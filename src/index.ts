@@ -197,6 +197,10 @@ const deploy = async (
 ) => {
   try {
     appDir = path.join(appDir, appName);
+    if(!fs.existsSync(appDir)){
+    console.log(`First deployment. Create ${appDir}`);
+    fs.mkdirSync(appDir, { recursive: true });
+    }
     const lockFilePath = path.join(appDir, "lock.pid");
 
     if (fs.existsSync(lockFilePath)) {
