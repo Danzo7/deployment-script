@@ -34,7 +34,7 @@ const argv = yargs(process.argv.slice(2))
   .alias('help', 'h')
   .argv;
 
-  const ROOT_DIR = dirname(fileURLToPath(import.meta.url));
+  const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)),"..");
 
 
 const {
