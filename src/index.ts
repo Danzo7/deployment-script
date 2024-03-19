@@ -1,7 +1,7 @@
 import { execSync } from "child_process";
 import fs from "fs";
 import fsExtra  from "fs-extra";
-import path from "path";
+import path, { dirname } from "path";
 import dotenv from "dotenv";
 import { simpleGit } from "simple-git";
 import { spawnSync } from 'child_process';
@@ -34,8 +34,7 @@ const argv = yargs(process.argv.slice(2))
   .alias('help', 'h')
   .argv;
 
-
-const RUN_DIR = process.cwd();
+  const ROOT_DIR = dirname(fileURLToPath(import.meta.url));
 
 
 const {
@@ -250,4 +249,4 @@ if (!appName) {
 if (!repo) {
   throw new Error("REPO is not defined");
 }
-deploy(appName,APP_DIR??path.join(RUN_DIR,"applications"), repo, envDir);
+deploy(appName,APP_DIR??path.join(ROOT_DIR,".applications"), repo, envDir);
