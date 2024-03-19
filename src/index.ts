@@ -1,7 +1,6 @@
-import { execSync } from "child_process";
 import fs from "fs";
 import fsExtra  from "fs-extra";
-import path, { dirname } from "path";
+import path, { dirname, resolve } from "path";
 import dotenv from "dotenv";
 import { simpleGit } from "simple-git";
 import { spawnSync } from 'child_process';
@@ -241,6 +240,23 @@ console.log('Deployed!');
     process.exit(1);
   }
 };
+
+
+
+
+const lockFilePath = path.join(RUN_DIR, 'lock.pid');
+
+if (fs.existsSync(lockFilePath)) {
+    console.log('Another instance of the script is already running.');
+    process.exit(0);
+}
+
+fs.writeFileSync(lockFilePath, process.pid.toString(), { flag: 'wx' });
+
+process.on('exit', () => {
+    fs.unlinkSync(lockFilePath);
+});
+
 const { appName, repo, envDir } = await argv;
 if (!appName) {
   throw new Error("APP_NAME is not defined");
