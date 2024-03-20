@@ -28,6 +28,11 @@ const argv = yargs(process.argv.slice(2))
       describe: "Directory containing environment files",
       type: "string",
     },
+    "no-symlink": {
+      alias: "ns",
+      describe: "In case of an error while creating symlink, Enabling this will allow to continue without creating symlink",
+      type: "boolean",
+    },
   })
   .help()
   .alias("help", "h").argv;
@@ -193,13 +198,14 @@ const deploy = async (
   appName: string,
   appDir: string,
   repo: string,
-  envDir?: string
+  envDir?: string,
+  noSymlink = false
 ) => {
   try {
     appDir = path.join(appDir, appName);
-    if(!fs.existsSync(appDir)){
-    console.log(`First deployment. Create ${appDir}`);
-    fs.mkdirSync(appDir, { recursive: true });
+    if (!fs.existsSync(appDir)) {
+      console.log(`First deployment. Create ${appDir}`);
+      fs.mkdirSync(appDir, { recursive: true });
     }
     const lockFilePath = path.join(appDir, "lock.pid");
 
@@ -268,9 +274,20 @@ const deploy = async (
     }
     console.log(`Linking ${releaseDir} to ${currentDir}`);
     if (!isFirstDeploy) fsExtra.unlinkSync(currentDir);
-    fs.symlinkSync(releaseDir, currentDir, "dir");
-    executePM2Commands(appName, releaseDir);
-
+    
+    try {
+      fs.symlinkSync(releaseDir, currentDir, "dir");
+      executePM2Commands(appName, currentDir);
+    } catch {
+      if(noSymlink) {
+        console.log("Skiping symbolic Link creation. Launching from release");
+        executePM2Commands(appName, currentDir);
+      }
+      else{
+        console.log("Failed to create a symbolic Link: Permission denied. Run the script with --no-symlink to force the launch from release");
+        throw new Error("failed. aborting!!");
+      }
+    }
     cleanupOldReleases(releaseDir, path.join(appDir, "releases"));
     console.log("Deployed!");
   } catch (error) {
@@ -279,7 +296,7 @@ const deploy = async (
   }
 };
 
-const { appName, repo, envDir } = await argv;
+const { appName, repo, envDir,noSymlink } = await argv;
 if (!appName) {
   throw new Error("APP_NAME is not defined");
 }
@@ -287,4 +304,4 @@ if (!appName) {
 if (!repo) {
   throw new Error("REPO is not defined");
 }
-deploy(appName, APP_DIR ?? path.join(ROOT_DIR, ".applications"), repo, envDir);
+deploy(appName, APP_DIR ?? path.join(ROOT_DIR, ".applications"), repo, envDir,noSymlink);
