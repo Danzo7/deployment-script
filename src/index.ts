@@ -40,10 +40,10 @@ const argv = yargs(process.argv.slice(2))
 const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const { APP_DIR } = process.env;
-const generateRunner = (dir: string) => {
+const generateRunner = (dir: string,appName: string, repo: string, envDir?: string,noSymlink=false) => {
   const scriptPath = fileURLToPath(import.meta.url);
-
-  const batchScript = `@echo off\nnode ${scriptPath} %*`;
+  
+  const batchScript = `@echo off\nnode ${scriptPath} --app-name ${appName} --repo ${repo} --env-dir ${envDir} --no-symlink ${noSymlink}`;
   try {
     fs.writeFileSync(path.join(dir, "rundeploy.bat"), batchScript);
     console.log("rundeploy.bat file created successfully.");
@@ -51,6 +51,21 @@ const generateRunner = (dir: string) => {
     console.error("Error creating rundeploy.bat file:", err);
     return false;
   }
+  return true;
+};
+const generateApiRoute =  (releaseDir: string, endpointLocation: string) => {
+  const source="/deployment/deploy/route.ts";
+  if (!fs.existsSync(source)) {
+      console.error(`Source file not found.`);
+      return false;
+  }
+  const destinationDir = path.dirname(path.join(releaseDir, "src","app",endpointLocation));
+  if (!fs.existsSync(destinationDir)) {
+      fs.mkdirSync(destinationDir, { recursive: true });
+  }
+  fs.copyFileSync(source, destinationDir);
+
+  console.log(`Generate /${endpointLocation} endpoint.`);
   return true;
 };
 const prepare = (dir: string) => {
@@ -263,12 +278,7 @@ const deploy = async (
       await preserveEnv(currentDir, envDir);
     }
 
-    // if (!isFirstDeploy&&fs.existsSync(path.join(currentDir, 'node_modules'))) {
-    //   console.log(`Moving node_modules directory to ${releaseDir}`);
-    //   fsExtra.copySync(path.join(currentDir, 'node_modules'), path.join(releaseDir, 'node_modules'));
-    // }
-
-    if (!generateRunner(releaseDir) || !prepare(releaseDir)) {
+    if (!generateRunner(releaseDir,appName, repo, envDir,noSymlink) || !prepare(releaseDir)) {
       fs.rmdirSync(releaseDir, { recursive: true });
       throw new Error("failed. aborting!!");
     }
@@ -304,4 +314,5 @@ if (!appName) {
 if (!repo) {
   throw new Error("REPO is not defined");
 }
+
 deploy(appName, APP_DIR ?? path.join(ROOT_DIR, ".applications"), repo, envDir,noSymlink);
