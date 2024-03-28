@@ -33,17 +33,26 @@ const argv = yargs(process.argv.slice(2))
       describe: "In case of an error while creating symlink, Enabling this will allow to continue without creating symlink",
       type: "boolean",
     },
+    "deployment-route": {
+      alias: "d",
+      describe: "Path of the deployment route (default: /app-name/deploy)",
+      type: "string",
+    },
+    "app-dir":{
+      alias:"a",
+      describe:"The application directory",
+      type:"string",
+  }
   })
   .help()
   .alias("help", "h").argv;
 
 const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-const { APP_DIR } = process.env;
-const generateRunner = (dir: string,appName: string, repo: string, envDir?: string,noSymlink=false) => {
+const generateRunner = (dir: string,appName: string, repo: string, appDir?:string,envDir?: string,noSymlink=false) => {
   const scriptPath = fileURLToPath(import.meta.url);
   
-  const batchScript = `@echo off\nnode ${scriptPath} --app-name ${appName} --repo ${repo} --env-dir ${envDir} --no-symlink ${noSymlink}`;
+  const batchScript = `@echo off\nnode ${scriptPath} --app-name ${appName} --repo ${repo} ${envDir?"--env-dir "+envDir:""} ${appDir?"--app-dir "+appDir:""} --no-symlink ${noSymlink}`;
   try {
     fs.writeFileSync(path.join(dir, "rundeploy.bat"), batchScript);
     console.log("rundeploy.bat file created successfully.");
@@ -54,7 +63,7 @@ const generateRunner = (dir: string,appName: string, repo: string, envDir?: stri
   return true;
 };
 const generateApiRoute =  (releaseDir: string, endpointLocation: string) => {
-  const source="/deployment/deploy/route.ts";
+  const source=path.join(ROOT_DIR,"deployment/deploy/route.ts");
   if (!fs.existsSync(source)) {
       console.error(`Source file not found.`);
       return false;
@@ -63,7 +72,7 @@ const generateApiRoute =  (releaseDir: string, endpointLocation: string) => {
   if (!fs.existsSync(destinationDir)) {
       fs.mkdirSync(destinationDir, { recursive: true });
   }
-  fs.copyFileSync(source, destinationDir);
+  fs.copyFileSync(source, path.join(destinationDir,"route.ts"));
 
   console.log(`Generate /${endpointLocation} endpoint.`);
   return true;
@@ -85,6 +94,22 @@ const prepare = (dir: string) => {
     return false;
   } else {
     console.log("npm install completed successfully");
+  }
+  console.log("Running Next lint fix...");
+  const nextLint = spawnSync("npx", ["next", "lint", "--fix"], {
+    cwd: dir,
+    stdio: "inherit",
+    shell: true,
+  });
+  if(nextLint.error) {
+    console.error("Error occurred during npx next lint:", nextLint.error);
+    return false;
+  } else if (nextLint.status !== 0) {
+    console.error("npx next lint failed with status code:", nextLint.status);
+    return false;
+  }
+  else {
+    console.log("npx next lint fix completed successfully");
   }
   console.log("Building...");
   const nextBuild = spawnSync("npx", ["next", "build"], {
@@ -214,7 +239,8 @@ const deploy = async (
   appDir: string,
   repo: string,
   envDir?: string,
-  noSymlink = false
+  noSymlink = false,
+  deploymentRoute?: string
 ) => {
   try {
     appDir = path.join(appDir, appName);
@@ -278,7 +304,7 @@ const deploy = async (
       await preserveEnv(currentDir, envDir);
     }
 
-    if (!generateRunner(releaseDir,appName, repo, envDir,noSymlink) || !prepare(releaseDir)) {
+    if (!generateRunner(releaseDir,appName, repo,appDir, envDir,noSymlink) ||!generateApiRoute(releaseDir,deploymentRoute??`${appName}/deploy`)|| !prepare(releaseDir)) {
       fs.rmdirSync(releaseDir, { recursive: true });
       throw new Error("failed. aborting!!");
     }
@@ -306,7 +332,7 @@ const deploy = async (
   }
 };
 
-const { appName, repo, envDir,noSymlink } = await argv;
+const { appName, repo, envDir,noSymlink ,deploymentRoute,appDir} = await argv;
 if (!appName) {
   throw new Error("APP_NAME is not defined");
 }
@@ -314,5 +340,6 @@ if (!appName) {
 if (!repo) {
   throw new Error("REPO is not defined");
 }
+const APP_DIR  = appDir??process.env?.APP_DIR;
 
-deploy(appName, APP_DIR ?? path.join(ROOT_DIR, ".applications"), repo, envDir,noSymlink);
+deploy(appName, APP_DIR ?? path.join(ROOT_DIR, ".applications"), repo, envDir,noSymlink,deploymentRoute);
