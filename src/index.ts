@@ -46,13 +46,22 @@ const argv = yargs(process.argv.slice(2))
   })
   .help()
   .alias("help", "h").argv;
+  const { appName, repo, envDir,noSymlink ,deploymentRoute,appDir} = await argv;
+  if (!appName) {
+    throw new Error("APP_NAME is not defined");
+  }
+  
+  if (!repo) {
+    throw new Error("REPO is not defined");
+  }
+  const APP_DIR  = appDir??process.env?.APP_DIR;
 
 const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const generateRunner = (dir: string,appName: string, repo: string, appDir?:string,envDir?: string,noSymlink=false) => {
   const scriptPath = fileURLToPath(import.meta.url);
   
-  const batchScript = `@echo off\nnode ${scriptPath} --app-name ${appName} --repo ${repo} ${envDir?"--env-dir "+envDir:""} ${appDir?"--app-dir "+appDir:""} --no-symlink ${noSymlink}`;
+  const batchScript = `@echo off\n node ${scriptPath} --app-name ${appName} --repo ${repo} ${envDir?"--env-dir "+envDir:""} ${appDir?"--app-dir "+appDir:""} --no-symlink ${noSymlink}`;
   try {
     fs.writeFileSync(path.join(dir, "rundeploy.bat"), batchScript);
     console.log("rundeploy.bat file created successfully.");
@@ -243,6 +252,7 @@ const deploy = async (
   deploymentRoute?: string
 ) => {
   try {
+    const rAppDir=appDir;
     appDir = path.join(appDir, appName);
     if (!fs.existsSync(appDir)) {
       console.log(`First deployment. Create ${appDir}`);
@@ -304,7 +314,7 @@ const deploy = async (
       await preserveEnv(currentDir, envDir);
     }
 
-    if (!generateRunner(releaseDir,appName, repo,appDir, envDir,noSymlink) ||!generateApiRoute(releaseDir,deploymentRoute??`${appName}/deploy`)|| !prepare(releaseDir)) {
+    if (!generateRunner(releaseDir,appName, repo,rAppDir, envDir,noSymlink) ||!generateApiRoute(releaseDir,deploymentRoute??`${appName}/deploy`)|| !prepare(releaseDir)) {
       fs.rmdirSync(releaseDir, { recursive: true });
       throw new Error("failed. aborting!!");
     }
@@ -332,14 +342,6 @@ const deploy = async (
   }
 };
 
-const { appName, repo, envDir,noSymlink ,deploymentRoute,appDir} = await argv;
-if (!appName) {
-  throw new Error("APP_NAME is not defined");
-}
 
-if (!repo) {
-  throw new Error("REPO is not defined");
-}
-const APP_DIR  = appDir??process.env?.APP_DIR;
 
 deploy(appName, APP_DIR ?? path.join(ROOT_DIR, ".applications"), repo, envDir,noSymlink,deploymentRoute);
