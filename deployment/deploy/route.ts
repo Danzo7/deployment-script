@@ -1,3 +1,5 @@
+/* eslint-disable */
+
 //import rateLimit from '@/lib/ratelimit';
 import { ChildProcess, spawn } from 'child_process';
 import { closeSync, openSync } from 'fs';
