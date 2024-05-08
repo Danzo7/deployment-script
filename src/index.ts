@@ -35,34 +35,22 @@ const argv = yargs(process.argv.slice(2))
       describe: "Directory containing environment files",
       type: "string",
     },
-    "no-symlink": {
-      alias: "ns",
-      describe:
-        "In case of an error while creating symlink, Enabling this will allow to continue without creating symlink",
-      type: "boolean",
-    },
-    "deployment-route": {
-      alias: "d",
-      describe: "Path of the deployment route (default: /app-name/deploy)",
-      type: "string",
-    },
     "app-dir": {
       alias: "a",
       describe: "The application directory",
       type: "string",
     },
+    "instances": {
+      alias: "i",
+      describe: "Number of instances",
+      type: "number",
+    },
   })
   .help()
   .alias("help", "h").argv;
-const { appName, repo, envDir, noSymlink, deploymentRoute, appDir, port } =
+const { appName, repo, envDir, appDir, port,instances } =
   await argv;
-if (!appName) {
-  throw new Error("APP_NAME is not defined");
-}
 
-if (!repo) {
-  throw new Error("REPO is not defined");
-}
 const APP_DIR = appDir ?? process.env?.APP_DIR;
 
 const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -75,7 +63,7 @@ const generateEcosystemConfig = (
   const config = {
     apps: [
       {
-        name: name,
+        name,
         exec_mode: "cluster",
         instances: instances,
         script: "./node_modules/next/dist/bin/next",
@@ -106,13 +94,12 @@ const generateRunner = (
   repo: string,
   appDir?: string,
   envDir?: string,
-  noSymlink = false
 ) => {
   const scriptPath = fileURLToPath(import.meta.url);
 
   const batchScript = `@echo off\n node ${scriptPath} --app-name ${appName} --repo ${repo} ${
     envDir ? "--env-dir " + envDir : ""
-  } ${appDir ? "--app-dir " + appDir : ""} --no-symlink ${noSymlink}`;
+  } ${appDir ? "--app-dir " + appDir : ""}`;
   try {
     fs.writeFileSync(path.join(dir, "rundeploy.bat"), batchScript);
     console.log("rundeploy.bat file created successfully.");
@@ -120,22 +107,6 @@ const generateRunner = (
     console.error("Error creating rundeploy.bat file:", err);
     return false;
   }
-  return true;
-};
-const generateApiRoute = (releaseDir: string, endpointLocation: string) => {
-  const source = path.join(ROOT_DIR, "deployment/deploy/route.ts");
-  if (!fs.existsSync(source)) {
-    console.error(`Source file not found.`);
-    return false;
-  }
-  endpointLocation = endpointLocation + ".deploy";
-  const destinationDir = path.join(releaseDir, "src", "app", endpointLocation);
-  if (!fs.existsSync(destinationDir)) {
-    fs.mkdirSync(destinationDir, { recursive: true });
-  }
-  fs.copyFileSync(source, path.join(destinationDir, "route.ts"));
-
-  console.log(`Generate /${endpointLocation} endpoint.`);
   return true;
 };
 const prepare = (dir: string) => {
@@ -300,7 +271,6 @@ const deploy = async (
   repo: string,
   port: number,
   envDir?: string,
-  noSymlink = false,
   deploymentRoute?: string
 ) => {
   try {
@@ -377,11 +347,10 @@ const deploy = async (
 
     if (
       !writeEcosystemConfig(
-        generateEcosystemConfig(appName, port),
+        generateEcosystemConfig(appName, port, instances),
         releaseDir
       ) ||
-      !generateRunner(releaseDir, appName, repo, rAppDir, envDir, noSymlink) ||
-      !generateApiRoute(releaseDir, deploymentRoute ?? `${appName}`) ||
+      !generateRunner(releaseDir, appName, repo, rAppDir, envDir) ||
       !prepare(releaseDir)
     ) {
       await rimraf(releaseDir);
@@ -394,15 +363,10 @@ const deploy = async (
       fs.symlinkSync(releaseDir, currentDir, "dir");
       executePM2Commands(appName, currentDir);
     } catch {
-      if (noSymlink) {
-        console.log("Skiping symbolic Link creation. Launching from release");
-        executePM2Commands(appName, currentDir);
-      } else {
         console.log(
           "Failed to create a symbolic Link: Permission denied. Run the script with --no-symlink to force the launch from release"
         );
         throw new Error("failed. aborting!!");
-      }
     }
     cleanupOldReleases(releaseDir, path.join(appDir, "releases"));
     console.log("Deployed!");
@@ -418,6 +382,4 @@ deploy(
   repo,
   port,
   envDir,
-  noSymlink,
-  deploymentRoute
 );
