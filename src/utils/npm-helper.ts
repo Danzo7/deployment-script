@@ -14,10 +14,10 @@ const runCommand = (command: string, options: { cwd: string }) => {
   }
 };
 
-const runNextScript = async (dir: string, args: string, description: string) => {
+const runScript = async (dir: string, args: string, description: string) => {
   Logger.info(`${description}...`);
   try {
-    const command = `npx next ${args}`;
+    const command = `npm run ${args}`;
     const result = runCommand(command, { cwd: dir });
 
     if (result.code !== 0) {
@@ -63,11 +63,11 @@ export const prepare = async (
     }
 
     if (withFix) {
-      await runNextScript(dir, 'lint --fix', 'Running lint fix');
+      await runScript(dir, 'fix', 'Running lint fix');
     }
 
     if (withBuild) {
-      await runNextScript(dir, 'build', 'Running build');
+      await runScript(dir, 'build', 'Running build');
     }
 
     return true;
