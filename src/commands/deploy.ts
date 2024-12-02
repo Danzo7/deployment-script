@@ -29,7 +29,7 @@ export const deploy = async ({name}:{name:string}) => {
     Logger.info(`Creating directory ${logDir}`);
     fs.mkdirSync(logDir, { recursive: true });  }
     Logger.info(`Checking git repo...`);
-      const isValidRepo =await simpleGit(relDir).checkIsRepo();
+      const isValidRepo =await simpleGit(relDir).checkIsRepo(CheckRepoActions.IS_REPO_ROOT);
   if(!isDirectoryEmpty(relDir)&&!isValidRepo){
    throw new Error(`Please Make sure the directory ${relDir} is empty or is a valid git repository.`);
   }
