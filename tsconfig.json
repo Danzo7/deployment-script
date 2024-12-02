@@ -1,12 +1,21 @@
 {
   "compilerOptions": {
-    "target": "es2020" /* Set the JavaScript language version for emitted JavaScript and include compatible library declarations. */,
-    "module": "NodeNext" /* Specify what module code is generated. */,
-    "moduleResolution": "NodeNext" /* Specify what module code is generated. */,
-    "esModuleInterop": true /* Emit additional JavaScript to ease support for importing CommonJS modules. This enables 'allowSyntheticDefaultImports' for type compatibility. */,
-    "forceConsistentCasingInFileNames": true /* Ensure that casing is correct in imports. */,
-    "strict": true /* Enable all strict type-checking options. */,
-    "outDir": "./dist"
+    "target": "ES2020",                 // Target the latest version of ECMAScript
+    "module": "node16",               // Use CommonJS modules for Node.js compatibility
+    "lib": ["ES2020"],                  // Use ES2020 libraries for modern JavaScript features
+    "esModuleInterop": true,            // Enable compatibility between CommonJS and ES modules
+    "moduleResolution": "node16",         // Use Node's module resolution strategy
+    "strict": true,                     // Enable all strict type-checking options
+    "skipLibCheck": true,               // Skip type checking of declaration files (speeds up compilation)
+    "forceConsistentCasingInFileNames": true,  // Ensure that filenames are case-sensitive
+    "outDir": "./dist",                 // Output directory for compiled files
+    "rootDir": "./src",                 // Root directory of source files
+    "resolveJsonModule": true           // Allow importing JSON files as modules
   },
-  "include": ["./src/**/*"]
+  "include": [
+    "src/**/*.ts"                        // Include all TypeScript files in the src folder
+  ],
+  "exclude": [
+    "node_modules"                       // Exclude the node_modules folder
+  ]
 }
