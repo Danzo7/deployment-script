@@ -46,11 +46,11 @@ export const deploy = async ({name}:{name:string}) => {
     await simpleGit().checkout(app.branch);
   await simpleGit(relDir).fetch();
   const status=await simpleGit(relDir).status();
-  if(status.behind>0){
-    throw new Error(`How can I deploy if you are ${status.behind} ahead!!! How did you even get here you?`);
-  }
   if(status.ahead>0){
-    Logger.info(`There are ${status.ahead} new commits in ${relDir}`);  
+    throw new Error(`How can I deploy if you are ${status.ahead} ahead!!! How did you even get here you?`);
+  }
+  if(status.behind>0){
+    Logger.info(`There are ${status.behind} new commits in ${relDir}`);  
     await simpleGit(relDir).pull();
   }
   else{
