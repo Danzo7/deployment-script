@@ -58,6 +58,7 @@ export const deploy = async ({name}:{name:string}) => {
     Logger.info(`There are no new commits in ${relDir}`);
   }
   }
+  let isRunning=false;
     let isChanged=await checkEnv(relDir,envDir);
     if(!isChanged&&noUpdate&&!isNeverDeployed){ 
      Logger.success(`Everything is up to date`);
@@ -65,6 +66,7 @@ export const deploy = async ({name}:{name:string}) => {
     const appStatus=await getAppStatus(name);
     Logger.advice(`App Status: ${appStatus}`);
     if(appStatus=="online"||appStatus=="launching"||appStatus=="stopping"){
+      isRunning=true;
       Logger.info("App is already running");
       process.exit(0);
     }
@@ -74,8 +76,8 @@ export const deploy = async ({name}:{name:string}) => {
   
   
   await prepare(relDir,{
-    withInstall:isNeverDeployed|| noUpdate,
-    withBuild:isNeverDeployed||isChanged||!noUpdate,
+    withInstall:isNeverDeployed|| !noUpdate,
+    withBuild:!isRunning||isNeverDeployed||isChanged||!noUpdate,
     withFix:false// Add skip lint in future
   });
   await runApp(relDir,{name:app.name,port:app.port,instances:app.instances,

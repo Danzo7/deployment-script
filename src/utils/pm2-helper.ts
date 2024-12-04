@@ -41,7 +41,6 @@ export const runApp = async (dir: string,config: Omit<pm2.StartOptions,"exec_mod
               if (startErr) {
                 return reject(startErr);
               }
-  
               Logger.info(`PM2 process "${config.name}" started successfully.`);
               resolve();
             });
