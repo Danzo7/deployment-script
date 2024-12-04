@@ -101,5 +101,4 @@ const argv = yargs(process.argv.slice(2))
     (args) => deploy(args)
   )
   .demandCommand(1, "You must specify a command to run.")
-  .help()
-  .alias("h", "help").argv;
+  .argv;
