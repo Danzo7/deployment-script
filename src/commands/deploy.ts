@@ -58,12 +58,13 @@ export const deploy = async ({name}:{name:string}) => {
     Logger.info(`There are no new commits in ${relDir}`);
   }
   }
+  const appStatus=await getAppStatus(name);
   let isRunning=false;
+
     let isChanged=await checkEnv(relDir,envDir);
     if(!isChanged&&noUpdate&&!isNeverDeployed){ 
      Logger.success(`Everything is up to date`);
      Logger.info("Checking app status...");
-    const appStatus=await getAppStatus(name);
     Logger.advice(`App Status: ${appStatus}`);
     if(appStatus=="online"||appStatus=="launching"||appStatus=="stopping"){
       isRunning=true;
@@ -80,7 +81,7 @@ export const deploy = async ({name}:{name:string}) => {
     withBuild:!isRunning||isNeverDeployed||isChanged||!noUpdate,
     withFix:false// Add skip lint in future
   });
-  await runApp(relDir,{name:app.name,port:app.port,instances:app.instances,
+  await runApp(relDir,{name:app.name,port:app.port,instances:app.instances,status:appStatus,
     output:path.join(logDir,"pm2.out.log"), error:path.join(logDir,"pm2.error.log") 
   });
   AppRepo.updateLastDeploy(name);
