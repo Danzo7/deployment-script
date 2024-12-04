@@ -33,7 +33,8 @@ export const runApp = async (dir: string,config: Omit<pm2.StartOptions,"exec_mod
             if(config.status=="not-found")
             pm2.start({...config,
               exec_mode: "cluster",
-              script: path.join(dir, `node_modules/next/dist/bin/next`),
+              cwd:dir,  
+              script: `node_modules/next/dist/bin/next`,
               args: `start -p ${config.port}`,
               max_memory_restart: "250M",
             }, (startErr) => {
@@ -52,8 +53,9 @@ export const runApp = async (dir: string,config: Omit<pm2.StartOptions,"exec_mod
                   } 
                   pm2.start({...config,
                     exec_mode: "cluster",
-                    script: path.join(dir, `node_modules/next/dist/bin/next`),
-                    args: `start -p ${config.port}`,
+                    cwd:dir,  
+                    script: `node_modules/next/dist/bin/next`,
+                          args: `start -p ${config.port}`,
                     max_memory_restart: "250M",
                   }, (startErr) => {
                     pm2.disconnect();
