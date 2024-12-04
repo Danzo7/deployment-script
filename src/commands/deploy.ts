@@ -78,7 +78,7 @@ export const deploy = async ({name}:{name:string}) => {
     withBuild:isNeverDeployed||isChanged||!noUpdate,
     withFix:false// Add skip lint in future
   });
-  await runApp(relDir,{name:app.repo,port:app.port,instances:app.instances,
+  await runApp(relDir,{name:app.name,port:app.port,instances:app.instances,
     output:path.join(logDir,"pm2.out.log"), error:path.join(logDir,"pm2.error.log") 
   });
   AppRepo.updateLastDeploy(name);
