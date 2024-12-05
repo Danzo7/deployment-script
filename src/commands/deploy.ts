@@ -50,17 +50,18 @@ export const deploy = async ({name}:{name:string}) => {
     throw new Error(`How can I deploy if you are ${status.ahead} ahead!!! How did you even get here you?`);
   }
   if(status.behind>0){
-    Logger.info(`There are ${status.behind} new commits in ${relDir}`);  
+    Logger.info(`There are ${status.behind} new commits in ${app.repo}. Pulling...`);  
     await simpleGit(relDir).pull();
   }
   else{
     noUpdate=true;  
-    Logger.info(`There are no new commits in ${relDir}`);
+    Logger.info(`There are no new commits in ${app.repo}. Skipping update...`);
   }
   }
   const appStatus=await getAppStatus(name);
   let isRunning=false;
 
+  Logger.info("Checking environment...");
     let isChanged=await checkEnv(relDir,envDir);
     if(!isChanged&&noUpdate&&!isNeverDeployed){ 
      Logger.success(`Everything is up to date`);
@@ -69,7 +70,7 @@ export const deploy = async ({name}:{name:string}) => {
     if(appStatus=="online"||appStatus=="launching"||appStatus=="stopping"){
       isRunning=true;
       Logger.info("App is already running");
-      process.exit(0);
+      return;
     }
     }
   
