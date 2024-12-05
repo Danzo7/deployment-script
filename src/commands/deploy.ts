@@ -85,4 +85,5 @@ export const deploy = async ({name}:{name:string}) => {
     output:path.join(logDir,"pm2.out.log"), error:path.join(logDir,"pm2.error.log") 
   });
   AppRepo.updateLastDeploy(name);
+  Logger.success(`Successfully deployed ${name}`);
     };
