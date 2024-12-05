@@ -24,7 +24,7 @@ interface DeployArgs {
 // Initialize environment
 initializeDB();
 
-const argv = yargs(process.argv.slice(2))
+await yargs(process.argv.slice(2))
   .usage(
     'Usage: $0 <command> [options]\n\nCommands:\n  init    Initialize a new application\n  deploy  Deploy or update an application\n\nUse "$0 <command> --help" for more information on a command.'
   )
@@ -85,7 +85,7 @@ const argv = yargs(process.argv.slice(2))
         },
       });
     },
-    (args) => init({ ...args, appsDir: APP_DIR })
+     (args) =>  init({ ...args, appsDir: APP_DIR })
   )
   .command<DeployArgs>(
     "deploy",
@@ -98,7 +98,7 @@ const argv = yargs(process.argv.slice(2))
         describe: "The name of the application to deploy or update",
       });
     },
-    (args) => deploy(args)
+     deploy
   )
-  .demandCommand(1, "You must specify a command to run.")
-  .argv;
+  .demandCommand(1, "You must specify a command to run.").parseAsync();
+ 
