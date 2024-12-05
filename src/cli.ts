@@ -14,45 +14,53 @@ interface InitArgs {
   repo: string;
   branch: string;
   instances: number;
-  port?: number; // Optional
+  port?: number;
 }
 
 interface DeployArgs {
   name: string;
+  force: boolean;
+  lint: boolean;
 }
+
+// Centralized cleanup logic
+const setupCleanup = (name: string) => {
+  const cleanUp = () => {
+    releaseLock(name);
+    process.exit();
+  };
+  process.on("exit", cleanUp);
+  process.on("SIGINT", cleanUp);
+  process.on("uncaughtException", (err) => {
+    Logger.error("Unhandled exception:", err);
+    cleanUp();
+  });
+};
 
 // Initialize environment
 initializeDB();
 
 await yargs(process.argv.slice(2))
   .usage(
-    'Usage: $0 <command> [options]\n\nCommands:\n  init    Initialize a new application\n  deploy  Deploy or update an application\n\nUse "$0 <command> --help" for more information on a command.'
+    `Usage: $0 <command> [options]
+
+Commands:
+  init    Initialize a new application
+  deploy  Deploy or update an application
+
+Use "$0 <command> --help" for more information on a command.`
   )
   .middleware((argv) => {
-    // Centralized locking logic for commands that require 'name'
     const { name } = argv as any as DeployArgs;
     if (name) {
-      try {
         acquireLock(name);
-      } catch (error) {
-        Logger.error(error);
-        process.exit(1); // Exit if lock already exists
-      }
-
-      // Ensure lock is released on exit or errors
-      const cleanUp = () => {
-        releaseLock(name);
-        process.exit();
-      };
-      process.on("exit", cleanUp);
-      process.on("SIGINT", cleanUp);
-      process.on("uncaughtException", cleanUp);
+        setupCleanup(name);
     }
   })
   .command<InitArgs>(
     "init",
     "Initialize a new application",
-    (yargs) => {
+    (yargs) =>
       yargs.options({
         name: {
           type: "string",
@@ -83,23 +91,40 @@ await yargs(process.argv.slice(2))
           alias: "p",
           describe: "The port number to use for the application",
         },
-      });
-    },
-     (args) =>  init({ ...args, appsDir: APP_DIR })
+      }),
+    async (args) => await init({ ...args, appsDir: APP_DIR })
   )
   .command<DeployArgs>(
-    "deploy",
+    "deploy <name>",
     "Deploy or update an application",
-    (yargs) => {
-      yargs.option("name", {
-        type: "string",
-        demandOption: true,
-        alias: "n",
-        describe: "The name of the application to deploy or update",
+    (yargs) =>
+      yargs
+        .positional("name", {
+          type: "string",
+          demandOption: true,
+          describe: "The name of the application to deploy or update",
+        })
+        .option("force", {
+          type: "boolean",
+          alias: "f",
+          default: false,
+          describe: "Force the deployment even if no changes are detected",
+        })
+        .option("lint", {
+          type: "boolean",
+          alias: "l",
+          default: false,
+          describe: "Run linting during the deployment process",
+        }),
+    async (args) => {
+      await deploy({
+        name: args.name,
+        force: args.force,
+        lint: args.lint,
       });
-    },
-     deploy
+    }
   )
-  .demandCommand(1, "You must specify a command to run.").parseAsync();
- 
+  .demandCommand(1, "You must specify a command to run.")
+  .parseAsync();
+
 process.exit();

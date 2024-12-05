@@ -35,3 +35,21 @@ export const calculateFileHash = (filePath: string): string => {
       return false;
   };
   export const isDirectoryEmpty = (dir: string): boolean => fs.existsSync(dir) && fs.statSync(dir).isDirectory() && fs.readdirSync(dir).length === 0;
+
+  export const ensureDirectories=(appDir:string)=>{
+    const relDir = path.join(appDir, "release");
+    const envDir = path.join(appDir, "env");
+    const logDir = path.join(appDir, "logs");
+  Logger.info(`Checking directories...`);
+  if(!fs.existsSync(relDir)){
+  Logger.info(`Creating directory ${relDir}`);
+  fs.mkdirSync(relDir, { recursive: true });
+}
+if(!fs.existsSync(envDir)){
+  Logger.info(`Creating directory ${envDir}`);
+  fs.mkdirSync(envDir, { recursive: true });}
+  if(!fs.existsSync(logDir)){
+  Logger.info(`Creating directory ${logDir}`);
+  fs.mkdirSync(logDir, { recursive: true });  }
+  return {relDir,envDir,logDir};
+  }

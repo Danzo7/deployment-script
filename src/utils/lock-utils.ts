@@ -23,11 +23,10 @@ export const acquireLock = (appName: string) => {
   const lockFile = path.join(LOCK_DIR, `${appName}.lock`);
 
   if (fs.existsSync(lockFile)) {
-    throw new Error(`Lock file for app "${appName}" already exists. CLI is already running.`);
+    throw new Error(`CLI for ${appName} is already running.`);
   }
 
   fs.writeFileSync(lockFile, String(process.pid));
-  Logger.success(`Lock acquired for app "${appName}".`);
 };
 
 /**
@@ -39,6 +38,5 @@ export const releaseLock = (appName: string) => {
 
   if (fs.existsSync(lockFile)) {
     fs.unlinkSync(lockFile);
-    Logger.info(`Lock released for app "${appName}".`);
   }
 };

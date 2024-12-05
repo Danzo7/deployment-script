@@ -1,90 +1,59 @@
 import path from "path";
 import { AppRepo } from "../db/repos.js";
 import { Logger } from "../utils/logger.js";
-import fs from "fs";
-import { CheckRepoActions, simpleGit } from "simple-git";
-import { checkEnv, isDirectoryEmpty } from "../utils/file-utils.js";
+import fs, { createWriteStream } from "fs";
+import { checkEnv, ensureDirectories } from "../utils/file-utils.js";
 import { prepare } from "../utils/npm-helper.js";
 import { getAppStatus, runApp } from "../utils/pm2-helper.js";
-
-export const deploy = async ({name}:{name:string}) => {
+import { handleGitRepo } from "../utils/git-helper.js";
+export const saveLogs=(logDir:string)=>{
+  const stdoutLogStream = createWriteStream(path.join(logDir, "deploy.log"), {
+        flags: "w",
+      });
+      process.stdout.write = (chunk: any) => {
+        stdoutLogStream.write(chunk);
+        return true;
+      };
+      process.stderr.write = (chunk: any) => {
+        stdoutLogStream.write(chunk);
+        return true;
+      };
+}
+export const deploy = async ({name,force,lint}:{name:string,lint?:boolean,force?:boolean}) => {
       let app=AppRepo.getAll().find((app)=>app.name===name);
-      const isNeverDeployed=app?.lastDeploy==undefined;
+      const isFirstDeploy=app?.lastDeploy==undefined;
   if(!app){
     throw new Error("App not found");}
-  
-    const relDir = path.join(app.appDir, "release");
-    const envDir = path.join(app.appDir, "env");
-    const logDir = path.join(app.appDir, "logs");
-    Logger.info(`Checking directories...`);
-    if(!fs.existsSync(relDir)){
-  
-    Logger.info(`Creating directory ${relDir}`);
-    fs.mkdirSync(relDir, { recursive: true });
-  }
-  if(!fs.existsSync(envDir)){
-    Logger.info(`Creating directory ${envDir}`);
-    fs.mkdirSync(envDir, { recursive: true });}
-    if(!fs.existsSync(logDir)){
-    Logger.info(`Creating directory ${logDir}`);
-    fs.mkdirSync(logDir, { recursive: true });  }
-    Logger.info(`Checking git repo...`);
-      const isValidRepo =await simpleGit(relDir).checkIsRepo(CheckRepoActions.IS_REPO_ROOT);
-  if(!isDirectoryEmpty(relDir)&&!isValidRepo){
-   throw new Error(`Please Make sure the directory ${relDir} is empty or is a valid git repository.`);
-  }
-  let noUpdate=false;
-  if(!isValidRepo){
-        fs.mkdirSync(relDir, { recursive: true });
-        Logger.info(`Cloning ${app.repo} into ${relDir}`);
-        await simpleGit().clone(app.repo, relDir);
-        await simpleGit().checkout(app.branch);
-  
-        Logger.success(`Successfully cloned ${app.repo} into ${relDir}`);
-      }
-  else {
-    await simpleGit().checkout(app.branch);
-  await simpleGit(relDir).fetch();
-  const status=await simpleGit(relDir).status();
-  if(status.ahead>0){
-    throw new Error(`How can I deploy if you are ${status.ahead} ahead!!! How did you even get here you?`);
-  }
-  if(status.behind>0){
-    Logger.info(`There are ${status.behind} new commits in ${app.repo}. Pulling...`);  
-    await simpleGit(relDir).pull();
-  }
-  else{
-    noUpdate=true;  
-    Logger.info(`There are no new commits in ${app.repo}. Skipping update...`);
-  }
-  }
+   const {relDir,envDir,logDir}=ensureDirectories(app.appDir); 
+   saveLogs(logDir);
+  Logger.info("Checking Git repository...")
+  let isGitChanged=await handleGitRepo({dir:relDir,repo:app.repo,branch:app.branch});
+
+  Logger.info("Checking app status...");
   const appStatus=await getAppStatus(name);
-  let isRunning=false;
+  Logger.advice(`App Status: ${appStatus}`);
+  let isRunning=appStatus=="online";
 
   Logger.info("Checking environment...");
-    let isChanged=await checkEnv(relDir,envDir);
-    if(!isChanged&&noUpdate&&!isNeverDeployed){ 
+    let isEnvChanged=await checkEnv(relDir,envDir);
+    if(isEnvChanged&&!isGitChanged&&!isFirstDeploy){ 
      Logger.success(`Everything is up to date`);
-     Logger.info("Checking app status...");
-    Logger.advice(`App Status: ${appStatus}`);
-    if(appStatus=="online"||appStatus=="launching"||appStatus=="stopping"){
-      isRunning=true;
-      Logger.info("App is already running");
+    if(isRunning){
+      Logger.info(`${name} is already running on port ${app.port}`);
+      if(force){Logger.info("Forcing restart...");} else
       return;
     }
     }
   
-  
-  
-  
   await prepare(relDir,{
-    withInstall:isNeverDeployed|| !noUpdate,
-    withBuild:!isRunning||isNeverDeployed||isChanged||!noUpdate,
-    withFix:false// Add skip lint in future
+    withInstall:force||isFirstDeploy|| isGitChanged||!isRunning,
+    withBuild:force||!isRunning||isFirstDeploy||isGitChanged||!isEnvChanged,
+    withFix:force||lint// Add skip lint in future
   });
   await runApp(relDir,{name:app.name,port:app.port,instances:app.instances,status:appStatus,
     output:path.join(logDir,"pm2.out.log"), error:path.join(logDir,"pm2.error.log") 
   });
   AppRepo.updateLastDeploy(name);
-  Logger.success(`Successfully deployed ${name}`);
+  Logger.success(`Successfully deployed ${name} on port ${app.port}`);
+  
     };

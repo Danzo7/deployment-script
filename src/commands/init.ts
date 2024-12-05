@@ -3,6 +3,7 @@ import { Logger } from "../utils/logger.js";
 import fs from "fs";
 import { findAvailablePort } from "../utils/network-utils.js";
 import path from "path";
+import { ensureDirectories } from "../utils/file-utils.js";
 
 export const init = async ({name,repo,branch,instances,port,appsDir}:{name:string;repo:string,branch:string,instances?:number,port?:number,appsDir:string}) => {  
   if(!repo) throw new Error("Repo is required");
@@ -13,22 +14,7 @@ export const init = async ({name,repo,branch,instances,port,appsDir}:{name:strin
   
       const appDir = path.join(appsDir, name);
   
-      const relDir = path.join(appDir, "release");
-      const envDir = path.join(appDir, "env");
-      const logDir = path.join(appDir, "logs");
-  if(fs.existsSync(appDir))
-    Logger.warn(`Directory ${appDir} already exists.`);
-    Logger.info(`Checking directories...`);
-    if(!fs.existsSync(relDir)){
-    Logger.info(`Creating directory ${relDir}`);
-    fs.mkdirSync(relDir, { recursive: true });
-  }
-  if(!fs.existsSync(envDir)){
-    Logger.info(`Creating directory ${envDir}`);
-    fs.mkdirSync(envDir, { recursive: true });}
-    if(!fs.existsSync(logDir)){
-    Logger.info(`Creating directory ${logDir}`);
-    fs.mkdirSync(logDir, { recursive: true });  }
+      ensureDirectories(appDir);  
   
         if(!port){
           Logger.info("Port is not specified. Finding available port...");
