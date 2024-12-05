@@ -102,3 +102,4 @@ await yargs(process.argv.slice(2))
   )
   .demandCommand(1, "You must specify a command to run.").parseAsync();
  
+process.exit();
