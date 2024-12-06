@@ -8,8 +8,9 @@ import dotenv from 'dotenv';
 import { acquireLock, releaseLock } from './utils/lock-utils.js';
 import { Logger } from './utils/logger.js';
 import { listApps } from './commands/list.js';
+import path from 'path';
 
-dotenv.config();
+dotenv.config({path: path.join(APP_DIR, '.env')});
 
 interface InitArgs {
   name: string;
