@@ -1,7 +1,7 @@
 
-import {  JSONFile, JSONFilePreset, JSONFileSync } from 'lowdb/node';
+import {  JSONFileSync } from 'lowdb/node';
 import { App } from './model.js';
-import { Low, LowSync } from 'lowdb';
+import { LowSync } from 'lowdb';
 
 
 interface DatabaseSchema {

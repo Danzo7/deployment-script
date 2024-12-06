@@ -1,6 +1,5 @@
-import pm2, { ProcessDescription } from "pm2";
+import pm2 from "pm2";
 import { Logger } from "./logger.js";
-import path from "path";
 type Status='online' | 'stopping' | 'stopped' | 'launching' | 'errored' | 'one-launch-status'|'not-found';
 
 export const runApp = async (dir: string,config: Omit<pm2.StartOptions,"exec_mode"|"script"|"args">&{name:string,port:number,status:Status}) => {

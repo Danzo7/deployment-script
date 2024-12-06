@@ -1,17 +1,22 @@
 {
   "name": "deployment-script",
   "version": "1.0.0",
-  "description": "A script to deploy Nextjs application",
+  "description": "A script to deploy Next.js applications",
   "type": "module",
   "main": "index.js",
+  "bin": {
+    "deploy-script": "./dist/cli.js"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
-    "deploy": "node dist/cli.js"
+    "deploy": "node dist/cli.js",
+    "pkg": "pkg ."
   },
   "license": "MIT",
   "dependencies": {
     "@types/fs-extra": "^11.0.4",
+    "cli-table3": "^0.6.5",
     "dotenv": "^16.4.5",
     "execa": "^9.5.1",
     "extract-zip": "^2.0.1",
@@ -28,6 +33,12 @@
     "@types/node": "^22.10.1",
     "@types/shelljs": "^0.8.15",
     "@types/yargs": "^17.0.33",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "pkg": "^5.9.0"
+  },
+  "pkg": {
+    "scripts": "dist/cli.js",
+    "targets": ["node16-win-x64"],
+    "outputPath": "./build"
   }
 }
