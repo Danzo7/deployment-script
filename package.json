@@ -1,7 +1,7 @@
 {
-  "name": "deployment-script",
-  "version": "1.0.0",
-  "description": "A script to deploy Next.js applications",
+  "name": "deployment-manager",
+  "version": "1.3.0",
+  "description": "A command-line tool designed to manage the deployment and status of Next.js applications using PM2.",
   "type": "module",
   "main": "index.js",
   "bin": {
@@ -11,7 +11,10 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
     "deploy": "node dist/cli.js",
-    "pkg": "pkg ."
+    "pkg": "pkg .",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write ."
   },
   "license": "MIT",
   "dependencies": {
@@ -32,10 +35,17 @@
     "yargs": "^17.7.2"
   },
   "devDependencies": {
+    "@eslint/js": "^9.16.0",
     "@types/node": "^22.10.1",
     "@types/shelljs": "^0.8.15",
     "@types/yargs": "^17.0.33",
-    "typescript": "^5.7.2"
+    "eslint": "^9.16.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "globals": "^15.13.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.17.0"
   },
   "pkg": {
     "scripts": "dist/cli.js",

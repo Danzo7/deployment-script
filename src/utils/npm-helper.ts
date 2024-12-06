@@ -10,7 +10,11 @@ const runCommand = (command: string, options: { cwd: string }) => {
     }).toString();
     return { code: 0, stdout: result, stderr: null };
   } catch (err: any) {
-    return { code: err.status || 1, stdout: null, stderr: err.stderr?.toString() || err.message };
+    return {
+      code: err.status || 1,
+      stdout: null,
+      stderr: err.stderr?.toString() || err.message,
+    };
   }
 };
 
@@ -54,7 +58,11 @@ const installDependencies = async (dir: string) => {
 
 export const prepare = async (
   dir: string,
-  { withInstall = true, withBuild = true, withFix = true }: { withInstall?: boolean; withBuild?: boolean; withFix?: boolean }
+  {
+    withInstall = true,
+    withBuild = true,
+    withFix = true,
+  }: { withInstall?: boolean; withBuild?: boolean; withFix?: boolean }
 ) => {
   Logger.info('Preparing');
   try {

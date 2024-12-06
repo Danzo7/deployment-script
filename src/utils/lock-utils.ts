@@ -1,8 +1,6 @@
-import fs from "fs";
-import path from "path";
-import { Logger } from "./logger.js";
-import { LOCK_DIR } from "../constants.js";
-
+import fs from 'fs';
+import path from 'path';
+import { LOCK_DIR } from '../constants.js';
 
 /**
  * Ensures the lock directory exists.

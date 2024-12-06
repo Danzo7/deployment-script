@@ -1,8 +1,6 @@
-
-import {  JSONFileSync } from 'lowdb/node';
+import { JSONFileSync } from 'lowdb/node';
 import { App } from './model.js';
 import { LowSync } from 'lowdb';
-
 
 interface DatabaseSchema {
   apps: App[]; // Array of applications
@@ -10,20 +8,20 @@ interface DatabaseSchema {
 
 // Initialize LowDB
 const adapter = new JSONFileSync<DatabaseSchema>('db.json'); // Path to the JSON file
-const db = new LowSync(adapter,{apps:[]});
+const db = new LowSync(adapter, { apps: [] });
 
 /**
  * Initializes the database.
  * Ensures the database file has default data if it's empty.
  */
-export const initializeDB =  () => {
-   db.read(); // Load the data from the JSON file
+export const initializeDB = () => {
+  db.read(); // Load the data from the JSON file
 
   // Provide default structure if the database is empty
   db.data ||= { apps: [] };
 
   // Save initial data if the database was empty
-   db.write();
+  db.write();
 };
 
 /**
