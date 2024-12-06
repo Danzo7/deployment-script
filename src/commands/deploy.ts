@@ -7,15 +7,22 @@ import { prepare } from '../utils/npm-helper.js';
 import { getAppStatus, runApp } from '../utils/pm2-helper.js';
 import { handleGitRepo } from '../utils/git-helper.js';
 export const saveLogs = (logDir: string) => {
-  const stdoutLogStream = createWriteStream(path.join(logDir, 'deploy.log'), {
-    flags: 'w',
+  const stdoutLogStream = createWriteStream(path.join(logDir, "deploy.log"), {
+    flags: "a", // Append to the log file instead of overwriting it
   });
-  process.stdout.write = (chunk: unknown) => {
+
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
+
+  process.stdout.write = (chunk) => {
     stdoutLogStream.write(chunk);
+    originalStdoutWrite(chunk); // Write to console
     return true;
   };
-  process.stderr.write = (chunk: unknown) => {
+
+  process.stderr.write = (chunk) => {
     stdoutLogStream.write(chunk);
+    originalStderrWrite(chunk); // Write to console
     return true;
   };
 };
