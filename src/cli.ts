@@ -3,14 +3,11 @@ import yargs from 'yargs';
 import { initializeDB } from './db/db.js';
 import { deploy } from './commands/deploy.js';
 import { init } from './commands/init.js';
-import { APP_DIR, ROOT_DIR } from './constants.js';
-import dotenv from 'dotenv';
+import { APP_DIR } from './constants.js';
 import { acquireLock, releaseLock } from './utils/lock-utils.js';
 import { Logger } from './utils/logger.js';
 import { listApps } from './commands/list.js';
-import path from 'path';
-
-dotenv.config({path: path.join(ROOT_DIR, '.env')});
+import { existsSync, mkdirSync } from 'fs';
 
 interface InitArgs {
   name: string;
@@ -39,7 +36,9 @@ const setupCleanup = (name: string) => {
     cleanUp();
   });
 };
-
+if (!existsSync(APP_DIR)) {
+  mkdirSync(APP_DIR, { recursive: true });
+}
 // Initialize environment
 initializeDB();
 try {
