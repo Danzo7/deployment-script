@@ -6,6 +6,7 @@ import { APP_DIR } from "./constants.js";
 import dotenv from "dotenv";
 import { acquireLock, releaseLock } from "./utils/lock-utils.js";
 import { Logger } from "./utils/logger.js";
+import { listApps } from "./commands/list.js";
 
 dotenv.config({ path: ".env" });
 
@@ -47,6 +48,7 @@ await yargs(process.argv.slice(2))
 Commands:
   init    Initialize a new application
   deploy  Deploy or update an application
+  list      List all applications
 
 Use "$0 <command> --help" for more information on a command.`
   )
@@ -122,6 +124,13 @@ Use "$0 <command> --help" for more information on a command.`
         force: args.force,
         lint: args.lint,
       });
+    }
+  ) .command(
+    "list",
+    "List all applications",
+    (yargs) => yargs,
+    async () => {
+      await listApps();
     }
   )
   .demandCommand(1, "You must specify a command to run.")
