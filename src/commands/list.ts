@@ -9,9 +9,11 @@ export const listApps = async () => {
 
   // Read the directory to get all apps
   const apps:(App&{status?:string})[] = AppRepo.getAll();
-  await Promise.all(apps.map(async (app) => ({app,
-    status: await getAppStatus(app.name)
-  })));
+  await Promise.all(
+    apps.map(async (app) => {
+      app.status = await getAppStatus(app.name); 
+    })
+  );
 
   // Create a table
   const table = new Table({
