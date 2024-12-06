@@ -1,13 +1,15 @@
 import { JSONFileSync } from 'lowdb/node';
 import { App } from './model.js';
 import { LowSync } from 'lowdb';
+import path from 'path';
+import { APP_DIR } from '../constants.js';
 
 interface DatabaseSchema {
   apps: App[]; // Array of applications
 }
 
 // Initialize LowDB
-const adapter = new JSONFileSync<DatabaseSchema>('db.json'); // Path to the JSON file
+const adapter = new JSONFileSync<DatabaseSchema>(path.resolve(APP_DIR, 'db.json')); // Path to the JSON file
 const db = new LowSync(adapter, { apps: [] });
 
 /**
