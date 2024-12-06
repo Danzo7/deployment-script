@@ -9,7 +9,7 @@ import { acquireLock, releaseLock } from './utils/lock-utils.js';
 import { Logger } from './utils/logger.js';
 import { listApps } from './commands/list.js';
 
-dotenv.config({ path: '.env' });
+dotenv.config();
 
 interface InitArgs {
   name: string;
