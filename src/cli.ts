@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import yargs from 'yargs';
 import { initializeDB } from './db/db.js';
 import { deploy } from './commands/deploy.js';
