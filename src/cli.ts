@@ -3,14 +3,14 @@ import yargs from 'yargs';
 import { initializeDB } from './db/db.js';
 import { deploy } from './commands/deploy.js';
 import { init } from './commands/init.js';
-import { APP_DIR } from './constants.js';
+import { APP_DIR, ROOT_DIR } from './constants.js';
 import dotenv from 'dotenv';
 import { acquireLock, releaseLock } from './utils/lock-utils.js';
 import { Logger } from './utils/logger.js';
 import { listApps } from './commands/list.js';
 import path from 'path';
 
-dotenv.config({path: path.join(APP_DIR, '.env')});
+dotenv.config({path: path.join(ROOT_DIR, '.env')});
 
 interface InitArgs {
   name: string;
