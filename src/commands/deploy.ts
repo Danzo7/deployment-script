@@ -25,6 +25,9 @@ export const saveLogs = (logDir: string) => {
     originalStderrWrite(chunk); // Write to console
     return true;
   };
+  process.on("exit", () => {
+    stdoutLogStream.end();
+  });
 };
 export const deploy = async ({
   name,
@@ -41,7 +44,8 @@ export const deploy = async ({
   const isFirstDeploy = app?.lastDeploy == undefined;
   if (!app) {
     throw new Error(
-      `App "${Logger.highlight(name)}" not found in the repository.`
+      `App "${Logger.highlight(name)}" not found in the repository.\n` +
+      `To initialize the app, run: ${Logger.highlight(`dm init --name ${name} --repo <repo-url> --branch <branch-name> --instances <number-of-instances> --port <port-number>`)}`
     );
   }
   const { relDir, envDir, logDir } = ensureDirectories(app.appDir);

@@ -61,7 +61,7 @@ Use "$0 <command> --help" for more information on a command.`
       }
     })
     .command<InitArgs>(
-      'init',
+      'init --name <app-name> --repo <repo-url> --branch <branch-name> --instances <number-of-instances> --port <port-number>',
       'Initialize a new application',
       (yargs) =>
         yargs.options({

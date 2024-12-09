@@ -49,7 +49,7 @@ export const init = async ({
 
   Logger.advice(
     `Next steps: Run ${Logger.command(
-      `deploy ${name}`
-    )} to deploy the app. Use ${Logger.command(`list`)} to verify its status.`
+      `dm deploy ${name}`
+    )} to deploy the app. Use ${Logger.command(`dm list`)} to verify its status.`
   );
 };
