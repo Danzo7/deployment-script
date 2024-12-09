@@ -9,7 +9,6 @@ export const calculateFileHash = (filePath: string): string => {
 };
 
 export const checkEnv = async (dir: string, envDir: string) => {
-  Logger.info('Checking environment variables...');
   const appEnvPath = path.join(dir, '.env.local');
   const releaseEnvPath = path.join(envDir, '.env.local');
 

@@ -62,7 +62,7 @@ export const deploy = async ({
   Logger.advice(`App Status: ${Logger.highlight(appStatus)}`);
   const isRunning = appStatus == 'online';
 
-  Logger.info('Checking environment...');
+  Logger.info('Checking environment variables...');
   const isEnvChanged = await checkEnv(relDir, envDir);
   if (isEnvChanged && !isGitChanged && !isFirstDeploy) {
     Logger.info(`Everything is up to date`);
@@ -89,7 +89,7 @@ export const deploy = async ({
     status: appStatus,
     output: path.join(logDir, 'pm2.out.log'),
     error: path.join(logDir, 'pm2.error.log'),
-  });
+  },force);
   AppRepo.updateLastDeploy(name);
   Logger.success(
     `Successfully deployed ${Logger.highlight(name)} on port ${Logger.highlight(app.port.toString())}.`
