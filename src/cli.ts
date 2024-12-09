@@ -44,14 +44,14 @@ initializeDB();
 try {
   await yargs(process.argv.slice(2))
     .usage(
-      `Usage: dm <command> [options]
+      `Usage: $0 <command> [options]
 
 Commands:
   init    Initialize a new application
   deploy  Deploy or update an application
   list      List all applications
 
-Use "dm <command> --help" for more information on a command.`
+Use "$0 <command> --help" for more information on a command.`
     )
     .middleware((argv) => {
       const { name } = argv as any as DeployArgs;
@@ -105,7 +105,7 @@ Use "dm <command> --help" for more information on a command.`
       }
     )
     .command<DeployArgs>(
-      'deploy',
+      'deploy <name>',
       'Deploy or update an application',
       (yargs) =>
         yargs
