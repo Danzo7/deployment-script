@@ -1,7 +1,6 @@
 import path from 'path';
 import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
-import { ensureDirectories } from '../utils/file-utils.js';
 import { writeFileSync } from 'fs';
 
 /**
@@ -30,8 +29,7 @@ export const generateIISConfig = async ({
     );
   }
 
-  const { relDir } = ensureDirectories(app.appDir);
-  const configFilePath = path.join(relDir, `web.config`);
+  const configFilePath = path.join(app.appDir, `web.config`);
 
   const configContent = `<?xml version="1.0" encoding="UTF-8"?>
 <configuration>
