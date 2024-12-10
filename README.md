@@ -1,59 +1,96 @@
-
 # Deployment Manager CLI
 
-A command-line tool to manage the deployment and status of Next.js applications using PM2. This tool enables you to list all applications, check their statuses, restart or start applications, and view key deployment information in a well-organized table format.
+A comprehensive command-line tool to manage deployment and application configurations for Next.js applications, utilizing PM2 and IIS. This tool simplifies the process of initializing, deploying, and managing applications while offering features like IIS reverse proxy configuration.
+
+---
 
 ## Features
 
-- **List Applications**: View all applications in the system with details like name, port, last deployment time, and status.
-- **Check Application Status**: Easily view the current status of each application (e.g., online, stopped, launching).
-- **Start/Restart Applications**: Start or restart applications with the ability to force deployment and run linting.
-- **Easy to Use**: Intuitive command-line interface for fast and efficient app management.
+### General
+- **List Applications**: View all registered applications with details such as name, port, deployment time, and status.
+- **Initialize Applications**: Set up new applications with configurations for repository, branch, instances, and ports.
+- **Deploy Applications**: Deploy or update applications with optional force or linting flags.
+- **Generate IIS Config**: Automatically create IIS reverse proxy configuration files for specified applications.
+- **Status Management**: View or manage application statuses (e.g., online, stopped, launching).
+- **Workflow generation**: Generate and push Gitea workflow to integrate with CI.
+---
 
 ## Installation
 
-To install the tool, clone the repository and install the dependencies.
+Clone the repository, install dependencies, and link the CLI tool:
 
 ```bash
 git clone <repository-url>
 cd <project-directory>
 npm install
-npm build
+npm run build
 npm link
 ```
 
+---
+
 ## Usage
 
-Once installed, you can use the tool directly from the command line.
+Once installed, the tool is accessible via the `dm` command.
 
-### List All Applications
-
-To list all applications and their statuses:
+### **List Applications**
+Displays a table of all applications along with their details.
 
 ```bash
 dm list
 ```
 
-### Deploy or Update an Application
+---
 
-To deploy or update an application:
+### **Initialize an Application**
 
-```bash
-dm deploy <app-name> --force --lint
-```
-
-- `--force`: Forces the deployment even if no changes are detected.
-- `--lint`: Runs linting during the deployment process.
-
-### Initialize a New Application
-
-To initialize a new application:
+Set up a new application for deployment.
 
 ```bash
-dm init --name <app-name> --repo <repo-url> --branch <branch-name> --instances <number-of-instances> --port <port-number>
+dm init <name> --repo <repo-url> --branch <branch-name> --instances <number-of-instances> --port <port-number>
 ```
 
+#### Options:
+- `--name` (Required): Name of the application.
+- `--repo` (Required): Repository URL for the application.
+- `--branch`: Branch to deploy (default: `main`).
+- `--instances`: Number of PM2 instances to start (default: 1).
+- `--port`: Port number (default: dynamically assigned).
 
+---
 
+### **Deploy an Application**
 
+Deploy or update an existing application.
 
+```bash
+dm deploy <name> --force --lint
+```
+
+#### Options:
+- `--force`: Force deployment even if no changes are detected.
+- `--lint`: Run linting during the deployment process.
+
+---
+
+### **Generate IIS Config**
+
+Create an IIS reverse proxy configuration for an application.
+
+```bash
+dm iis-config <name> --https --non-www
+```
+
+#### Options:
+- `--https`: Include HTTPS redirection rules in the configuration.
+- `--non-www`: Redirect all traffic to the non-WWW version of the domain.
+
+---
+### **Generate Workflow**
+
+Generate a workflow file and push it to the remote repository.
+
+```bash
+dm workflow <name>
+```
+---

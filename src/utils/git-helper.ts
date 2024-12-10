@@ -51,3 +51,33 @@ export const handleGitRepo = async ({
   Logger.info('Repository is up-to-date. No changes detected.');
   return false;
 };
+export const pushChanges = async ({
+  dir,
+  commitMessage,
+}: {
+  dir: string;
+  commitMessage: string;
+}) => {
+  const git = simpleGit(dir);
+
+  try {
+    // Stage changes (all files)
+    Logger.info('Staging changes...');
+    await withRetry('Staging changes', async () => git.add('.'));
+
+    // Commit changes
+    Logger.info('Committing changes...');
+    await withRetry('Committing changes', async () =>
+      git.commit(commitMessage)
+    );
+
+    // Push the changes to the remote repository
+    Logger.info('Pushing changes...');
+    await withRetry('Pushing changes', async () => git.push());
+
+    Logger.success('Changes pushed successfully.');
+  } catch (error) {
+    Logger.error('Failed to push changes.');
+    throw error;
+  }
+};

@@ -11,7 +11,7 @@ import { Logger } from './logger.js';
 export const findAvailablePort = async (
   knownUsedPort: number[],
   startPort: number = 50000,
-  stopPort: number = 50500
+  stopPort: number = 50999
 ): Promise<number> => {
   portfinder.basePort = startPort; // Set the base port for portfinder.
 

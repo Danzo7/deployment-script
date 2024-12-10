@@ -8,6 +8,8 @@ import { acquireLock, releaseLock } from './utils/lock-utils.js';
 import { Logger } from './utils/logger.js';
 import { listApps } from './commands/list.js';
 import { existsSync, mkdirSync } from 'fs';
+import { generateIISConfig } from './commands/iis-config.js';
+import { generateWorkflow } from './commands/generate-workflow.js';
 
 interface InitArgs {
   name: string;
@@ -51,6 +53,8 @@ Commands:
   init    Initialize a new application
   deploy  Deploy or update an application
   list      List all applications
+  iis-config Generate an IIS config file for reverse proxy
+  workflow Generate Gitea Workflow and push it to the remote repository
 
 Use "dm <command> --help" for more information on a command.`
     )
@@ -62,40 +66,38 @@ Use "dm <command> --help" for more information on a command.`
       }
     })
     .command<InitArgs>(
-      'init',
+      'init <name>',
       'Initialize a new application',
       (yargs) =>
-        yargs.options({
-          name: {
+        yargs
+          .positional('name', {
             type: 'string',
             demandOption: true,
-            alias: 'n',
             describe: 'The name of the application to initialize',
-          },
-          repo: {
+          })
+          .option('repo', {
             type: 'string',
             demandOption: true,
             alias: 'r',
             describe: 'The repository URL of the application',
-          },
-          branch: {
+          })
+          .option('branch', {
             type: 'string',
             default: 'main',
             alias: 'b',
-            describe: 'The branch of the repository to use (default: main)',
-          },
-          instances: {
+            describe:'The port number to use for the application. Defaults to an available port starting from 50xxx if not specified.',
+          })
+          .option('instances', {
             type: 'number',
             default: 1,
             alias: 'i',
             describe: 'The number of instances to initialize (default: 1)',
-          },
-          port: {
+          })
+          .option('port', {
             type: 'number',
             alias: 'p',
-            describe: 'The port number to use for the application',
-          },
-        }),
+            describe: 'The port number to use for the application (default: find)',
+          }),
       async (args) => {
         try {
           await init({ ...args, appsDir: APP_DIR });
@@ -147,7 +149,43 @@ Use "dm <command> --help" for more information on a command.`
       async () => {
         await listApps();
       }
-    )
+    ).command(
+      'iis-config <name>',
+      'Generate an IIS config file for reverse proxy',
+      (yargs) =>
+        yargs
+          .positional('name', {
+            type: 'string',
+            demandOption: true,
+            describe: 'The name of the application',
+          })
+          .option('https', {
+            type: 'boolean',
+            default: false,
+            describe: 'Include HTTPS redirection rules',
+          })
+          .option('non-www', {
+            type: 'boolean',
+            default: false,
+            describe: 'Redirect all traffic to non-WWW',
+          }),
+      async (args) => {
+        await generateIISConfig(args);
+      })
+      .command(
+        'workflow <name>',
+        'Generate and push Gitea workflow to remote repository',
+        (yargs) =>
+          yargs
+            .positional('name', {
+              type: 'string',
+              demandOption: true,
+              describe: 'The name of the application',
+            })
+           ,
+        async (args) => {
+          await generateWorkflow(args);
+        })
     .demandCommand(1, 'You must specify a command to run.')
     .parseAsync();
 } catch (err) {
