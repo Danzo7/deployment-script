@@ -1,34 +1,11 @@
 import path from 'path';
 import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
-import { createWriteStream } from 'fs';
 import { checkEnv, ensureDirectories } from '../utils/file-utils.js';
 import { prepare } from '../utils/npm-helper.js';
 import { getAppStatus, runApp } from '../utils/pm2-helper.js';
 import { handleGitRepo } from '../utils/git-helper.js';
-export const saveLogs = (logDir: string) => {
-  const stdoutLogStream = createWriteStream(path.join(logDir, "deploy.log"), {
-    flags: "a", // Append to the log file instead of overwriting it
-  });
 
-  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
-  const originalStderrWrite = process.stderr.write.bind(process.stderr);
-
-  process.stdout.write = (chunk) => {
-    stdoutLogStream.write(chunk);
-    originalStdoutWrite(chunk); // Write to console
-    return true;
-  };
-
-  process.stderr.write = (chunk) => {
-    stdoutLogStream.write(chunk);
-    originalStderrWrite(chunk); // Write to console
-    return true;
-  };
-  process.on("exit", () => {
-    stdoutLogStream.end();
-  });
-};
 export const deploy = async ({
   name,
   force,
@@ -49,7 +26,6 @@ export const deploy = async ({
     );
   }
   const { relDir, envDir, logDir } = ensureDirectories(app.appDir);
-  saveLogs(logDir);
   Logger.info('Checking Git repository...');
   const isGitChanged = await handleGitRepo({
     dir: relDir,
@@ -81,6 +57,7 @@ export const deploy = async ({
     withBuild:
       force || !isRunning || isFirstDeploy || isGitChanged || !isEnvChanged,
     withFix: force || lint, // Add skip lint in future
+    logDir 
   });
   await runApp(relDir, {
     name: app.name,

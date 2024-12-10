@@ -29,7 +29,7 @@ export const findAvailablePort = async (
 
       startPort = availablePort + 1; // Increment the starting port to avoid re-checking.
     } catch (err) {
-      Logger.error(`Error finding available port: ${err}`);
+      Logger.error(`Error finding available port`);
       throw err;
     }
   }

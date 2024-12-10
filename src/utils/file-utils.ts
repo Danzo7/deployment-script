@@ -19,15 +19,15 @@ export const checkEnv = async (dir: string, envDir: string) => {
     if (appEnvHash !== releaseEnvHash) {
       fs.copyFileSync(releaseEnvPath, appEnvPath);
       Logger.success(
-        `Overwritten .env.local in ${dir} with the one from ${envDir}`
+        `Update environment variables`
       );
       return true;
     } else {
-      Logger.info('.env.local is up to date. No changes made.');
+      Logger.info('environment variables are up to date. No changes made.');
     }
   } else if (!fs.existsSync(appEnvPath) && fs.existsSync(releaseEnvPath)) {
     fs.copyFileSync(releaseEnvPath, appEnvPath);
-    Logger.success(`Copied .env.local from ${dir} to ${envDir}`);
+    Logger.success(`Pull environment variables`);
     return true;
   } else {
     Logger.info('No .env.local file found.');
