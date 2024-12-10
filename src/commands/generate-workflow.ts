@@ -1,7 +1,7 @@
 import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 import { pushChanges } from '../utils/git-helper.js';
-import { writeFileSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 export const generateWorkflow = async ({
@@ -47,6 +47,9 @@ jobs:
   // Step 3: Write the deploy.yaml file to the .gitea/workflows directory
   const repoDir = app.appDir;  // Assuming app.appDir is the path to the app's repo
   const workflowDir = join(repoDir, '.gitea', 'workflows');
+  if(!existsSync(workflowDir)) {
+    mkdirSync(workflowDir, { recursive: true });
+  }
   const yamlFilePath = join(workflowDir, 'deploy.yaml');
 
   Logger.info(`Writing deploy.yaml to: ${yamlFilePath}`);
