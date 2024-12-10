@@ -28,7 +28,7 @@ export const generateWorkflow = async ({
   // Step 2: Create the deploy.yaml content for the Gitea Actions
   const deployYamlContent = `
 name: Deploy
-run-name:Deploying via Gitea Actions 🚀
+run-name: Deploying via Gitea Actions 🚀
 on: [push]
 
 jobs:
