@@ -15,8 +15,7 @@ const runCommand = (command: string, options: { cwd: string; logFile: string }) 
       cwd: options.cwd,
       stdio: 'pipe', // Prevent interaction with the current process
       windowsHide: true, // Prevents a console window (Windows-specific)
-      env: {  CI: 'true',  },
-      timeout: 60000, // Timeout after 60 seconds
+      env: {  CI: 'true' },
     }).toString();
 
     fs.appendFileSync(options.logFile, `Command: ${command}\nOutput:\n${result}\n\n`, 'utf8');
@@ -43,7 +42,6 @@ const runCommand = (command: string, options: { cwd: string; logFile: string }) 
  */
 const runScript = async (dir: string, args: string, description: string, logFile: string) => {
   Logger.info(`${description}...`);
-  try {
     const command = `npm run ${args}`;
     const result = runCommand(command, { cwd: dir, logFile });
 
@@ -52,10 +50,7 @@ const runScript = async (dir: string, args: string, description: string, logFile
     }
 
     Logger.info(`${description} completed successfully.`);
-  } catch (err) {
-    Logger.error(`${description} failed`);
-    throw err;
-  }
+ 
 };
 
 /**
@@ -65,7 +60,6 @@ const runScript = async (dir: string, args: string, description: string, logFile
  */
 const installDependencies = async (dir: string, logFile: string) => {
   Logger.info('Installing packages using npm...');
-  try {
     const command = `npm install --no-audit --no-fund --yes`;
     const result = runCommand(command, { cwd: dir, logFile });
 
@@ -75,10 +69,7 @@ const installDependencies = async (dir: string, logFile: string) => {
 
     Logger.success('Packages installed successfully.');
     Logger.info(result.stdout);
-  } catch (error) {
-    Logger.error(`Installation failed`);
-    throw error;
-  }
+  
 };
 
 /**
