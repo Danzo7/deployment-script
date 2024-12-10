@@ -3,6 +3,7 @@ import { Logger } from '../utils/logger.js';
 import { pushChanges } from '../utils/git-helper.js';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { ensureDirectories } from '../utils/file-utils.js';
 
 export const generateWorkflow = async ({
   name,
@@ -45,8 +46,8 @@ jobs:
     `;
 
   // Step 3: Write the deploy.yaml file to the .gitea/workflows directory
-  const repoDir = app.appDir;  // Assuming app.appDir is the path to the app's repo
-  const workflowDir = join(repoDir, '.gitea', 'workflows');
+  const {relDir} = ensureDirectories(app.appDir);  // Assuming app.appDir is the path to the app's repo
+  const workflowDir = join(relDir, '.gitea', 'workflows');
   if(!existsSync(workflowDir)) {
     mkdirSync(workflowDir, { recursive: true });
   }
@@ -58,7 +59,7 @@ jobs:
   // Step 4: Use git-helper to push the new workflow to the repository
   Logger.info('Pushing deploy.yaml to Git...');
   await pushChanges({
-    dir: repoDir,
+    dir: relDir,
     commitMessage:"[CLI-tool] Creating deployment workflow"    
   });
 

@@ -55,7 +55,7 @@ export const deploy = async ({
   await prepare(relDir, {
     withInstall: force || isFirstDeploy || isGitChanged || !isRunning,
     withBuild:
-      force || !isRunning || isFirstDeploy || isGitChanged || !isEnvChanged,
+      force || !isRunning || isFirstDeploy || isGitChanged || isEnvChanged,
     withFix: force || lint, // Add skip lint in future
     logDir 
   });
