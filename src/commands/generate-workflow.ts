@@ -1,6 +1,6 @@
 import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
-import { pushChanges } from '../utils/git-helper.js';
+import { discardUncommittedChanges, pushChanges } from '../utils/git-helper.js';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { ensureDirectories } from '../utils/file-utils.js';
@@ -42,6 +42,9 @@ jobs:
 
   // Step 3: Write the deploy.yaml file to the .gitea/workflows directory
   const {relDir} = ensureDirectories(app.appDir);  // Assuming app.appDir is the path to the app's repo
+  Logger.info('Cleaning local repository...');
+  discardUncommittedChanges(relDir);
+
   const workflowDir = join(relDir, '.gitea', 'workflows');
   if(!existsSync(workflowDir)) {
     mkdirSync(workflowDir, { recursive: true });

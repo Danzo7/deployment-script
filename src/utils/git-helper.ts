@@ -1,4 +1,4 @@
-import { simpleGit, CheckRepoActions } from 'simple-git';
+import { simpleGit, CheckRepoActions, ResetMode } from 'simple-git';
 import { Logger } from './logger.js';
 import { withRetry } from './retry-helper.js';
 import { isDirectoryEmpty } from './file-utils.js';
@@ -37,9 +37,10 @@ export const handleGitRepo = async ({
   );
 
   if (status.ahead > 0) {
-    throw new Error(
-      `Cannot deploy: ${status.ahead} commits ahead. Please don't do that.`
+    Logger.warn(
+      `${status.ahead} commits ahead. Please don't do that.`
     );
+    discardUncommittedChanges(dir);
   }
 
   if (status.behind > 0) {
@@ -59,6 +60,13 @@ export const pushChanges = async ({
   commitMessage: string;
 }) => {
   const git = simpleGit(dir);
+  const status = await withRetry('Getting repository status', async () =>
+    git.status()
+  );
+  if(status.ahead > 0) {
+    if(status.behind > 0) {
+      throw new Error('Cannot push changes. The repository is not up-to-date.');
+    }
 
   try {
     // Stage changes (all files)
@@ -78,6 +86,21 @@ export const pushChanges = async ({
     Logger.success('Changes pushed successfully.');
   } catch (error) {
     Logger.error('Failed to push changes.');
+    throw error;
+  }  }
+  else{
+    Logger.info('No changes to push.');
+  }
+};
+export const discardUncommittedChanges = async (dir: string) => {
+  const git = simpleGit(dir);
+
+  try {
+    await withRetry('Discarding changes', async () => git.reset(ResetMode.HARD));
+
+    Logger.success('Uncommitted changes discarded.');
+  } catch (error) {
+    Logger.error('Failed to discard uncommitted changes.');
     throw error;
   }
 };

@@ -11,6 +11,7 @@ import { existsSync, mkdirSync } from 'fs';
 import { generateIISConfig } from './commands/iis-config.js';
 import { generateWorkflow } from './commands/generate-workflow.js';
 import { unlock } from './commands/unlock.js';
+import { clean } from './commands/clean.js';
 
 interface InitArgs {
   name: string;
@@ -57,6 +58,7 @@ Commands:
   iis-config Generate an IIS config file for reverse proxy
   workflow Generate Gitea Workflow and push it to the remote repository
   unlock  Forcefully release the lock for an application
+  clean   Clean app directory from local changes
 
 Use "dm <command> --help" for more information on a command.`
     )
@@ -199,6 +201,24 @@ Use "dm <command> --help" for more information on a command.`
            (args) => {
             try {
                unlock(args);
+            } catch (err) {
+              Logger.error(err);
+              process.exit(1);
+            }
+          }
+        )
+        .command(
+          'clean <name>',
+          'Clean app directory from local changes.',
+          (yargs) =>
+            yargs.positional('name', {
+              type: 'string',
+              demandOption: true,
+              describe: 'The name of the application',
+            }),
+           (args) => {
+            try {
+               clean(args);
             } catch (err) {
               Logger.error(err);
               process.exit(1);

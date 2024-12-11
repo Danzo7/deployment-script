@@ -4,7 +4,7 @@ import { Logger } from '../utils/logger.js';
 import {  ensureDirectories } from '../utils/file-utils.js';
 import { prepare } from '../utils/npm-helper.js';
 import { getAppStatus, runApp } from '../utils/pm2-helper.js';
-import { handleGitRepo } from '../utils/git-helper.js';
+import {  handleGitRepo, pushChanges } from '../utils/git-helper.js';
 import { checkEnv } from '../utils/env-heper.js';
 
 export const deploy = async ({
@@ -69,6 +69,10 @@ export const deploy = async ({
     error: path.join(logDir, 'pm2.error.log'),
   },force);
   AppRepo.updateLastDeploy(name);
+  if(lint){
+    Logger.info('Pushing lint fix...');
+    pushChanges({dir:relDir, commitMessage:`[CLI Tool] Linting fix`});
+  }
   Logger.success(
     `Successfully deployed ${Logger.highlight(name)} on port ${Logger.highlight(app.port.toString())}.`
   );
