@@ -1,10 +1,11 @@
 import path from 'path';
 import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
-import { checkEnv, ensureDirectories } from '../utils/file-utils.js';
+import {  ensureDirectories } from '../utils/file-utils.js';
 import { prepare } from '../utils/npm-helper.js';
 import { getAppStatus, runApp } from '../utils/pm2-helper.js';
 import { handleGitRepo } from '../utils/git-helper.js';
+import { checkEnv } from '../utils/env-heper.js';
 
 export const deploy = async ({
   name,
@@ -56,7 +57,7 @@ export const deploy = async ({
     withInstall: force || isFirstDeploy || isGitChanged || !isRunning,
     withBuild:
       force || !isRunning || isFirstDeploy || isGitChanged || isEnvChanged,
-    withFix: force || lint, // Add skip lint in future
+    withFix:  lint, // Add skip lint in future
     logDir 
   });
   await runApp(relDir, {

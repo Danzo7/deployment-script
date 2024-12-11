@@ -35,11 +35,6 @@ jobs:
   Explore-Gitea-Actions:
     runs-on: windows
     steps:
-      # Step 1: Checkout code from the repository
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      # Step 2: Deploy Application
       - name: Deploy Application
         run: |
           dm deploy ${name}
