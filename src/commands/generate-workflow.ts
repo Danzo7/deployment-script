@@ -43,7 +43,7 @@ jobs:
   // Step 3: Write the deploy.yaml file to the .gitea/workflows directory
   const {relDir} = ensureDirectories(app.appDir);  // Assuming app.appDir is the path to the app's repo
   Logger.info('Cleaning local repository...');
-  discardUncommittedChanges(relDir);
+  await discardUncommittedChanges(relDir);
 
   const workflowDir = join(relDir, '.gitea', 'workflows');
   if(!existsSync(workflowDir)) {
