@@ -63,7 +63,7 @@ export const pushChanges = async ({
   const status = await withRetry('Getting repository status', async () =>
     git.status()
   );
-  if(status.ahead > 0) {
+
     if(status.behind > 0) {
       throw new Error('Cannot push changes. The repository is not up-to-date.');
     }
@@ -87,10 +87,8 @@ export const pushChanges = async ({
   } catch (error) {
     Logger.error('Failed to push changes.');
     throw error;
-  }  }
-  else{
-    Logger.info('No changes to push.');
-  }
+  }  
+
 };
 export const discardUncommittedChanges = async (dir: string) => {
   const git = simpleGit(dir);
