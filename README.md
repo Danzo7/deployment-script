@@ -105,6 +105,15 @@ dm workflow <name>
 ```
 
 ---
+### **Hard Unlock a Locked Application**
+
+Forcefully release a lock on an application by killing the associated process. This command is useful when an application is stuck or has an orphaned lock.
+
+```bash
+dm unlock <name>
+```
+
+---
 
 ## Why Use Deployment Manager CLI?
 

@@ -10,6 +10,7 @@ import { listApps } from './commands/list.js';
 import { existsSync, mkdirSync } from 'fs';
 import { generateIISConfig } from './commands/iis-config.js';
 import { generateWorkflow } from './commands/generate-workflow.js';
+import { unlock } from './commands/unlock.js';
 
 interface InitArgs {
   name: string;
@@ -55,6 +56,7 @@ Commands:
   list      List all applications
   iis-config Generate an IIS config file for reverse proxy
   workflow Generate Gitea Workflow and push it to the remote repository
+  unlock  Forcefully release the lock for an application
 
 Use "dm <command> --help" for more information on a command.`
     )
@@ -185,7 +187,24 @@ Use "dm <command> --help" for more information on a command.`
            ,
         async (args) => {
           await generateWorkflow(args);
-        })
+        }) .command(
+          'unlock <name>',
+          'Forcefully release the lock for an application by killing its process.',
+          (yargs) =>
+            yargs.positional('name', {
+              type: 'string',
+              demandOption: true,
+              describe: 'The name of the application',
+            }),
+          (args) => {
+            try {
+              unlock(args);
+            } catch (err) {
+              Logger.error(err);
+              process.exit(1);
+            }
+          }
+        )
     .demandCommand(1, 'You must specify a command to run.')
     .parseAsync();
 } catch (err) {
