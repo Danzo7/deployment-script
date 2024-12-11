@@ -61,8 +61,8 @@ Commands:
 Use "dm <command> --help" for more information on a command.`
     )
     .middleware((argv) => {
-      const { name } = argv as any as DeployArgs;
-      if (name) {
+      const { name ,_} = argv as any as DeployArgs&{_: string[]};
+      if (name&&_[0]!="unlock") {
         acquireLock(name);
         setupCleanup(name);
       }
@@ -196,9 +196,9 @@ Use "dm <command> --help" for more information on a command.`
               demandOption: true,
               describe: 'The name of the application',
             }),
-          (args) => {
+           (args) => {
             try {
-              unlock(args);
+               unlock(args);
             } catch (err) {
               Logger.error(err);
               process.exit(1);

@@ -3,7 +3,7 @@ import { forceReleaseLock } from "../utils/lock-utils.js";
 import { Logger } from "../utils/logger.js";
 
 
-export const unlock = async ({
+export const unlock =  ({
   name,
 
 }: {
