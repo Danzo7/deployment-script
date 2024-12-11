@@ -216,9 +216,9 @@ Use "dm <command> --help" for more information on a command.`
               demandOption: true,
               describe: 'The name of the application',
             }),
-           (args) => {
+          async (args) => {
             try {
-               clean(args);
+              await clean(args);
             } catch (err) {
               Logger.error(err);
               process.exit(1);

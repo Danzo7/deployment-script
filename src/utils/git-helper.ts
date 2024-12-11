@@ -40,7 +40,7 @@ export const handleGitRepo = async ({
     Logger.warn(
       `${status.ahead} commits ahead. Please don't do that.`
     );
-    discardUncommittedChanges(dir);
+    await discardUncommittedChanges(dir);
   }
 
   if (status.behind > 0) {

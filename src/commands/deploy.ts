@@ -71,7 +71,7 @@ export const deploy = async ({
   AppRepo.updateLastDeploy(name);
   if(lint){
     Logger.info('Pushing lint fix...');
-    pushChanges({dir:relDir, commitMessage:`[CLI Tool] Linting fix`});
+   await pushChanges({dir:relDir, commitMessage:`[CLI Tool] Linting fix`});
   }
   Logger.success(
     `Successfully deployed ${Logger.highlight(name)} on port ${Logger.highlight(app.port.toString())}.`
