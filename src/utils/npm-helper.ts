@@ -68,7 +68,7 @@ const installDependencies = async (dir: string, logFile: string) => {
     }
 
     Logger.success('Packages installed successfully.');
-    Logger.info(result.stdout);
+    result.stdout?.split('\n').forEach((line) => Logger.info(line));
   
 };
 

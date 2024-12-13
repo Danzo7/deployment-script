@@ -1,10 +1,12 @@
 import chalk from 'chalk';
 
 export class Logger {
+  static isMuted = false;
   /**
    * Logs an informational message in blue.
    */
   static info(message?: any, ...optionalParams: any[]) {
+    if (Logger.isMuted) return;
     this.log(chalk.blueBright(`ℹ ${message}`), ...optionalParams);
     return this.nl();
   }
@@ -13,6 +15,7 @@ export class Logger {
    * Logs a success message in green.
    */
   static success(message?: any, ...optionalParams: any[]) {
+    if (Logger.isMuted) return;
     this.log(chalk.green(`✔ ${message}`), ...optionalParams);
     return this.nl();
   }
@@ -21,6 +24,7 @@ export class Logger {
    * Logs an error message in red.
    */
   static error(message?: any, ...optionalParams: any[]) {
+    if (Logger.isMuted) return;
     this.log(chalk.red(`✖ ${message}`), ...optionalParams);
     return this.nl();
   }
@@ -29,6 +33,7 @@ export class Logger {
    * Logs a warning message in yellow.
    */
   static warn(message?: any, ...optionalParams: any[]) {
+    if (Logger.isMuted) return;
     this.log(chalk.yellow(`⚠ ${message}`), ...optionalParams);
     return this.nl();
   }
@@ -37,6 +42,7 @@ export class Logger {
    * Logs an advice message in italic white.
    */
   static advice(message?: any, ...optionalParams: any[]) {
+    if (Logger.isMuted) return;
     this.log(chalk.italic.bold.whiteBright(`💡 ${message}`), ...optionalParams);
     return this.nl();
   }

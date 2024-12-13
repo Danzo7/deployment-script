@@ -12,6 +12,7 @@ import { generateIISConfig } from './commands/iis-config.js';
 import { generateWorkflow } from './commands/generate-workflow.js';
 import { unlock } from './commands/unlock.js';
 import { clean } from './commands/clean.js';
+import { setEnvForApp } from './commands/set-env.js';
 
 interface InitArgs {
   name: string;
@@ -59,6 +60,8 @@ Commands:
   workflow Generate Gitea Workflow and push it to the remote repository
   unlock  Forcefully release the lock for an application
   clean   Clean app directory from local changes
+  set-env     Set or update an environment variable for an application
+
 
 Use "dm <command> --help" for more information on a command.`
     )
@@ -224,7 +227,38 @@ Use "dm <command> --help" for more information on a command.`
               process.exit(1);
             }
           }
+        )  .command(
+          'set-env <name> <env>',
+          'Set or update an environment variable for an application',
+          (yargs) =>
+            yargs
+              .positional('name', {
+                type: 'string',
+                demandOption: true,
+                describe: 'The name of the application',
+              })
+              .positional('env', {
+                type: 'string',
+                demandOption: true,
+                describe:
+                  'Environment variable in the format VAR_NAME=VALUE, e.g., API_URL=https://example.com',
+              }),
+          async (args) => {
+            const { name, env } = args as any;
+                  const [envName, envValue] = env.split('=');
+      
+            if (!envName || envValue === undefined) {
+              Logger.error(
+                `Invalid format for environment variable. Expected format: VAR_NAME=VALUE`
+              );
+              return;
+            }
+      
+            // Call the function to set the environment variable
+            await setEnvForApp({ name, envName, envValue });
+          }
         )
+      
     .demandCommand(1, 'You must specify a command to run.')
     .parseAsync();
 } catch (err) {

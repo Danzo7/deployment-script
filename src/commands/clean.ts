@@ -18,15 +18,18 @@ export const clean =  async({
   const { relDir } = ensureDirectories(app.appDir);
 
   try{
+    Logger.isMuted=true;
     const isChanged=await handleGitRepo({
     dir: relDir,
     repo: app.repo,
     branch: app.branch,
   })
+  Logger.isMuted=false;
   Logger.info(`Local directory is already clean, ${isChanged?'with uncoming changes':'and up to date'}.`);
 }
   catch{
      discardUncommittedChanges(relDir);
   }
+  Logger.isMuted=false;
 
 };

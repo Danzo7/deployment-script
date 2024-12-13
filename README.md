@@ -114,6 +114,15 @@ dm unlock <name>
 ```
 
 ---
+### **Set environment variables**
+
+Set or update an environment variable for an application.
+
+```bash
+dm set-env <name> <env>
+```
+
+---
 
 ## Why Use Deployment Manager CLI?
 
@@ -122,6 +131,8 @@ dm unlock <name>
 3. **Efficiency**: Saves time by streamlining application initialization, deployment, and monitoring.
 4. **Scalability**: Provides tools for managing multiple applications with ease.
 5. **Reliability**: Robust error handling, logging, and dependency management ensure smooth operation.
+6. **Integration**: Leverages PM2 for process management and Gitea Actions for CI/CD automation.
+7. **Flexibility**: Modular design allows for easy customization and extension to meet specific project needs.
 
 ---
 
