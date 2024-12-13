@@ -48,23 +48,7 @@ const startTime = Date.now(); // Start the timer
 
 initializeDB();
 try {
-  await yargs(process.argv.slice(2))
-    .usage(
-      `Usage: dm <command> [options]
-
-Commands:
-  init    Initialize a new application
-  deploy  Deploy or update an application
-  list      List all applications
-  iis-config Generate an IIS config file for reverse proxy
-  workflow Generate Gitea Workflow and push it to the remote repository
-  unlock  Forcefully release the lock for an application
-  clean   Clean app directory from local changes
-  set-env     Set or update an environment variable for an application
-
-
-Use "dm <command> --help" for more information on a command.`
-    )
+  await yargs(process.argv.slice(2)).scriptName('dm')
     .middleware((argv) => {
       const { name ,_} = argv as any as DeployArgs&{_: string[]};
       if (name&&_[0]!="unlock") {
@@ -258,8 +242,8 @@ Use "dm <command> --help" for more information on a command.`
             await setEnvForApp({ name, envName, envValue });
           }
         )
-      
     .demandCommand(1, 'You must specify a command to run.')
+    .strictCommands()
     .parseAsync();
 } catch (err) {
   Logger.error(err);
