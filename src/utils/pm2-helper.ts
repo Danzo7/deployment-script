@@ -18,13 +18,14 @@ export const runApp = async (
   },
   force: boolean = false
 ) => {
+  const {port,status,...rest}=config;
   return new Promise<void>((resolve, reject) => {
     pm2.connect((err) => {
       if (err) {
         return reject(err);
       }
 
-      if (config.status == 'online' && !force) {
+      if (status == 'online' && !force) {
         Logger.info(`Restarting "${config.name}"...`);
         pm2.restart(config.name, (restartErr) => {
           pm2.disconnect();
@@ -36,16 +37,18 @@ export const runApp = async (
           resolve();
         });
       } else {
+    
         Logger.info(`Starting "${config.name}"...`);
-        if (config.status == 'not-found')
+        if (status == 'not-found')
           pm2.start(
             {
               ...config,
               exec_mode: 'cluster',
               cwd: dir,
               script: `node_modules/next/dist/bin/next`,
-              args: `start -p ${config.port}`,
+              args: `start -p ${port}`,
               max_memory_restart: '250M',
+              restart_delay:100
             },
             (startErr) => {
               pm2.disconnect();
@@ -65,12 +68,15 @@ export const runApp = async (
             }
             pm2.start(
               {
-                ...config,
+                ...rest,
                 exec_mode: 'cluster',
                 cwd: dir,
                 script: `node_modules/next/dist/bin/next`,
                 args: `start -p ${config.port}`,
                 max_memory_restart: '250M',
+                watch:true,
+                restart_delay:100
+
               },
               (startErr) => {
                 pm2.disconnect();
@@ -102,7 +108,7 @@ export const getAppStatus = async (name: string) =>
           return reject(listErr);
         }
 
-        const app = processList.find((app) => app.name === name);
+        const app = processList.find((app) => app.name === name);   
         if (app) resolve(app.pm2_env?.status ?? 'not-found');
         else resolve('not-found');
       });
