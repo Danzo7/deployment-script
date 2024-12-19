@@ -7,7 +7,7 @@ export class Logger {
    */
   static info(message?: any, ...optionalParams: any[]) {
     if (Logger.isMuted) return;
-    this.log(chalk.blueBright(`ℹ ${message}`), ...optionalParams);
+    this.log(chalk.gray(`ℹ ${message}`), ...optionalParams);
     return this.nl();
   }
 
