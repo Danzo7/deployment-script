@@ -27,14 +27,30 @@ export const runApp = async (
 
       if (status == 'online' && !force) {
         Logger.info(`Restarting "${config.name}"...`);
-        pm2.restart(config.name, (restartErr) => {
-          pm2.disconnect();
+        pm2.stop(config.name, (restartErr) => {
+          pm2.start(
+            {
+              ...config,
+              exec_mode: '',
+              cwd: dir,
+              script: `node_modules/next/dist/bin/next`,
+              args: `start -p ${port}`,
+              max_memory_restart: '250M',
+              restart_delay:100
+            },
+            (startErr) => {
+              pm2.disconnect();
+              if (startErr) {
+                return reject(startErr);
+              }
+              Logger.info(`"${config.name}" restarted successfully.`);
+              resolve();
+            }
+          );
           if (restartErr) {
+            pm2.disconnect();
             return reject(restartErr);
           }
-
-          Logger.info(`"${config.name}" restarted successfully.`);
-          resolve();
         });
       } else {
     
@@ -43,7 +59,7 @@ export const runApp = async (
           pm2.start(
             {
               ...config,
-              exec_mode: 'cluster',
+              exec_mode: '',
               cwd: dir,
               script: `node_modules/next/dist/bin/next`,
               args: `start -p ${port}`,
