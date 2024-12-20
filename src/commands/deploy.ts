@@ -3,7 +3,7 @@ import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 import {  ensureDirectories } from '../utils/file-utils.js';
 import { prepare } from '../utils/npm-helper.js';
-import { getAppStatus, runApp } from '../utils/pm2-helper.js';
+import { getAppStatus, getProcessId, runApp } from '../utils/pm2-helper.js';
 import {  handleGitRepo, pushChanges } from '../utils/git-helper.js';
 import { checkEnv } from '../utils/env-heper.js';
 
@@ -60,6 +60,8 @@ export const deploy = async ({
     withFix:  lint, // Add skip lint in future
     logDir 
   });
+  let pId=getProcessId(name);
+  Logger.info("Old Process ID: "+pId);
   await runApp(relDir, {
     name: app.name,
     port: app.port,
@@ -68,6 +70,8 @@ export const deploy = async ({
     output: path.join(logDir, 'pm2.out.log'),
     error: path.join(logDir, 'pm2.error.log'),
   },force);
+  pId=getProcessId(name);
+  Logger.info("New Process ID: "+pId);
   AppRepo.updateLastDeploy(name);
   if(lint){
     Logger.info('Pushing lint fix...');
