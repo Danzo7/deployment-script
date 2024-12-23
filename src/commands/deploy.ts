@@ -70,8 +70,6 @@ export const deploy = async ({
     output: path.join(logDir, 'pm2.out.log'),
     error: path.join(logDir, 'pm2.error.log'),
   },force);
-  pId=await getProcessId(name);
-  Logger.info("New Process ID: "+pId);
   AppRepo.updateLastDeploy(name);
   if(lint){
     Logger.info('Pushing lint fix...');
