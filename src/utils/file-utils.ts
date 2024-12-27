@@ -42,7 +42,7 @@ export const createBuildDir =  (appDir: string): string => {
   const releaseDir = path.join(appDir, 'release');
   const envDir = path.join(appDir, 'env');
   // const nextConfig = path.join(appDir, 'next.config.js');
-  const nextFolder = path.join(appDir, '.next');
+  const nextFolder = path.join(releaseDir, '.next');
 if(!fs.existsSync(nextFolder)){
   throw new Error('Next.js build not found.');
 }
