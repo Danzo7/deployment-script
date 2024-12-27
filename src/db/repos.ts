@@ -56,6 +56,7 @@ export const AppRepo = {
     app.lastDeploy = new Date().toISOString();
     app.builds ||= [];
     app.builds.push(buildPath);
+    app.activeBuild = app.builds.length - 1;
     db.write();
     return app;
   },

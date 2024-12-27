@@ -107,3 +107,21 @@ export const getAppStatus = async (name: string) =>
         });
       });
     });
+export const deletePm2App = async (name: string) => {
+  return new Promise<void>((resolve, reject) => {
+    pm2.connect((err) => {
+      if (err) {
+        return reject(err);
+      }
+        pm2.delete(name, (deleteErr) => {
+          pm2.disconnect();
+          if (deleteErr) {
+            return reject(deleteErr);
+          }
+          Logger.info(`"${name}" deleted successfully.`);
+          resolve();
+        });
+    });
+  });
+};
+        

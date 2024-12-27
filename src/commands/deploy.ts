@@ -57,7 +57,7 @@ export const deploy = async ({
     withInstall: force || isFirstDeploy || isGitChanged || !isRunning,
     withBuild:
       force || !isRunning || isFirstDeploy || isGitChanged || isEnvChanged,
-    withFix:  lint, // Add skip lint in future
+    withFix:  lint,
     logDir 
   });
   Logger.info('Creating build version...');

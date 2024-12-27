@@ -13,6 +13,7 @@ import { generateWorkflow } from './commands/generate-workflow.js';
 import { unlock } from './commands/unlock.js';
 import { clean } from './commands/clean.js';
 import { setEnvForApp } from './commands/set-env.js';
+import { Delete } from './commands/delete.js';
 
 interface InitArgs {
   name: string;
@@ -240,6 +241,28 @@ try {
       
             // Call the function to set the environment variable
             await setEnvForApp({ name, envName, envValue });
+          }
+        )
+        .command(
+          "delete <name> <secret>",
+          "Delete an application",
+          (yargs) =>
+            yargs.positional("name", {
+              type: "string",
+              demandOption: true,
+              describe: "The name of the application",
+            })
+            .positional("secret", {
+              type: "string",
+              demandOption: true,
+              describe: "The secret key",
+            }),
+          async (args) => {
+            if(args.secret!==process.env.SECRET_KEY){
+              Logger.error("Invalid secret key");
+              process.exit(1);
+            }
+            await Delete(args);
           }
         )
     .demandCommand(1, 'You must specify a command to run.')

@@ -10,4 +10,5 @@ export interface App {
   branch: string; // Branch name
   lastDeploy?: string; // Optional ISO string for last deployment date
   builds?: string[]; 
+  activeBuild?: number; 
 }

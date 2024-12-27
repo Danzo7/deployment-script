@@ -59,7 +59,7 @@ const runScript = async (dir: string, args: string, description: string, logFile
  * @param logFile The log file path.
  */
 const installDependencies = async (dir: string, logFile: string) => {
-  Logger.info('Installing packages using npm...');
+  Logger.info('Installing packages...');
     const command = `npm install --no-audit --no-fund --yes`;
     const result = runCommand(command, { cwd: dir, logFile });
 
@@ -67,8 +67,7 @@ const installDependencies = async (dir: string, logFile: string) => {
       throw new Error(`Installation failed: ${result.stderr}`);
     }
 
-    Logger.success('Packages installed successfully.');
-    result.stdout?.split('\n').forEach((line) => Logger.info(line));
+    result.stdout?.split('\n').forEach((line) =>line.trim()==''?null: Logger.success(line));
   
 };
 
@@ -100,11 +99,11 @@ export const prepare = async (
     }
 
     if (withFix) {
-      await runScript(dir, 'fix', 'Running lint fix', logFile);
+      await runScript(dir, 'fix', 'lint fix', logFile);
     }
 
     if (withBuild) {
-      await runScript(dir, 'build', 'Running build', logFile);
+      await runScript(dir, 'build', 'build', logFile);
     }
 
     return true;
