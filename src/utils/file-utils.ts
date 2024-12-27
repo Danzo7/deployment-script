@@ -41,7 +41,14 @@ export const createBuildDir =  (appDir: string): string => {
   const buildDir = path.join(appDir, 'builds','build-' + Date.now());
   const releaseDir = path.join(appDir, 'release');
   const envDir = path.join(appDir, 'env');
-  // const nextConfig = path.join(appDir, 'next.config.js');
+   const nextConfigExts = ['.mjs','.js', '.ts','.cjs', '.json'];
+   nextConfigExts.forEach((ext)=>{
+  const nextConfig = path.join(releaseDir, 'next.config'+ext);
+  if( fs.existsSync(nextConfig)){
+    const nextConfigDest = path.join(buildDir, 'next.config'+ext);
+     fs.copyFileSync(nextConfig, nextConfigDest);
+  }
+});
   const nextFolder = path.join(releaseDir, '.next');
   const publicFolder = path.join(releaseDir, 'public');
   if(fs.existsSync(publicFolder)){
@@ -64,8 +71,6 @@ if(!fs.existsSync(nextFolder)){
   const envLocalSrc = path.join(envDir, '.env.local');
   const envLocalDest = path.join(buildDir, '.env.local');
    fs.copyFileSync(envLocalSrc, envLocalDest);
-  // const nextConfigDest = path.join(buildDir, 'next.config.js');
-  //  fs.copyFileSync(nextConfig, nextConfigDest);
   const nextFolderDest = path.join(buildDir, '.next');
   fsExtra.copySync(nextFolder, nextFolderDest);
 
