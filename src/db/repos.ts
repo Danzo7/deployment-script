@@ -50,10 +50,12 @@ export const AppRepo = {
     db.write();
     return app;
   },
-  updateLastDeploy: function (name: string) {
+  addBuild: function (name: string, buildPath: string) {
     const db = getDB();
     const app = this.findByName(name);
     app.lastDeploy = new Date().toISOString();
+    app.builds ||= [];
+    app.builds.push(buildPath);
     db.write();
     return app;
   },

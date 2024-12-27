@@ -1,9 +1,9 @@
 import path from 'path';
 import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
-import {  ensureDirectories } from '../utils/file-utils.js';
+import {  createBuildDir, ensureDirectories } from '../utils/file-utils.js';
 import { prepare } from '../utils/npm-helper.js';
-import { getAppStatus, getProcessId, runApp } from '../utils/pm2-helper.js';
+import { getAppStatus, runApp } from '../utils/pm2-helper.js';
 import {  handleGitRepo, pushChanges } from '../utils/git-helper.js';
 import { checkEnv } from '../utils/env-heper.js';
 
@@ -60,9 +60,9 @@ export const deploy = async ({
     withFix:  lint, // Add skip lint in future
     logDir 
   });
-  let pId=await getProcessId(name);
-  Logger.info("Old Process ID: "+pId);
-  await runApp(relDir, {
+  Logger.info('Creating build version...');
+ const buildDir= createBuildDir(app.appDir);
+  await runApp(buildDir, {
     name: app.name,
     port: app.port,
     instances: app.instances,
@@ -70,7 +70,7 @@ export const deploy = async ({
     output: path.join(logDir, 'pm2.out.log'),
     error: path.join(logDir, 'pm2.error.log'),
   },force);
-  AppRepo.updateLastDeploy(name);
+  AppRepo.addBuild(name,buildDir);
   if(lint){
     Logger.info('Pushing lint fix...');
    await pushChanges({dir:relDir, commitMessage:`[CLI Tool] Linting fix`});

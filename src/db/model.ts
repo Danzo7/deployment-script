@@ -9,4 +9,5 @@ export interface App {
   repo: string; // Repository URL or path
   branch: string; // Branch name
   lastDeploy?: string; // Optional ISO string for last deployment date
+  builds?: string[]; 
 }
