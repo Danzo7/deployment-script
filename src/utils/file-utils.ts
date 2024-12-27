@@ -64,5 +64,7 @@ if(!fs.existsSync(nextFolder)){
   //  fs.copyFileSync(nextConfig, nextConfigDest);
   const nextFolderDest = path.join(buildDir, '.next');
   fsExtra.copySync(nextFolder, nextFolderDest);
+  //delete .next folder
+  fsExtra.removeSync(nextFolder);
   return buildDir;
 };
