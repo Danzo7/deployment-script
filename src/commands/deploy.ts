@@ -16,7 +16,6 @@ export const deploy = async ({
   lint?: boolean;
   force?: boolean;
 }) => {
-  Logger.info(`Starting deployment for ${Logger.highlight(name)}...`);
 
   const app = AppRepo.getAll().find((app) => app.name === name);
   const isFirstDeploy = app?.lastDeploy == undefined;
@@ -26,6 +25,8 @@ export const deploy = async ({
       `To initialize the app, run: ${Logger.highlight(`dm init --name ${name} --repo <repo-url> --branch <branch-name> --instances <number-of-instances> --port <port-number>`)}`
     );
   }
+  Logger.info(`Deploying ${Logger.highlight(name)}...`);
+
   const { relDir, envDir, logDir } = ensureDirectories(app.appDir);
   Logger.info('Checking Git repository...');
   const isGitChanged = await handleGitRepo({
@@ -48,7 +49,7 @@ export const deploy = async ({
         `${Logger.highlight(name)} is already running on port ${Logger.highlight(app.port.toString())}.`
       );
       if (force) {
-        Logger.info('Forcing restart...');
+        Logger.info('Forcing redeploy...');
       } else return;
     }
   }
