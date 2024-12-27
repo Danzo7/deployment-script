@@ -41,7 +41,7 @@ export const deploy = async ({
 
   Logger.info('Checking environment variables...');
   const isEnvChanged = await checkEnv(relDir, envDir);
-  if (isEnvChanged && !isGitChanged && !isFirstDeploy) {
+  if (!isEnvChanged && !isGitChanged && !isFirstDeploy) {
     Logger.info(`Everything is up to date`);
     if (isRunning) {
       Logger.info(
