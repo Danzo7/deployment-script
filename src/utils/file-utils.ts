@@ -42,13 +42,7 @@ export const createBuildDir =  (appDir: string): string => {
   const releaseDir = path.join(appDir, 'release');
   const envDir = path.join(appDir, 'env');
    const nextConfigExts = ['.mjs','.js', '.ts','.cjs', '.json'];
-   nextConfigExts.forEach((ext)=>{
-  const nextConfig = path.join(releaseDir, 'next.config'+ext);
-  if( fs.existsSync(nextConfig)){
-    const nextConfigDest = path.join(buildDir, 'next.config'+ext);
-     fs.copyFileSync(nextConfig, nextConfigDest);
-  }
-});
+
   const nextFolder = path.join(releaseDir, '.next');
   const publicFolder = path.join(releaseDir, 'public');
   if(fs.existsSync(publicFolder)){
@@ -76,5 +70,13 @@ if(!fs.existsSync(nextFolder)){
 
   //delete .next folder
   fsExtra.removeSync(nextFolder);
+
+  nextConfigExts.forEach((ext)=>{
+    const nextConfig = path.join(releaseDir, 'next.config'+ext);
+    if( fs.existsSync(nextConfig)){
+      const nextConfigDest = path.join(buildDir, 'next.config'+ext);
+       fs.copyFileSync(nextConfig, nextConfigDest);
+    }
+  });
   return buildDir;
 };
