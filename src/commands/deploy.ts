@@ -69,7 +69,7 @@ export const deploy = async ({
     status: appStatus,
     output: path.join(logDir, 'pm2.out.log'),
     error: path.join(logDir, 'pm2.error.log'),
-  },force);
+  });
   AppRepo.addBuild(name,buildDir);
   if(lint){
     Logger.info('Pushing lint fix...');

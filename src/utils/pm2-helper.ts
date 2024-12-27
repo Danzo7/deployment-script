@@ -15,9 +15,7 @@ export const runApp = async (
     name: string;
     port: number;
     status: Status;
-  },
-  force: boolean = false
-) => {
+  }) => {
   const {port,status,...rest}=config;
   const pm2Config:pm2.StartOptions = {
     ...rest,
@@ -33,8 +31,20 @@ export const runApp = async (
       if (err) {
         return reject(err);
       }
-
-      if (status == 'online' && !force) {
+      if (status == 'not-found')
+      {
+        Logger.info(`Starting "${config.name}"...`);
+        pm2.start(pm2Config,
+          (startErr) => {
+            pm2.disconnect();
+            if (startErr) {
+              return reject(startErr);
+            }
+            Logger.info(`"${config.name}" started successfully.`);
+            resolve();
+          }
+        );}
+     else {
         Logger.info(`Restarting "${config.name}"...`);
         pm2.stop(config.name, (restartErr) => {
           pm2.start(pm2Config,
@@ -52,39 +62,6 @@ export const runApp = async (
             return reject(restartErr);
           }
         });
-      } else {
-    
-        Logger.info(`Starting "${config.name}"...`);
-        if (status == 'not-found')
-          pm2.start(pm2Config,
-            (startErr) => {
-              pm2.disconnect();
-              if (startErr) {
-                return reject(startErr);
-              }
-              Logger.info(`"${config.name}" started successfully.`);
-              resolve();
-            }
-          );
-        else {
-          Logger.info(`Reinstalling "${config.name}"...`);
-          pm2.delete(config.name, (deleteErr) => {
-            if (deleteErr) {
-              pm2.disconnect();
-              return reject(deleteErr);
-            }
-            pm2.start(pm2Config,
-              (startErr) => {
-                pm2.disconnect();
-                if (startErr) {
-                  return reject(startErr);
-                }
-                Logger.info(`"${config.name}" started successfully.`);
-                resolve();
-              }
-            );
-          });
-        }
       }
     });
   });
