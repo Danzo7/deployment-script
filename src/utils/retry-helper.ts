@@ -18,7 +18,6 @@ export const withRetry = async <T>(
         throw err;
       }
       Logger.warn(`${name} Failed. Retrying in ${delay}ms...`);
-      Logger.error(err);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
