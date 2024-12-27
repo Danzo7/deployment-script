@@ -36,10 +36,11 @@ await handleGitRepo({
   Logger.info("Cleaning old builds...");
   const buildDir=path.join(app.appDir, 'builds');
   app.builds?.forEach((build, index)=>{
-    if(index===app.activeBuild||app.activeBuild==undefined&&index!==app.builds!.length-1){
+    if(index!==app.activeBuild){
     const buildPath=path.join(buildDir, build);
     Logger.info(`Removing build: ${build}`);
     fsExtra.removeSync(buildPath);
+    AppRepo.removeBuild(name, build);
     }
   });
   

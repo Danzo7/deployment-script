@@ -60,4 +60,12 @@ export const AppRepo = {
     db.write();
     return app;
   },
+  removeBuild: function (name: string, buildPath: string) {
+    const db = getDB();
+    const app = this.findByName(name);
+    app.builds ||= [];
+    app.builds = app.builds.filter((build) => build !== buildPath);
+    db.write();
+    return app;
+  },
 };
