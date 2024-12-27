@@ -2,7 +2,7 @@ import { createHash } from 'crypto';
 import { Logger } from './logger.js';
 import fs from  'fs';
 import path from 'path';
-import {  execSync } from 'child_process';
+import { copySync } from 'fs-extra';
 
 export const calculateFileHash = (filePath: string): string => {
   if (!fs.existsSync(filePath)) return '';
@@ -63,6 +63,6 @@ if(!fs.existsSync(nextFolder)){
   // const nextConfigDest = path.join(buildDir, 'next.config.js');
   //  fs.copyFileSync(nextConfig, nextConfigDest);
   const nextFolderDest = path.join(buildDir, '.next');
-  execSync(`cp -r ${nextFolder} ${nextFolderDest}`);
+  copySync(nextFolder, nextFolderDest);
   return buildDir;
 };
