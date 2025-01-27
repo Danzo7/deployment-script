@@ -14,6 +14,7 @@ import { unlock } from './commands/unlock.js';
 import { clean } from './commands/clean.js';
 import { setEnvForApp } from './commands/set-env.js';
 import { Delete } from './commands/delete.js';
+import { startAllApplications } from './commands/start-all.js';
 
 interface InitArgs {
   name: string;
@@ -263,6 +264,19 @@ try {
               process.exit(1);
             }
             await Delete(args);
+          }
+        )
+        .command(
+          'start-all',
+          'Start all applications',
+          (yargs) => yargs,
+          async () => {
+            try {
+              await startAllApplications();
+            } catch (error) {
+              Logger.error(error);
+              process.exit(1);
+            }
           }
         )
     .demandCommand(1, 'You must specify a command to run.')
