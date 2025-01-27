@@ -26,6 +26,8 @@ export async function startAllApplications() {
                 output: path.join(logDir, 'pm2.out.log'),
                 error: path.join(logDir, 'pm2.error.log'),
               });}
+              //1s timeout to avoid
+                await new Promise((resolve)=>setTimeout(resolve,1000));
         } else {
             Logger.info(`${app.name} is already running.`);
         }
