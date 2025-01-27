@@ -15,6 +15,7 @@ import { clean } from './commands/clean.js';
 import { setEnvForApp } from './commands/set-env.js';
 import { Delete } from './commands/delete.js';
 import { startAllApplications } from './commands/start-all.js';
+import { stopAllApplications } from './commands/stop-all.js';
 
 interface InitArgs {
   name: string;
@@ -273,6 +274,19 @@ try {
           async () => {
             try {
               await startAllApplications();
+            } catch (error) {
+              Logger.error(error);
+              process.exit(1);
+            }
+          }
+        )
+        .command(
+          "stop-all",
+          "Stop all applications",
+          (yargs) => yargs,
+          async () => {
+            try {
+              await stopAllApplications();
             } catch (error) {
               Logger.error(error);
               process.exit(1);

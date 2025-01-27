@@ -33,6 +33,3 @@ export async function startAllApplications() {
         }
     }
 }
-
-// Run the function to start all applications
-startAllApplications();

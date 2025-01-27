@@ -66,7 +66,22 @@ export const runApp = async (
     });
   });
 };
-
+export const stopApp = async(name: string) => {
+  return new Promise<void>((resolve, reject) => {
+    pm2.connect((err) => {
+      if (err) {
+        return reject(err);
+      }
+      pm2.stop(name, (stopErr) => {
+        pm2.disconnect();
+        if (stopErr) {
+          return reject(stopErr);
+        }
+        resolve();
+      });
+    });
+  });
+}
 export const getAppStatus = async (name: string) =>
   new Promise<Status>((resolve, reject) => {
     pm2.connect((err) => {
