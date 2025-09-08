@@ -9,62 +9,62 @@ type Status =
   | 'one-launch-status'
   | 'not-found';
 
+function pm2Connect(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    pm2.connect((err) => (err ? reject(err) : resolve()));
+  });
+}
+
+function pm2Disconnect(): void {
+  pm2.disconnect();
+}
+
+function pm2Start(config: pm2.StartOptions): Promise<void> {
+  return new Promise((resolve, reject) => {
+    pm2.start(config, (err) => (err ? reject(err) : resolve()));
+  });
+}
+
+function pm2Stop(name: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    pm2.stop(name, (err) => (err ? reject(err) : resolve()));
+  });
+}
+
 export const runApp = async (
   dir: string,
-  config: Omit<pm2.StartOptions, 'exec_mode' | 'script' | 'args'> & {
+  config: Omit<pm2.StartOptions, "exec_mode" | "script" | "args"> & {
     name: string;
     port: number;
     status: Status;
-  }) => {
-  const {port,status,...rest}=config;
-  const pm2Config:pm2.StartOptions = {
+  }
+) => {
+  const { port, status, ...rest } = config;
+  const pm2Config: pm2.StartOptions = {
     ...rest,
-    exec_mode: 'cluster',
+    exec_mode: "cluster",
     cwd: dir,
     script: `node_modules/next/dist/bin/next`,
     args: `start ${dir} -p ${port}`,
-    max_memory_restart: '250M',
-
+    max_memory_restart: "250M",
   };
-  return new Promise<void>((resolve, reject) => {
-    pm2.connect((err) => {
-      if (err) {
-        return reject(err);
-      }
-      if (status == 'not-found')
-      {
-        Logger.info(`Starting "${config.name}"...`);
-        pm2.start(pm2Config,
-          (startErr) => {
-            pm2.disconnect();
-            if (startErr) {
-              return reject(startErr);
-            }
-            Logger.info(`"${config.name}" started successfully.`);
-            resolve();
-          }
-        );}
-     else {
-        Logger.info(`Restarting "${config.name}"...`);
-        pm2.stop(config.name, (restartErr) => {
-          pm2.start(pm2Config,
-            (startErr) => {
-              pm2.disconnect();
-              if (startErr) {
-                return reject(startErr);
-              }
-              Logger.info(`"${config.name}" restarted successfully.`);
-              resolve();
-            }
-          );
-          if (restartErr) {
-            pm2.disconnect();
-            return reject(restartErr);
-          }
-        });
-      }
-    });
-  });
+
+  try {
+    await pm2Connect();
+
+    if (status === "not-found") {
+      Logger.info(`Starting "${config.name}"...`);
+      await pm2Start(pm2Config);
+      Logger.info(`"${config.name}" started successfully.`);
+    } else {
+      Logger.info(`Restarting "${config.name}"...`);
+      await pm2Stop(config.name);
+      await pm2Start(pm2Config);
+      Logger.info(`"${config.name}" restarted successfully.`);
+    }
+  } finally {
+    pm2Disconnect();
+  }
 };
 export const stopApp = async(name: string) => {
   return new Promise<void>((resolve, reject) => {

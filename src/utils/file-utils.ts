@@ -63,8 +63,9 @@ if(!fs.existsSync(nextFolder)){
 
 
   const envLocalSrc = path.join(envDir, '.env.local');
+  if(fs.existsSync(envLocalSrc)){
   const envLocalDest = path.join(buildDir, '.env.local');
-   fs.copyFileSync(envLocalSrc, envLocalDest);
+   fs.copyFileSync(envLocalSrc, envLocalDest);}
   const nextFolderDest = path.join(buildDir, '.next');
   fsExtra.copySync(nextFolder, nextFolderDest);
 
