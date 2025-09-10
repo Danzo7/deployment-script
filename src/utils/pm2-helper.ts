@@ -49,11 +49,10 @@ function pm2Delete(name: string): Promise<void> {
 const getPM2Config = (
   dir: string, 
   config: Omit<pm2.StartOptions, "exec_mode" | "script" | "args"> & {
-      projectType: 'nextjs' | 'nestjs',
-
-    name: string;
-    port: number;
-    status: Status;
+  projectType: 'nextjs' | 'nestjs',
+  name: string;
+  port: number;
+  status: Status;
   }
 ): pm2.StartOptions => {
   const { port, status,projectType, ...rest } = config;
@@ -71,12 +70,14 @@ const getPM2Config = (
 
   switch (projectType) {
     case 'nestjs':
+        const nestjsMain = path.join(dir, 'dist', 'main.js');
+      if (!fs.existsSync(nestjsMain)) throw new Error(`NestJS main file not found at ${nestjsMain}`);
         return {
           ...baseConfig,
-          script: 'npm',
-          args: 'run start:prod'
+          script: nestjsMain,
+          args: undefined
         };
-
+      
     case 'nextjs':
     default:
       return {
