@@ -25,7 +25,7 @@ export const deploy = async ({
       `To initialize the app, run: ${Logger.highlight(`dm init --name ${name} --repo <repo-url> --branch <branch-name> --instances <number-of-instances> --port <port-number>`)}`
     );
   }
-    if(app.projectType) {
+    if(!app.projectType) {
       AppRepo.update(app.name,{projectType:"nextjs"});
       app.projectType= "nextjs";
     }
