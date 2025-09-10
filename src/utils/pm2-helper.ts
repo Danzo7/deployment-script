@@ -33,6 +33,16 @@ function pm2Stop(name: string): Promise<void> {
   });
 }
 
+function pm2Restart(name: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    pm2.restart(name, (err) => (err ? reject(err) : resolve()));
+  });
+}
+function pm2Delete(name: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    pm2.delete(name, (err) => (err ? reject(err) : resolve()));
+  });
+}
 /**
  * Gets the PM2 configuration based on project type
  */
@@ -109,8 +119,7 @@ export const runApp = async (
       Logger.info(`"${config.name}" started successfully.`);
     } else {
       Logger.info(`Restarting "${config.name}" (${projectType})...`);
-      await pm2Stop(config.name);
-      await pm2Start(pm2Config);
+      await pm2Restart(config.name);
       Logger.info(`"${config.name}" restarted successfully.`);
     }
   } finally {
@@ -118,20 +127,9 @@ export const runApp = async (
   }
 };
 export const stopApp = async(name: string) => {
-  return new Promise<void>((resolve, reject) => {
-    pm2.connect((err) => {
-      if (err) {
-        return reject(err);
-      }
-      pm2.stop(name, (stopErr) => {
-        pm2.disconnect();
-        if (stopErr) {
-          return reject(stopErr);
-        }
-        resolve();
-      });
-    });
-  });
+  await pm2Connect();
+  await pm2Stop(name);
+  pm2Disconnect();
 }
 export const getAppStatus = async (name: string) =>
   new Promise<Status>((resolve, reject) => {
