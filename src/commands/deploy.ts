@@ -59,7 +59,7 @@ export const deploy = async ({
     withBuild:
       force || !isRunning || isFirstDeploy || isGitChanged || isEnvChanged,
     withFix:  lint,
-    logDir 
+    logDir,
   });
   Logger.info('Creating build version...');
  const buildDir= createBuildDir(app.appDir);
@@ -70,6 +70,7 @@ export const deploy = async ({
     status: appStatus,
     output: path.join(logDir, 'pm2.out.log'),
     error: path.join(logDir, 'pm2.error.log'),
+    projectType: app.projectType 
   });
   AppRepo.addBuild(name,buildDir);
   if(lint){

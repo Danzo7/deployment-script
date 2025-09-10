@@ -82,7 +82,8 @@ export const prepare = async (
   {
     withInstall = true,
     withBuild = true,
-    withFix = false,logDir
+    withFix = false,
+    logDir,
   }: {
     withInstall?: boolean;
     withBuild?: boolean;

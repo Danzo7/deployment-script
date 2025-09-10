@@ -23,6 +23,7 @@ interface InitArgs {
   branch: string;
   instances: number;
   port?: number;
+  type?: 'nextjs' | 'nestjs';
 }
 
 interface DeployArgs {
@@ -91,6 +92,13 @@ try {
             type: 'number',
             alias: 'p',
             describe: 'The port number to use for the application (default: find)',
+          })
+          .option('type', {
+            type: 'string',
+            choices: ['nextjs', 'nestjs'],
+            default: 'nextjs',
+            alias: 't',
+            describe: 'The type of application (nextjs or nestjs)',
           }),
       async (args) => {
         try {

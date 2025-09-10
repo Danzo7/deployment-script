@@ -50,6 +50,7 @@ export const AppRepo = {
     db.write();
     return app;
   },
+
   addBuild: function (name: string, buildPath: string) {
     const db = getDB();
     const app = this.findByName(name);

@@ -1,4 +1,6 @@
 import pm2 from 'pm2';
+import path from 'path';
+import fs from 'fs';
 import { Logger } from './logger.js';
 type Status =
   | 'online'
@@ -31,33 +33,82 @@ function pm2Stop(name: string): Promise<void> {
   });
 }
 
+/**
+ * Gets the PM2 configuration based on project type
+ */
+const getPM2Config = (
+  dir: string, 
+  projectType: 'nextjs' | 'nestjs',
+  config: Omit<pm2.StartOptions, "exec_mode" | "script" | "args"> & {
+    name: string;
+    port: number;
+    status: Status;
+  }
+): pm2.StartOptions => {
+  const { port, status, ...rest } = config;
+  
+  const baseConfig: pm2.StartOptions = {
+    ...rest,
+    exec_mode: "cluster",
+    cwd: dir,
+    max_memory_restart: "250M",
+    env: {
+      NODE_ENV: 'production',
+      PORT: port.toString(),
+      ...process.env
+    }
+  };
+
+  switch (projectType) {
+    case 'nestjs':
+      // For NestJS, run the built main.js file
+      const nestjsMain = path.join(dir, 'dist', 'main.js');
+      if (fs.existsSync(nestjsMain)) {
+        return {
+          ...baseConfig,
+          script: nestjsMain,
+          args: undefined
+        };
+      } else {
+        // Fallback to npm script
+        return {
+          ...baseConfig,
+          script: 'npm',
+          args: 'run start:prod'
+        };
+      }
+    
+    case 'nextjs':
+    default:
+      return {
+        ...baseConfig,
+        script: `node_modules/next/dist/bin/next`,
+        args: `start ${dir} -p ${port}`
+      };
+  }
+};
+
 export const runApp = async (
   dir: string,
   config: Omit<pm2.StartOptions, "exec_mode" | "script" | "args"> & {
     name: string;
     port: number;
     status: Status;
+    projectType?: 'nextjs' | 'nestjs';
   }
 ) => {
-  const { port, status, ...rest } = config;
-  const pm2Config: pm2.StartOptions = {
-    ...rest,
-    exec_mode: "cluster",
-    cwd: dir,
-    script: `node_modules/next/dist/bin/next`,
-    args: `start ${dir} -p ${port}`,
-    max_memory_restart: "250M",
-  };
+  const { projectType = 'nextjs', ...restConfig } = config;
+  const pm2Config = getPM2Config(dir, projectType, restConfig);
 
   try {
     await pm2Connect();
 
-    if (status === "not-found") {
-      Logger.info(`Starting "${config.name}"...`);
+    if (restConfig.status === "not-found") {
+      Logger.info(`Starting "${config.name}" (${projectType})...`);
       await pm2Start(pm2Config);
       Logger.info(`"${config.name}" started successfully.`);
     } else {
-      Logger.info(`Restarting "${config.name}"...`);
+      Logger.info(`Restarting "${config.name}" (${projectType})...`);
       await pm2Stop(config.name);
       await pm2Start(pm2Config);
       Logger.info(`"${config.name}" restarted successfully.`);
