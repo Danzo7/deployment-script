@@ -66,29 +66,17 @@ const getPM2Config = (
     env: {
       NODE_ENV: 'production',
       PORT: port.toString(),
-      ...process.env
     }
   };
 
   switch (projectType) {
     case 'nestjs':
-      // For NestJS, run the built main.js file
-      const nestjsMain = path.join(dir, 'dist', 'main.js');
-      if (fs.existsSync(nestjsMain)) {
-        return {
-          ...baseConfig,
-          script: nestjsMain,
-          args: undefined
-        };
-      } else {
-        // Fallback to npm script
         return {
           ...baseConfig,
           script: 'npm',
           args: 'run start:prod'
         };
-      }
-    
+
     case 'nextjs':
     default:
       return {

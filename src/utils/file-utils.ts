@@ -131,8 +131,6 @@ export const createBuildDirForNestJS = (appDir: string): string => {
     const packageJsonDest = path.join(buildDir, 'package.json');
     fs.copyFileSync(packageJsonSrc, packageJsonDest);
   }
-
-  Logger.success(`NestJS build directory created: ${buildDir}`);
   return buildDir;
 };
 

@@ -62,7 +62,7 @@ export const deploy = async ({
     logDir,
   });
   Logger.info('Creating build version...');
- const buildDir= createBuildDirByType(app.appDir, app.projectType || 'nextjs');
+ const buildDir= createBuildDirByType(app.appDir, app.projectType);
   await runApp(buildDir, {
     name: app.name,
     port: app.port,
