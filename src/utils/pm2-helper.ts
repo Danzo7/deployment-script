@@ -116,9 +116,12 @@ export const runApp = async (
   }
 };
 export const stopApp = async(name: string) => {
-  await pm2Connect();
-  await pm2Stop(name);
-  pm2Disconnect();
+    try {
+      await pm2Connect();
+      await pm2Stop(name);
+    } finally {
+      pm2Disconnect();
+    }
 }
 export const getAppStatus = async (name: string) =>
   new Promise<Status>((resolve, reject) => {
