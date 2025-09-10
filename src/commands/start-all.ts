@@ -24,7 +24,8 @@ export async function startAllApplications() {
                 instances: app.instances,
                 status: appStatus,
                 output: path.join(logDir, 'pm2.out.log'),
-                error: path.join(logDir, 'pm2.error.log'),
+                error: path.join(logDir, 'pm2.error.log'),    
+                projectType: app.projectType??"nextjs" 
               });}
               //1s timeout to avoid
                 await new Promise((resolve)=>setTimeout(resolve,1000));

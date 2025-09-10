@@ -48,14 +48,15 @@ function pm2Delete(name: string): Promise<void> {
  */
 const getPM2Config = (
   dir: string, 
-  projectType: 'nextjs' | 'nestjs',
   config: Omit<pm2.StartOptions, "exec_mode" | "script" | "args"> & {
+      projectType: 'nextjs' | 'nestjs',
+
     name: string;
     port: number;
     status: Status;
   }
 ): pm2.StartOptions => {
-  const { port, status, ...rest } = config;
+  const { port, status,projectType, ...rest } = config;
   
   const baseConfig: pm2.StartOptions = {
     ...rest,
@@ -104,21 +105,20 @@ export const runApp = async (
     name: string;
     port: number;
     status: Status;
-    projectType?: 'nextjs' | 'nestjs';
+    projectType: 'nextjs' | 'nestjs';
   }
 ) => {
-  const { projectType = 'nextjs', ...restConfig } = config;
-  const pm2Config = getPM2Config(dir, projectType, restConfig);
+  const pm2Config = getPM2Config(dir, config);
 
   try {
     await pm2Connect();
 
-    if (restConfig.status === "not-found") {
-      Logger.info(`Starting "${config.name}" (${projectType})...`);
+    if (config.status === "not-found") {
+      Logger.info(`Starting "${config.name}" (${config.projectType})...`);
       await pm2Start(pm2Config);
       Logger.info(`"${config.name}" started successfully.`);
     } else {
-      Logger.info(`Restarting "${config.name}" (${projectType})...`);
+      Logger.info(`Restarting "${config.name}" (${config.projectType})...`);
       await pm2Restart(config.name);
       Logger.info(`"${config.name}" restarted successfully.`);
     }
