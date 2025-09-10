@@ -119,7 +119,8 @@ export const runApp = async (
       Logger.info(`"${config.name}" started successfully.`);
     } else {
       Logger.info(`Restarting "${config.name}" (${config.projectType})...`);
-      await pm2Restart(config.name);
+      await pm2Delete(config.name);
+      await pm2Start(pm2Config);
       Logger.info(`"${config.name}" restarted successfully.`);
     }
   } finally {
