@@ -25,6 +25,11 @@ export const deploy = async ({
       `To initialize the app, run: ${Logger.highlight(`dm init --name ${name} --repo <repo-url> --branch <branch-name> --instances <number-of-instances> --port <port-number>`)}`
     );
   }
+    if(app.projectType) {
+      AppRepo.update(app.name,{projectType:"nextjs"});
+      app.projectType= "nextjs";
+    }
+      
   Logger.info(`Deploying ${Logger.highlight(name)}...`);
 
   const { relDir, envDir, logDir } = ensureDirectories(app.appDir);
@@ -70,7 +75,7 @@ export const deploy = async ({
     status: appStatus,
     output: path.join(logDir, 'pm2.out.log'),
     error: path.join(logDir, 'pm2.error.log'),
-    projectType: app.projectType??"nextjs" 
+    projectType: app.projectType
   });
   AppRepo.addBuild(name,buildDir);
   if(lint){

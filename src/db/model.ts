@@ -11,5 +11,5 @@ export interface App {
   lastDeploy?: string; // Optional ISO string for last deployment date
   builds?: string[]; 
   activeBuild?: number;
-  projectType?: 'nextjs' | 'nestjs'; // Project framework type
+  projectType: 'nextjs' | 'nestjs'; // Project framework type
 }

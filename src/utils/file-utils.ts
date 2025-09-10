@@ -140,7 +140,7 @@ export const createBuildDirForNestJS = (appDir: string): string => {
  * @param projectType The type of project ('nextjs' | 'nestjs')
  * @returns The path to the created build directory
  */
-export const createBuildDirByType = (appDir: string, projectType: 'nextjs' | 'nestjs' = 'nextjs'): string => {
+export const createBuildDirByType = (appDir: string, projectType: 'nextjs' | 'nestjs'): string => {
   switch (projectType) {
     case 'nestjs':
       return createBuildDirForNestJS(appDir);
