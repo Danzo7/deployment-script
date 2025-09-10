@@ -81,3 +81,73 @@ if(!fs.existsSync(nextFolder)){
   });
   return buildDir;
 };
+
+export const createBuildDirForNestJS = (appDir: string): string => {
+  const buildDir = path.join(appDir, 'builds', 'build-' + Date.now());
+  const releaseDir = path.join(appDir, 'release');
+  const envDir = path.join(appDir, 'env');
+
+  const distFolder = path.join(releaseDir, 'dist');
+  
+  if (!fs.existsSync(distFolder)) {
+    throw new Error('NestJS build not found. Make sure to run "npm run build" first.');
+  }
+
+  fs.mkdirSync(buildDir, { recursive: true });
+
+  // Link node_modules
+  const nodeModulesSrc = path.join(releaseDir, 'node_modules');
+  if (!fs.existsSync(nodeModulesSrc)) {
+    throw new Error('Node modules not found.');
+  }
+  const nodeModulesDest = path.join(buildDir, 'node_modules');
+  Logger.info('Linking node modules...');
+  fs.symlinkSync(nodeModulesSrc, nodeModulesDest);
+
+  // Copy environment files
+  const envLocalSrc = path.join(envDir, '.env');
+  if (fs.existsSync(envLocalSrc)) {
+    const envLocalDest = path.join(buildDir, '.env');
+    fs.copyFileSync(envLocalSrc, envLocalDest);
+  }
+
+  // Copy production environment file if it exists
+  const envProdSrc = path.join(envDir, '.env.production');
+  if (fs.existsSync(envProdSrc)) {
+    const envProdDest = path.join(buildDir, '.env.production');
+    fs.copyFileSync(envProdSrc, envProdDest);
+  }
+
+  // Copy the dist folder
+  const distFolderDest = path.join(buildDir, 'dist');
+  fsExtra.copySync(distFolder, distFolderDest);
+
+  // Delete dist folder from release directory
+  fsExtra.removeSync(distFolder);
+
+  // Copy package.json (needed for production dependencies info)
+  const packageJsonSrc = path.join(releaseDir, 'package.json');
+  if (fs.existsSync(packageJsonSrc)) {
+    const packageJsonDest = path.join(buildDir, 'package.json');
+    fs.copyFileSync(packageJsonSrc, packageJsonDest);
+  }
+
+  Logger.success(`NestJS build directory created: ${buildDir}`);
+  return buildDir;
+};
+
+/**
+ * Creates a build directory based on the project type
+ * @param appDir The application directory
+ * @param projectType The type of project ('nextjs' | 'nestjs')
+ * @returns The path to the created build directory
+ */
+export const createBuildDirByType = (appDir: string, projectType: 'nextjs' | 'nestjs' = 'nextjs'): string => {
+  switch (projectType) {
+    case 'nestjs':
+      return createBuildDirForNestJS(appDir);
+    case 'nextjs':
+    default:
+      return createBuildDir(appDir);
+  }
+};

@@ -4,11 +4,10 @@ import { calculateFileHash } from "./file-utils.js";
 import { Logger } from "./logger.js";
 
 // Function to check and update environment variables
-export const checkEnv = async (dir: string, envDir: string) => {
+export const checkEnv = async (dir: string, envDir: string,envName:".env.local"|".env") => {
   const appEnvPath = path.join(dir, '.env.local');
-  const releaseEnvPath = path.join(envDir, '.env.local');
+  const releaseEnvPath = path.join(envDir, envName);
 
-  // Check if the .env.local file exists in both locations
   if (fs.existsSync(appEnvPath) && fs.existsSync(releaseEnvPath)) {
     const appEnvHash = calculateFileHash(appEnvPath);
     const releaseEnvHash = calculateFileHash(releaseEnvPath);
@@ -26,7 +25,7 @@ export const checkEnv = async (dir: string, envDir: string) => {
     Logger.success(`Pull environment variables`);
     return true;
   } else {
-    Logger.info('No .env.local file found.');
+    Logger.info(`No ${envName} file found`);
   }
   return false;
 };

@@ -1,7 +1,7 @@
 import path from 'path';
 import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
-import {  createBuildDir, ensureDirectories } from '../utils/file-utils.js';
+import {  createBuildDirByType, ensureDirectories } from '../utils/file-utils.js';
 import { prepare } from '../utils/npm-helper.js';
 import { getAppStatus, runApp } from '../utils/pm2-helper.js';
 import {  handleGitRepo, pushChanges } from '../utils/git-helper.js';
@@ -41,7 +41,7 @@ export const deploy = async ({
   const isRunning = appStatus == 'online';
 
   Logger.info('Checking environment variables...');
-  const isEnvChanged = await checkEnv(relDir, envDir);
+  const isEnvChanged = await checkEnv(relDir, envDir,app.projectType==="nextjs"?".env.local":".env");
   if (!isEnvChanged && !isGitChanged && !isFirstDeploy) {
     Logger.info(`Everything is up to date`);
     if (isRunning) {
@@ -62,7 +62,7 @@ export const deploy = async ({
     logDir,
   });
   Logger.info('Creating build version...');
- const buildDir= createBuildDir(app.appDir);
+ const buildDir= createBuildDirByType(app.appDir, app.projectType || 'nextjs');
   await runApp(buildDir, {
     name: app.name,
     port: app.port,
