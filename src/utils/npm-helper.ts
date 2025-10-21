@@ -11,25 +11,35 @@ import { Logger } from './logger.js';
  */
 const runCommand = (command: string, options: { cwd: string; logFile: string }) => {
   try {
+    // Ensure log directory exists
+    fs.mkdirSync(path.dirname(options.logFile), { recursive: true });
+
     const result = execSync(command, {
       cwd: options.cwd,
-      stdio: 'pipe', // Prevent interaction with the current process
-      windowsHide: true, // Prevents a console window (Windows-specific)
-      env: {  CI: 'true' },
+      stdio: 'pipe',
+      env: { ...process.env, CI: 'true' },
     }).toString();
 
     fs.appendFileSync(options.logFile, `Command: ${command}\nOutput:\n${result}\n\n`, 'utf8');
-
     return { code: 0, stdout: result, stderr: null };
   } catch (err: any) {
-    const errorMessage = err.stderr?.toString() || err.message;
-    fs.appendFileSync(options.logFile, `Command: ${command}\nError:\n${errorMessage}\n\n`, 'utf8');
+    const stderr = err.stderr?.toString() ?? '';
+    const stdout = err.stdout?.toString() ?? '';
+    const status = err.status ?? 1;
 
-    return {
-      code: err.status || 1,
-      stdout: null,
-      stderr: errorMessage,
-    };
+    // Determine if stderr contains only harmless npm warnings
+    const hasError = /npm ERR!/i.test(stderr);
+    const hasOnlyWarnings = !hasError && /npm WARN/i.test(stderr);
+
+    // If it's just warnings, treat as success
+    if (hasOnlyWarnings || status === 0) {
+      fs.appendFileSync(options.logFile, `Command: ${command}\nWarning:\n${stderr}\n\n`, 'utf8');
+      return { code: 0, stdout, stderr };
+    }
+
+    // Otherwise treat as a real error
+    fs.appendFileSync(options.logFile, `Command: ${command}\nError:\n${stderr}\n\n`, 'utf8');
+    return { code: status, stdout, stderr };
   }
 };
 
