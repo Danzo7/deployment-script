@@ -33,11 +33,11 @@ function pm2Stop(name: string): Promise<void> {
   });
 }
 
-function pm2Restart(name: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    pm2.restart(name, (err) => (err ? reject(err) : resolve()));
-  });
-}
+// function pm2Restart(name: string): Promise<void> {
+//   return new Promise((resolve, reject) => {
+//     pm2.restart(name, (err) => (err ? reject(err) : resolve()));
+//   });
+// }
 function pm2Delete(name: string): Promise<void> {
   return new Promise((resolve, reject) => {
     pm2.delete(name, (err) => (err ? reject(err) : resolve()));
@@ -55,7 +55,7 @@ const getPM2Config = (
   status: Status;
   }
 ): pm2.StartOptions => {
-  const { port, status ,projectType, ...rest } = config;
+  const { port ,projectType, ...rest } = config;
   
   const baseConfig: pm2.StartOptions = {
     ...rest,

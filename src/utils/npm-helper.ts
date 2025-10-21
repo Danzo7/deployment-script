@@ -77,7 +77,7 @@ const installDependencies = async (dir: string, logFile: string) => {
       throw new Error(`Installation failed: ${result.stderr}`);
     }
 
-    result.stdout?.split('\n').forEach((line) =>line.trim()==''?null: Logger.success(line));
+    result.stdout?.split('\n').forEach((line:string) =>line.trim()==''?null: Logger.success(line));
   
 };
 
