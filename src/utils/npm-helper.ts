@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execSync, ExecSyncOptions } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { Logger } from './logger.js';
@@ -9,39 +9,67 @@ import { Logger } from './logger.js';
  * @param options The options containing the working directory and log file path.
  * @returns An object with the command execution result.
  */
+
 const runCommand = (command: string, options: { cwd: string; logFile: string }) => {
+  const execOptions: ExecSyncOptions = {
+    cwd: options.cwd,
+    stdio: ['pipe', 'pipe', 'pipe'], // capture stdout/stderr
+    env: { ...process.env, CI: 'true' }, // ensure CI-friendly mode
+    encoding: 'utf8',
+  };
+
   try {
-    // Ensure log directory exists
-    fs.mkdirSync(path.dirname(options.logFile), { recursive: true });
+    // Run the command and capture all output
+    const stdout = execSync(command, execOptions);
 
-    const result = execSync(command, {
-      cwd: options.cwd,
-      stdio: 'pipe',
-      env: { ...process.env, CI: 'true' },
-    }).toString();
+    // Log normal output
+    fs.appendFileSync(
+      options.logFile,
+      `Command: ${command}\nOutput:\n${stdout}\n\n`,
+      'utf8'
+    );
 
-    fs.appendFileSync(options.logFile, `Command: ${command}\nOutput:\n${result}\n\n`, 'utf8');
-    return { code: 0, stdout: result, stderr: null };
+    return { code: 0, stdout, stderr: null };
   } catch (err: any) {
-    const stderr = err.stderr?.toString() ?? '';
+    const code = err.status ?? 1;
     const stdout = err.stdout?.toString() ?? '';
-    const status = err.status ?? 1;
+    const stderr = err.stderr?.toString() ?? '';
+    const output = `${stdout}\n${stderr}`;
 
-    // Determine if stderr contains only harmless npm warnings
-    const hasError = /npm ERR!/i.test(stderr);
-    const hasOnlyWarnings = !hasError && /npm WARN/i.test(stderr);
+    // 🧩 Detect common harmless warnings (non-fatal)
+    const harmlessPatterns = [
+      /npm WARN/i,
+      /Browserslist: caniuse-lite is outdated/i,
+      /deprecated/i,
+      /EBADENGINE/i,
+      /old lockfile/i,
+    ];
 
-    // If it's just warnings, treat as success
-    if (hasOnlyWarnings || status === 0) {
-      fs.appendFileSync(options.logFile, `Command: ${command}\nWarning:\n${stderr}\n\n`, 'utf8');
-      return { code: 0, stdout, stderr };
+    const isHarmlessWarning =
+      code === 0 ||
+      harmlessPatterns.some((regex) => regex.test(stderr)) ||
+      harmlessPatterns.some((regex) => regex.test(stdout));
+
+    if (isHarmlessWarning) {
+      fs.appendFileSync(
+        options.logFile,
+        `Command: ${command}\nWarning (ignored):\n${output}\n\n`,
+        'utf8'
+      );
+      return { code: 0, stdout, stderr: output };
     }
 
-    // Otherwise treat as a real error
-    fs.appendFileSync(options.logFile, `Command: ${command}\nError:\n${stderr}\n\n`, 'utf8');
-    return { code: status, stdout, stderr };
+    // ⚠️ If it's a real error (exit code ≠ 0 and not harmless)
+    fs.appendFileSync(
+      options.logFile,
+      `Command: ${command}\nError:\n${output}\n\n`,
+      'utf8'
+    );
+
+    return { code, stdout, stderr: output };
   }
 };
+
 
 /**
  * Runs a specified npm script in a directory and logs output to a file.
