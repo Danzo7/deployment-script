@@ -9,7 +9,7 @@ type Status =
   | 'launching'
   | 'errored'
   | 'one-launch-status'
-  | 'not-found';
+  | 'not-found'| string; 
 
 function pm2Connect(): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -55,7 +55,7 @@ const getPM2Config = (
   status: Status;
   }
 ): pm2.StartOptions => {
-  const { port, status,projectType, ...rest } = config;
+  const { port, status ,projectType, ...rest } = config;
   
   const baseConfig: pm2.StartOptions = {
     ...rest,
@@ -69,7 +69,7 @@ const getPM2Config = (
   };
 
   switch (projectType) {
-    case 'nestjs':
+    case 'nestjs':{
         const nestjsMain = path.join(dir, 'dist', 'main.js');
       if (!fs.existsSync(nestjsMain)) throw new Error(`NestJS main file not found at ${nestjsMain}`);
         return {
@@ -77,6 +77,7 @@ const getPM2Config = (
           script: nestjsMain,
           args: undefined
         };
+      }
       
     case 'nextjs':
     default:
