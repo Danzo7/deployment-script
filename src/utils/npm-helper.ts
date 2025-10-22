@@ -15,8 +15,8 @@ const runCommand = (command: string, options: { cwd: string; logFile: string }) 
     cwd: options.cwd,
     stdio: ['pipe', 'pipe', 'pipe'], // capture stdout/stderr
     env: { ...process.env, CI: 'true',
-    // NEXT_PRIVATE_SKIP_WARNINGS_IN_CI: 'true', // ignore warnings as errors
-    // NEXT_TELEMETRY_DISABLED: '1',            // disable telemetry
+     NEXT_PRIVATE_SKIP_WARNINGS_IN_CI: 'true', // ignore warnings as errors
+     NEXT_TELEMETRY_DISABLED: '1',            // disable telemetry
      }, // ensure CI-friendly mode
     encoding: 'utf8',
   };
