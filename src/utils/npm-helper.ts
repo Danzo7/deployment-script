@@ -32,44 +32,16 @@ const runCommand = (command: string, options: { cwd: string; logFile: string }) 
       'utf8'
     );
 
-    return { code: 0, stdout, stderr: null };
-  } catch (err: any) {
-    const code = err.status ?? 1;
-    const stdout = err.stdout?.toString() ?? '';
-    const stderr = err.stderr?.toString() ?? '';
-    const output = `${stdout}\n${stderr}`;
+    return { code: 0, stdout:stdout?.toString(), stderr: null };
+  } catch (err: any) { 
+    const errorMessage = err.stderr?.toString() || err.message;
+    fs.appendFileSync(options.logFile, `Command: ${command}\nError:\n${errorMessage}\n\n`, 'utf8');
 
-    // 🧩 Detect common harmless warnings (non-fatal)
-    const harmlessPatterns = [
-      /npm WARN/i,
-      /Browserslist: caniuse-lite is outdated/i,
-      /deprecated/i,
-      /EBADENGINE/i,
-      /old lockfile/i,
-    ];
-
-    const isHarmlessWarning =
-      code === 0 ||
-      harmlessPatterns.some((regex) => regex.test(stderr)) ||
-      harmlessPatterns.some((regex) => regex.test(stdout));
-
-    if (isHarmlessWarning) {
-      fs.appendFileSync(
-        options.logFile,
-        `Command: ${command}\nWarning (ignored):\n${output}\n\n`,
-        'utf8'
-      );
-      return { code: 0, stdout, stderr: output };
-    }
-
-    // ⚠️ If it's a real error (exit code ≠ 0 and not harmless)
-    fs.appendFileSync(
-      options.logFile,
-      `Command: ${command}\nError:\n${output}\n\n`,
-      'utf8'
-    );
-
-    return { code, stdout, stderr: output };
+    return {
+      code: err.status || 1,
+      stdout: null,
+      stderr: errorMessage,
+    };
   }
 };
 

@@ -3,13 +3,14 @@
   "version": "1.3.0",
   "description": "A command-line tool designed to manage the deployment and status of Next.js and NestJS applications using PM2.",
   "type": "module",
-  "main": "index.js",
+  "main": "dist/cli.js",
   "bin": {
     "dm": "./dist/cli.js"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
+    "prepare": "npm run build",
     "deploy": "node dist/cli.js",
     "pkg": "pkg .",
     "lint": "eslint .",

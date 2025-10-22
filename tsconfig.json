@@ -16,6 +16,7 @@
     "src/**/*.ts" // Include all TypeScript files in the src folder
   ],
   "exclude": [
-    "node_modules" // Exclude the node_modules folder
+    "node_modules",  // Exclude the node_modules folder,
+    "dist" // Exclude the dist folder
   ]
 }

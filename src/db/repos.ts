@@ -55,7 +55,7 @@ export const AppRepo = {
     const db = getDB();
     const app = this.findByName(name);
     app.lastDeploy = new Date().toISOString();
-    app.builds ||= [];
+    if (!app.builds) app.builds = [];
     app.builds.push(buildPath);
     app.activeBuild = app.builds.length - 1;
     db.write();
@@ -64,7 +64,7 @@ export const AppRepo = {
   removeBuild: function (name: string, buildPath: string) {
     const db = getDB();
     const app = this.findByName(name);
-    app.builds ||= [];
+    if (!app.builds) app.builds = [];
     app.builds = app.builds.filter((build) => build !== buildPath);
     db.write();
     return app;
