@@ -16,6 +16,7 @@ import { setEnvForApp } from './commands/set-env.js';
 import { Delete } from './commands/delete.js';
 import { startAllApplications } from './commands/start-all.js';
 import { stopAllApplications } from './commands/stop-all.js';
+import { update } from './commands/update.js';
 
 interface InitArgs {
   name: string;
@@ -295,6 +296,19 @@ try {
           async () => {
             try {
               await stopAllApplications();
+            } catch (error) {
+              Logger.error(error);
+              process.exit(1);
+            }
+          }
+        )
+        .command(
+          'update',
+          'Update the dm tool',
+          (yargs) => yargs,
+          async () => {
+            try {
+              await update();
             } catch (error) {
               Logger.error(error);
               process.exit(1);
