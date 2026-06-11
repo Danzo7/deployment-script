@@ -6,6 +6,7 @@ import { prepare } from '../utils/npm-helper.js';
 import { getAppStatus, runApp } from '../utils/pm2-helper.js';
 import {  handleGitRepo, pushChanges } from '../utils/git-helper.js';
 import { checkEnv } from '../utils/env-heper.js';
+import { pruneOldBuilds } from '../utils/build-pruner.js';
 
 export const deploy = async ({
   name,
@@ -77,7 +78,8 @@ export const deploy = async ({
     error: path.join(logDir, 'pm2.error.log'),
     projectType: app.projectType
   });
-  AppRepo.addBuild(name,buildDir);
+  AppRepo.addBuild(name, buildDir);
+  pruneOldBuilds(name).catch(() => {}); // fire-and-forget, non-blocking
   if(lint){
     Logger.info('Pushing lint fix...');
    await pushChanges({dir:relDir, commitMessage:`[CLI Tool] Linting fix`});

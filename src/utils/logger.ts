@@ -78,6 +78,30 @@ export class Logger {
   }
 
   /**
+   * Displays an inline spinner while an async operation runs.
+   * Returns the result of the operation.
+   */
+  static async spinner<T>(label: string, operation: () => Promise<T>): Promise<T> {
+    const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+    let i = 0;
+    const timestamp = chalk.gray(`[${new Date().toLocaleTimeString()}]`);
+    const interval = setInterval(() => {
+      process.stdout.write(`\r${timestamp} ${chalk.cyan(frames[i++ % frames.length])} ${label}`);
+    }, 80);
+
+    try {
+      const result = await operation();
+      clearInterval(interval);
+      process.stdout.write(`\r${timestamp} ${chalk.green('✔')} ${label}\n\n`);
+      return result;
+    } catch (err) {
+      clearInterval(interval);
+      process.stdout.write(`\r${timestamp} ${chalk.red('✖')} ${label}\n\n`);
+      throw err;
+    }
+  }
+
+  /**
    * Private helper for consistent logging.
    */
   private static log(formattedMessage: string, ...optionalParams: any[]) {

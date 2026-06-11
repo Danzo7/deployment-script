@@ -37,14 +37,19 @@ export const handleGitRepo = async ({
   );
 
   if (status.ahead > 0) {
-    Logger.warn(
-      `${status.ahead} commits ahead. Please don't do that.`
+    Logger.warn(`${status.ahead} commits ahead. Resetting to remote...`);
+    await withRetry('Resetting to remote', async () =>
+      git.reset(['--hard', `origin/${status.current}`])
     );
-    await discardUncommittedChanges(dir);
   }
 
-  if (status.behind > 0) {
-    Logger.info(`${status.behind} new commits found. Pulling changes...`);
+  // Re-fetch status after potential reset so behind count is accurate
+  const freshStatus = await withRetry('Getting updated repository status', async () =>
+    git.status()
+  );
+
+  if (freshStatus.behind > 0) {
+    Logger.info(`${freshStatus.behind} new commits found. Pulling changes...`);
     await withRetry('Pulling changes', async () => git.pull());
     return true;
   }

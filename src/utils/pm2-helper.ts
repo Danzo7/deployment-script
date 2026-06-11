@@ -83,8 +83,8 @@ const getPM2Config = (
     default:
       return {
         ...baseConfig,
-        script: `node_modules/next/dist/bin/next`,
-        args: `start ${dir} -p ${port}`
+        script: path.join(dir, 'node_modules', 'next', 'dist', 'bin', 'next'),
+        args: `start -p ${port}`
       };
   }
 };
