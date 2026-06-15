@@ -1,21 +1,23 @@
 import chalk from 'chalk';
 import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
-import { getAppStatus } from '../utils/pm2-helper.js';
 import { simpleGit } from 'simple-git';
 import { ensureDirectories } from '../utils/file-utils.js';
 import { format } from 'date-fns';
 import pm2 from 'pm2';
 import path from 'path';
 
-const getPm2ProcessInfo = (name: string): Promise<pm2.ProcessDescription | undefined> =>
+const getPm2ProcessInfo = (name: string): Promise<{ status: string; proc: pm2.ProcessDescription | undefined }> =>
   new Promise((resolve, reject) => {
     pm2.connect((err) => {
       if (err) return reject(err);
       pm2.list((listErr, list) => {
         pm2.disconnect();
         if (listErr) return reject(listErr);
-        resolve(list.find((p) => p.name === name));
+        const proc = list.find((p) => p.name === name);
+        const env = proc?.pm2_env as any;
+        const status = env?.status ?? 'stopped';
+        resolve({ status, proc });
       });
     });
   });
@@ -45,15 +47,16 @@ export const info = async ({ name }: { name: string }) => {
   }
 
   // PM2 process info
-  const status = await getAppStatus(name);
+  let status = 'stopped';
   let memory = 'N/A';
   let uptime = 'N/A';
   let restarts = 'N/A';
 
   try {
-    const proc = await getPm2ProcessInfo(name);
-    if (proc?.monit) {
-      memory = proc.monit.memory ? `${Math.round(proc.monit.memory / 1024 / 1024)} MB` : 'N/A';
+    const { status: s, proc } = await getPm2ProcessInfo(name);
+    status = s;
+    if (proc?.monit?.memory) {
+      memory = `${Math.round(proc.monit.memory / 1024 / 1024)} MB`;
     }
     if (proc?.pm2_env) {
       const env = proc.pm2_env as any;
@@ -64,7 +67,7 @@ export const info = async ({ name }: { name: string }) => {
         const s = uptimeSec % 60;
         uptime = `${h}h ${m}m ${s}s`;
       }
-      restarts = env.restart_time ?? 'N/A';
+      restarts = env?.unstable_restarts ?? env?.restart_time ?? '0';
     }
   } catch {
     // pm2 may not be running
@@ -90,6 +93,7 @@ export const info = async ({ name }: { name: string }) => {
   row('Memory', chalk.white(memory));
   row('Uptime', chalk.white(uptime));
   row('Restarts', chalk.white(restarts.toString()));
+  row('Builds', chalk.white((app.builds?.length ?? 0).toString()));
   row('Active Build', chalk.white(activeBuildPath));
   row('Last Deploy', app.lastDeploy ? chalk.yellow(format(new Date(app.lastDeploy), 'yyyy-MM-dd HH:mm:ss')) : chalk.gray('Never'));
   console.log(chalk.gray('  ' + '─'.repeat(40)));
