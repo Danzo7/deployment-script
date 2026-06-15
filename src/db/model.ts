@@ -8,6 +8,7 @@ export interface App {
   instances?: number; // Number of instances (default 1)
   repo: string; // Repository URL or path
   branch: string; // Branch name
+  url?: string; // Public URL or domain for the app
   lastDeploy?: string; // Optional ISO string for last deployment date
   builds?: string[]; 
   activeBuild?: number;

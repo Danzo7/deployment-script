@@ -15,6 +15,12 @@ import { Delete } from './commands/delete.js';
 import { startAllApplications } from './commands/start-all.js';
 import { stopAllApplications } from './commands/stop-all.js';
 import { update } from './commands/update.js';
+import { setUrl } from './commands/set-url.js';
+import { info } from './commands/info.js';
+import { restart } from './commands/restart.js';
+import { rollback } from './commands/rollback.js';
+import { logs } from './commands/logs.js';
+import { monit } from './commands/monit.js';
 import { cleanAll } from './commands/clean-all.js';
 
 interface InitArgs {
@@ -24,6 +30,7 @@ interface InitArgs {
   instances: number;
   port?: number;
   type?: 'nextjs' | 'nestjs';
+  url?: string;
 }
 
 interface DeployArgs {
@@ -99,12 +106,16 @@ try {
             default: 'nextjs',
             alias: 't',
             describe: 'The type of application (nextjs or nestjs)',
+          })
+          .option('url', {
+            type: 'string',
+            alias: 'u',
+            describe: 'The public URL or domain of the application',
           }),
       async (args) => {
         try {
           await init({ ...args, appsDir: APP_DIR });
-        } catch (error) {
-          Logger.error(error);
+        } catch (error) {          Logger.error(error);
           process.exit(1);
         }
       }
@@ -287,6 +298,93 @@ try {
               await update();
             } catch (error) {
               Logger.error(error);
+              process.exit(1);
+            }
+          }
+        )
+        .command(
+          'set-url <name> <url>',
+          'Set or update the public URL/domain for an application',
+          (yargs) =>
+            yargs
+              .positional('name', { type: 'string', demandOption: true, describe: 'Application name' })
+              .positional('url', { type: 'string', demandOption: true, describe: 'Public URL or domain' }),
+          (args) => {
+            try {
+              setUrl(args as any);
+            } catch (err) {
+              Logger.error(err);
+              process.exit(1);
+            }
+          }
+        )
+        .command(
+          'info <name>',
+          'Show detailed info about an application',
+          (yargs) =>
+            yargs.positional('name', { type: 'string', demandOption: true, describe: 'Application name' }),
+          async (args) => {
+            try {
+              await info(args as any);
+            } catch (err) {
+              Logger.error(err);
+              process.exit(1);
+            }
+          }
+        )
+        .command(
+          'restart <name>',
+          'Restart an application using its active build',
+          (yargs) =>
+            yargs.positional('name', { type: 'string', demandOption: true, describe: 'Application name' }),
+          async (args) => {
+            try {
+              await restart(args as any);
+            } catch (err) {
+              Logger.error(err);
+              process.exit(1);
+            }
+          }
+        )
+        .command(
+          'rollback <name>',
+          'Roll back an application to a previous build',
+          (yargs) =>
+            yargs
+              .positional('name', { type: 'string', demandOption: true, describe: 'Application name' })
+              .option('to', { type: 'number', describe: 'Build index to roll back to (default: previous)' }),
+          async (args) => {
+            try {
+              await rollback({ name: args.name as string, to: args.to });
+            } catch (err) {
+              Logger.error(err);
+              process.exit(1);
+            }
+          }
+        )
+        .command(
+          'logs <name>',
+          'Stream live logs for an application',
+          (yargs) =>
+            yargs.positional('name', { type: 'string', demandOption: true, describe: 'Application name' }),
+          (args) => {
+            try {
+              logs(args as any);
+            } catch (err) {
+              Logger.error(err);
+              process.exit(1);
+            }
+          }
+        )
+        .command(
+          'monit',
+          'Open PM2 monitor for all applications',
+          (yargs) => yargs,
+          () => {
+            try {
+              monit();
+            } catch (err) {
+              Logger.error(err);
               process.exit(1);
             }
           }

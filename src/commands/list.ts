@@ -20,11 +20,12 @@ export const listApps = async () => {
   const table = new Table({
     head: [
       chalk.cyan('#'),
-      chalk.whiteBright('Name'), // Removed the color here for a simpler look
+      chalk.whiteBright('Name'),
       chalk.blue('Port'),
+      chalk.magenta('URL'),
       chalk.yellow('Last Deployed'),
       chalk.whiteBright('Status'),
-      chalk.whiteBright('Directory'), // Removed the color here for simplicity
+      chalk.whiteBright('Directory'),
     ],
     style: {
       compact: false, // Make sure the table looks more spaced out
@@ -48,11 +49,12 @@ export const listApps = async () => {
 
     table.push([
       chalk.cyan(index + 1),
-      chalk.whiteBright(app.name), // No color for the name, just plain text
+      chalk.whiteBright(app.name),
       chalk.blue.bold(app.port),
+      app.url ? chalk.magenta(app.url) : chalk.gray('—'),
       chalk.yellow(lastDeployed),
-      statusColor, // Apply color only to the status
-      app.appDir, // No color for the directory, just plain text
+      statusColor,
+      app.appDir,
     ]);
   });
 
