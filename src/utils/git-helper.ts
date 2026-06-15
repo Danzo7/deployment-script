@@ -99,7 +99,13 @@ export const discardUncommittedChanges = async (dir: string) => {
   const git = simpleGit(dir);
 
   try {
-    await withRetry('Discarding changes', async () => git.reset(ResetMode.HARD));
+    // Reset tracked files to HEAD
+    await withRetry('Resetting tracked files', async () => git.reset(ResetMode.HARD));
+
+    // Restore any deleted tracked files
+    await withRetry('Restoring deleted tracked files', async () =>
+      git.checkout(['.'])
+    );
 
     Logger.success('Uncommitted changes discarded.');
   } catch (error) {

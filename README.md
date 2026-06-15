@@ -1,31 +1,10 @@
 # Deployment Manager CLI
 
-A comprehensive command-line tool designed to simplify the deployment and management of Next.js applications. The tool supports critical tasks such as application initialization, deployment, IIS reverse proxy configuration, and CI/CD workflow generation. It also maintains a database of registered applications for streamlined management.
-
----
-
-## Key Features
-
-### General
-- **Application Database**: Maintains a centralized database of all registered applications, including their details (name, port, status, and deployment history).
-- **List Applications**: View all registered applications with detailed information.
-- **Initialize Applications**: Easily set up new applications with pre-configured repository, branch, instances, and ports.
-- **Deploy Applications**: Deploy or update applications with optional force and linting flags to ensure quality and control.
-- **Generate IIS Configurations**: Automatically create IIS reverse proxy configuration files for seamless server setup.
-- **Application Status Management**: View or manage application statuses, such as checking if they are online, stopped, or launching.
-- **CI/CD Workflow Integration**: Generate and push Gitea workflows to automate build and deployment pipelines.
-- **Environment and Dependency Management**: Automatically handle environment variable setups and dependencies for consistent deployments.
-- **Error Handling and Logging**: Robust error-handling and logging mechanisms ensure reliability and provide clear diagnostics.
-
-### Advanced
-- **PM2 Integration**: Leverages PM2 for process management, including instance control and status monitoring.
-- **Extensibility**: Modular design allows for easy customization and extension to meet specific project needs.
+A CLI tool for managing the full lifecycle of Next.js and NestJS applications — from initialization and deployment to process management and environment config. Built on top of PM2 and Git.
 
 ---
 
 ## Installation
-
-Clone the repository, install dependencies, and link the CLI tool for global use:
 
 ```bash
 git clone <repository-url>
@@ -37,13 +16,44 @@ npm link
 
 ---
 
-## Usage
+## Commands
 
-The tool is accessible via the `dm` command. Below are the primary commands and their descriptions.
+### `dm init <name>`
 
-### **List Applications**
+Register a new application.
 
-View a list of all registered applications with detailed information.
+```bash
+dm init <name> --repo <repo-url> [options]
+```
+
+| Option | Alias | Default | Description |
+|---|---|---|---|
+| `--repo` | `-r` | required | Git repository URL |
+| `--branch` | `-b` | `main` | Branch to deploy from |
+| `--instances` | `-i` | `1` | Number of PM2 instances |
+| `--port` | `-p` | auto | Port number (auto-assigned if omitted) |
+| `--type` | `-t` | `nextjs` | App type: `nextjs` or `nestjs` |
+
+---
+
+### `dm deploy <name>`
+
+Pull latest changes, install dependencies, build, and start/restart the app via PM2.
+
+```bash
+dm deploy <name> [--force] [--lint]
+```
+
+| Option | Alias | Default | Description |
+|---|---|---|---|
+| `--force` | `-f` | `false` | Force redeploy even if nothing changed |
+| `--lint` | `-l` | `false` | Run linting and push fixes before deploying |
+
+---
+
+### `dm list`
+
+Display all registered apps with their port, status, last deploy time, and directory.
 
 ```bash
 dm list
@@ -51,89 +61,80 @@ dm list
 
 ---
 
-### **Initialize an Application**
+### `dm start-all`
 
-Set up a new application for deployment with required configurations.
-
-```bash
-dm init <name> --repo <repo-url> --branch <branch-name> --instances <number-of-instances> --port <port-number>
-```
-
-#### Options:
-- `--name` (Required): Application name.
-- `--repo` (Required): Repository URL.
-- `--branch`: Target branch (default: `main`).
-- `--instances`: Number of PM2 instances (default: 1).
-- `--port`: Port number (default: dynamically assigned).
-
----
-
-### **Deploy an Application**
-
-Deploy or update an application with optional parameters for additional control.
+Start all registered applications that are not currently running, using their last known build.
 
 ```bash
-dm deploy <name> --force --lint
-```
-
-#### Options:
-- `--force`: Force deployment even if no changes are detected.
-- `--lint`: Run linting as part of the deployment process.
-
----
-
-### **Generate IIS Configurations**
-
-Create IIS reverse proxy configurations for specified applications.
-
-```bash
-dm iis-config <name> --https --non-www
-```
-
-#### Options:
-- `--https`: Include HTTPS redirection.
-- `--non-www`: Redirect traffic to the non-WWW version of the domain.
-
----
-
-### **Generate CI/CD Workflow**
-
-Generate and push a CI/CD workflow file for Gitea integration.
-
-```bash
-dm workflow <name>
+dm start-all
 ```
 
 ---
-### **Hard Unlock a Locked Application**
 
-Forcefully release a lock on an application by killing the associated process. This command is useful when an application is stuck or has an orphaned lock.
+### `dm stop-all`
+
+Stop all running applications.
+
+```bash
+dm stop-all
+```
+
+---
+
+### `dm set-env <name> <VAR=VALUE>`
+
+Set or update an environment variable for an application.
+
+```bash
+dm set-env <name> API_URL=https://example.com
+```
+
+---
+
+### `dm clean <name>`
+
+Discard local git changes and remove old builds, keeping only the active one.
+
+```bash
+dm clean <name>
+```
+
+---
+
+### `dm delete <name> <secret>`
+
+Fully remove an application — stops the PM2 process, deletes the app directory, and removes it from the database. Requires a secret key (`SECRET_KEY` env var).
+
+```bash
+dm delete <name> <secret>
+```
+
+---
+
+### `dm unlock <name>`
+
+Force-release a stuck lock on an application by killing the associated process.
 
 ```bash
 dm unlock <name>
 ```
 
 ---
-### **Set environment variables**
 
-Set or update an environment variable for an application.
+### `dm update`
+
+Pull the latest version of the `dm` tool itself, reinstall dependencies if needed, and rebuild.
 
 ```bash
-dm set-env <name> <env>
+dm update
 ```
 
 ---
 
-## Why Use Deployment Manager CLI?
+## How It Works
 
-1. **Simplified Processes**: Automates tedious tasks such as IIS configuration, deployment, and workflow generation.
-2. **Error Reduction**: Minimizes manual errors with predefined and tested scripts.
-3. **Efficiency**: Saves time by streamlining application initialization, deployment, and monitoring.
-4. **Scalability**: Provides tools for managing multiple applications with ease.
-5. **Reliability**: Robust error handling, logging, and dependency management ensure smooth operation.
-6. **Integration**: Leverages PM2 for process management and Gitea Actions for CI/CD automation.
-7. **Flexibility**: Modular design allows for easy customization and extension to meet specific project needs.
-
----
-
-This tool is a one-stop solution for managing Next.js applications in environments requiring robust deployment and monitoring capabilities, especially when integrated with IIS and PM2.
+- Apps are tracked in a local database (lowdb) with metadata like port, repo, branch, build history, and last deploy time.
+- Each command acquires a per-app lock to prevent concurrent operations on the same app.
+- Deployment checks for git changes and env changes before deciding whether to rebuild, so unchanged apps are skipped unless `--force` is used.
+- PM2 is used for process management — apps run in cluster mode with a 250MB memory restart threshold.
+- Builds are versioned and stored; `clean` prunes old ones while preserving the active build.

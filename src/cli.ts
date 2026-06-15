@@ -8,8 +8,6 @@ import { acquireLock, releaseLock } from './utils/lock-utils.js';
 import { Logger } from './utils/logger.js';
 import { listApps } from './commands/list.js';
 import { existsSync, mkdirSync } from 'fs';
-import { generateIISConfig } from './commands/iis-config.js';
-import { generateWorkflow } from './commands/generate-workflow.js';
 import { unlock } from './commands/unlock.js';
 import { clean } from './commands/clean.js';
 import { setEnvForApp } from './commands/set-env.js';
@@ -17,6 +15,7 @@ import { Delete } from './commands/delete.js';
 import { startAllApplications } from './commands/start-all.js';
 import { stopAllApplications } from './commands/stop-all.js';
 import { update } from './commands/update.js';
+import { cleanAll } from './commands/clean-all.js';
 
 interface InitArgs {
   name: string;
@@ -153,42 +152,6 @@ try {
         await listApps();
       }
     ).command(
-      'iis-config <name>',
-      'Generate an IIS config file for reverse proxy',
-      (yargs) =>
-        yargs
-          .positional('name', {
-            type: 'string',
-            demandOption: true,
-            describe: 'The name of the application',
-          })
-          .option('https', {
-            type: 'boolean',
-            default: false,
-            describe: 'Include HTTPS redirection rules',
-          })
-          .option('non-www', {
-            type: 'boolean',
-            default: false,
-            describe: 'Redirect all traffic to non-WWW',
-          }),
-      async (args) => {
-        await generateIISConfig(args);
-      })
-      .command(
-        'workflow <name>',
-        'Generate and push Gitea workflow to remote repository',
-        (yargs) =>
-          yargs
-            .positional('name', {
-              type: 'string',
-              demandOption: true,
-              describe: 'The name of the application',
-            })
-           ,
-        async (args) => {
-          await generateWorkflow(args);
-        }) .command(
           'unlock <name>',
           'Forcefully release the lock for an application by killing its process.',
           (yargs) =>
@@ -296,6 +259,19 @@ try {
           async () => {
             try {
               await stopAllApplications();
+            } catch (error) {
+              Logger.error(error);
+              process.exit(1);
+            }
+          }
+        )
+        .command(
+          'clean-all',
+          'Clean all apps: discard uncommitted changes and prune old builds',
+          (yargs) => yargs,
+          async () => {
+            try {
+              await cleanAll();
             } catch (error) {
               Logger.error(error);
               process.exit(1);
