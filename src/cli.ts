@@ -370,6 +370,7 @@ try {
           (args) => {
             try {
               logs(args as any);
+              return new Promise(() => {}); // keep process alive — child owns the lifecycle
             } catch (err) {
               Logger.error(err);
               process.exit(1);
@@ -383,6 +384,7 @@ try {
           () => {
             try {
               monit();
+              return new Promise(() => {}); // keep process alive — child owns the lifecycle
             } catch (err) {
               Logger.error(err);
               process.exit(1);

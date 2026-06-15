@@ -9,4 +9,5 @@ export const logs = ({ name }: { name: string }) => {
 
   const child = spawn(PM2_BIN, ['logs', name], { stdio: 'inherit' });
   child.on('error', (err) => Logger.error('Failed to start pm2 logs:', err));
+  child.on('close', (code) => process.exit(code ?? 0));
 };
