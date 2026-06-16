@@ -1,10 +1,11 @@
 import chalk from 'chalk';
-import { AppRepo } from '../db/repos.js';
+import { AppRepo, StorageRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 import { simpleGit } from 'simple-git';
 import { ensureDirectories } from '../utils/file-utils.js';
 import { format } from 'date-fns';
 import { getProcessInfo } from '../utils/pm2-helper.js';
+import { getDirectorySize, formatSize } from './storage.js';
 import path from 'path';
 
 export const info = async ({ name }: { name: string }) => {
@@ -92,5 +93,21 @@ export const info = async ({ name }: { name: string }) => {
   row('Message', chalk.white(commitMessage));
   row('Author', chalk.white(commitAuthor));
   row('Commit Date', chalk.white(commitDate));
+
+  // Storages
+  const linkedStorages = app.linkedStorages ?? [];
+  if (linkedStorages.length > 0) {
+    console.log(chalk.gray('  ' + '─'.repeat(40)));
+    for (const storageName of linkedStorages) {
+      try {
+        const storage = StorageRepo.findByName(storageName);
+        const size = formatSize(getDirectorySize(storage.path));
+        row('Storage', `${chalk.white(storageName)} ${chalk.gray('(')}${chalk.green(size)}${chalk.gray(')')}`);
+      } catch {
+        row('Storage', chalk.gray(`${storageName} (not found)`));
+      }
+    }
+  }
+
   console.log();
 };

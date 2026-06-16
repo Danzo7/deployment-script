@@ -1,9 +1,10 @@
 import Table from 'cli-table3';
 import chalk from 'chalk';
-import { AppRepo } from '../db/repos.js';
+import { AppRepo, StorageRepo } from '../db/repos.js';
 import { App } from '../db/model.js';
 import { getAppStatus } from '../utils/pm2-helper.js';
 import { format } from 'date-fns';
+import { getDirectorySize, formatSize } from './storage.js';
 
 export const listApps = async () => {
   // Read the directory to get all apps
@@ -26,6 +27,7 @@ export const listApps = async () => {
       chalk.yellow('Last Deployed'),
       chalk.whiteBright('Status'),
       chalk.whiteBright('Directory'),
+      chalk.green('Storages'),
     ],
     style: {
       compact: false, // Make sure the table looks more spaced out
@@ -47,6 +49,21 @@ export const listApps = async () => {
       ? format(new Date(app.lastDeploy), 'yyyy-MM-dd HH:mm:ss')
       : 'N/A';
 
+    const storageDisplay =
+      (app.linkedStorages ?? []).length === 0
+        ? chalk.gray('—')
+        : (app.linkedStorages ?? [])
+            .map((storageName) => {
+              try {
+                const storage = StorageRepo.findByName(storageName);
+                const size = formatSize(getDirectorySize(storage.path));
+                return `${chalk.white(storageName)} ${chalk.gray('(')}${chalk.green(size)}${chalk.gray(')')}`;
+              } catch {
+                return chalk.gray(`${storageName} (not found)`);
+              }
+            })
+            .join('\n');
+
     table.push([
       chalk.cyan(index + 1),
       chalk.whiteBright(app.name),
@@ -55,6 +72,7 @@ export const listApps = async () => {
       chalk.yellow(lastDeployed),
       statusColor,
       app.appDir,
+      storageDisplay,
     ]);
   });
 
