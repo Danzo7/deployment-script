@@ -49,7 +49,7 @@ function pm2Delete(name: string): Promise<void> {
 const getPM2Config = (
   dir: string, 
   config: Omit<pm2.StartOptions, "exec_mode" | "script" | "args"> & {
-  projectType: 'nextjs' | 'nestjs',
+  projectType: 'nextjs' | 'nestjs' | 'dotnet',
   name: string;
   port: number;
   status: Status;
@@ -79,6 +79,25 @@ const getPM2Config = (
         };
       }
       
+    case 'dotnet': {
+      const dllPath = path.join(dir, 'publish', `${config.name}.dll`);
+      if (!fs.existsSync(dllPath)) {
+        throw new Error(`DLL not found at ${dllPath}`);
+      }
+      return {
+        ...rest,
+        exec_mode: 'fork',
+        cwd: dir,
+        max_memory_restart: '250M',
+        script: 'dotnet',
+        args: dllPath,
+        env: {
+          ASPNETCORE_ENVIRONMENT: 'Production',
+          ASPNETCORE_URLS: `http://0.0.0.0:${port}`,
+        },
+      };
+    }
+
     case 'nextjs':
     default:
       return {
@@ -95,7 +114,7 @@ export const runApp = async (
     name: string;
     port: number;
     status: Status;
-    projectType: 'nextjs' | 'nestjs';
+    projectType: 'nextjs' | 'nestjs' | 'dotnet';
   }
 ) => {
   const pm2Config = getPM2Config(dir, config);

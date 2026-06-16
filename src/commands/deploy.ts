@@ -6,6 +6,7 @@ import { prepare } from '../utils/npm-helper.js';
 import { getAppStatus, runApp } from '../utils/pm2-helper.js';
 import {  handleGitRepo, pushChanges } from '../utils/git-helper.js';
 import { checkEnv } from '../utils/env-heper.js';
+import { checkDotnetSdk, checkAssemblyName, checkAppSettings, prepareDotnet } from '../utils/dotnet-helper.js';
 import { pruneOldBuilds } from '../utils/build-pruner.js';
 
 export const deploy = async ({
@@ -48,7 +49,15 @@ export const deploy = async ({
 
   Logger.info('Checking environment variables...');
   const isEnvChanged = await checkEnv(relDir, envDir,app.projectType==="nextjs"?".env.local":".env");
-  if (!isEnvChanged && !isGitChanged && !isFirstDeploy) {
+
+  let isAppSettingsChanged = false;
+  if (app.projectType === 'dotnet') {
+    await checkDotnetSdk(relDir);
+    await checkAssemblyName(relDir, app.name);
+    isAppSettingsChanged = await checkAppSettings(relDir, envDir);
+  }
+
+  if (!isEnvChanged && !isAppSettingsChanged && !isGitChanged && !isFirstDeploy) {
     Logger.info(`Everything is up to date`);
     if (isRunning) {
       Logger.info(
@@ -60,13 +69,17 @@ export const deploy = async ({
     }
   }
 
-  await prepare(relDir, {
-    withInstall: force || isFirstDeploy || isGitChanged || !isRunning,
-    withBuild:
-      force || !isRunning || isFirstDeploy || isGitChanged || isEnvChanged,
-    withFix:  lint,
-    logDir,
-  });
+  if (app.projectType === 'dotnet') {
+    await prepareDotnet(relDir, { logDir });
+  } else {
+    await prepare(relDir, {
+      withInstall: force || isFirstDeploy || isGitChanged || !isRunning,
+      withBuild:
+        force || !isRunning || isFirstDeploy || isGitChanged || isEnvChanged,
+      withFix:  lint,
+      logDir,
+    });
+  }
   Logger.info('Creating build version...');
  const buildDir= createBuildDirByType(app.appDir, app.projectType);
   await runApp(buildDir, {

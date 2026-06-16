@@ -20,7 +20,7 @@ export const init = async ({
   instances?: number;
   port?: number;
   appsDir: string;
-  type?: 'nextjs' | 'nestjs';
+  type?: 'nextjs' | 'nestjs' | 'dotnet';
   url?: string;
 }) => {
   if (!repo) throw new Error('Repository URL is required.');

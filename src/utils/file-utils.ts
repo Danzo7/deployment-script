@@ -135,16 +135,39 @@ export const createBuildDirForNestJS = (appDir: string): string => {
   return buildDir;
 };
 
+export const createBuildDirForDotnet = (appDir: string): string => {
+  const buildDir = path.join(appDir, 'builds', 'build-' + Date.now());
+  const releaseDir = path.join(appDir, 'release');
+
+  const publishFolder = path.join(releaseDir, 'publish');
+
+  fs.mkdirSync(buildDir, { recursive: true });
+
+  // Copy publish/ contents into buildDir/publish/
+  const publishDest = path.join(buildDir, 'publish');
+  fsExtra.copySync(publishFolder, publishDest);
+
+  // Delete release/publish/ to keep the release directory clean
+  fsExtra.removeSync(publishFolder);
+
+  return buildDir;
+};
+
 /**
  * Creates a build directory based on the project type
  * @param appDir The application directory
- * @param projectType The type of project ('nextjs' | 'nestjs')
+ * @param projectType The type of project ('nextjs' | 'nestjs' | 'dotnet')
+ * @param appName The application name (required for dotnet builds)
  * @returns The path to the created build directory
  */
-export const createBuildDirByType = (appDir: string, projectType: 'nextjs' | 'nestjs'): string => {
+export const createBuildDirByType = (
+  appDir: string,
+  projectType: 'nextjs' | 'nestjs' | 'dotnet'): string => {
   switch (projectType) {
     case 'nestjs':
       return createBuildDirForNestJS(appDir);
+    case 'dotnet':
+      return createBuildDirForDotnet(appDir);
     case 'nextjs':
     default:
       return createBuildDir(appDir);

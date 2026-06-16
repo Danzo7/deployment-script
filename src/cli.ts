@@ -29,7 +29,7 @@ interface InitArgs {
   branch: string;
   instances: number;
   port?: number;
-  type?: 'nextjs' | 'nestjs';
+  type?: 'nextjs' | 'nestjs' | 'dotnet';
   url?: string;
 }
 
@@ -102,10 +102,10 @@ try {
           })
           .option('type', {
             type: 'string',
-            choices: ['nextjs', 'nestjs'],
+            choices: ['nextjs', 'nestjs', 'dotnet'],
             default: 'nextjs',
             alias: 't',
-            describe: 'The type of application (nextjs or nestjs)',
+            describe: 'The type of application (nextjs, nestjs, or dotnet)',
           })
           .option('url', {
             type: 'string',
