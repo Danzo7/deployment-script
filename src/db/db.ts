@@ -22,12 +22,10 @@ export const initializeDB = () => {
 
   // Provide default structure if the database is empty
   db.data ||= { apps: [], storages: [] };
+  db.data.storages||= [];
 
-  // Migrate: add storages array if missing (db.json created before storage feature)
-  if (!db.data.storages) {
-    db.data.storages = [];
-    db.write();
-  }
+  db.write();
+
 };
 
 /**
