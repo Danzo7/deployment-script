@@ -18,6 +18,7 @@ import { update } from './commands/update.js';
 import { setUrl } from './commands/set-url.js';
 import { info } from './commands/info.js';
 import { restart } from './commands/restart.js';
+import { stop } from './commands/stop.js';
 import { rollback } from './commands/rollback.js';
 import { logs } from './commands/logs.js';
 import { monit } from './commands/monit.js';
@@ -340,6 +341,20 @@ try {
           async (args) => {
             try {
               await restart(args as any);
+            } catch (err) {
+              Logger.error(err);
+              process.exit(1);
+            }
+          }
+        )
+        .command(
+          'stop <name>',
+          'Stop a running application',
+          (yargs) =>
+            yargs.positional('name', { type: 'string', demandOption: true, describe: 'Application name' }),
+          async (args) => {
+            try {
+              await stop(args as any);
             } catch (err) {
               Logger.error(err);
               process.exit(1);
