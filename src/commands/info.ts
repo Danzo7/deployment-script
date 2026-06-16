@@ -4,23 +4,8 @@ import { Logger } from '../utils/logger.js';
 import { simpleGit } from 'simple-git';
 import { ensureDirectories } from '../utils/file-utils.js';
 import { format } from 'date-fns';
-import pm2 from 'pm2';
+import { getProcessInfo } from '../utils/pm2-helper.js';
 import path from 'path';
-
-const getPm2ProcessInfo = (name: string): Promise<{ status: string; proc: pm2.ProcessDescription | undefined }> =>
-  new Promise((resolve, reject) => {
-    pm2.connect((err) => {
-      if (err) return reject(err);
-      pm2.list((listErr, list) => {
-        pm2.disconnect();
-        if (listErr) return reject(listErr);
-        const proc = list.find((p) => p.name === name);
-        const env = proc?.pm2_env as any;
-        const status = env?.status ?? 'stopped';
-        resolve({ status, proc });
-      });
-    });
-  });
 
 export const info = async ({ name }: { name: string }) => {
   const app = AppRepo.getAll().find((a) => a.name === name);
@@ -51,9 +36,11 @@ export const info = async ({ name }: { name: string }) => {
   let memory = 'N/A';
   let uptime = 'N/A';
   let restarts = 'N/A';
+  let scriptPath = 'N/A';
+  let scriptArgs = 'N/A';
 
   try {
-    const { status: s, proc } = await getPm2ProcessInfo(name);
+    const { status: s, proc } = await getProcessInfo(name);
     status = s;
     if (proc?.monit?.memory) {
       memory = `${Math.round(proc.monit.memory / 1024 / 1024)} MB`;
@@ -68,6 +55,8 @@ export const info = async ({ name }: { name: string }) => {
         uptime = `${h}h ${m}m ${s}s`;
       }
       restarts = env?.unstable_restarts ?? env?.restart_time ?? '0';
+      scriptPath = env?.pm_exec_path ?? 'N/A';
+      scriptArgs = Array.isArray(env?.args) ? env.args.join(' ') : (env?.args ?? 'N/A');
     }
   } catch {
     // pm2 may not be running
@@ -96,6 +85,9 @@ export const info = async ({ name }: { name: string }) => {
   row('Builds', chalk.white((app.builds?.length ?? 0).toString()));
   row('Active Build', chalk.white(activeBuildPath));
   row('Last Deploy', app.lastDeploy ? chalk.yellow(format(new Date(app.lastDeploy), 'yyyy-MM-dd HH:mm:ss')) : chalk.gray('Never'));
+  console.log(chalk.gray('  ' + '─'.repeat(40)));
+  row('Script', chalk.white(scriptPath));
+  row('Script Args', chalk.white(scriptArgs));
   console.log(chalk.gray('  ' + '─'.repeat(40)));
   row('Commit', chalk.white(commitHash));
   row('Message', chalk.white(commitMessage));

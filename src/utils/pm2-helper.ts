@@ -182,4 +182,19 @@ export const deletePm2App = async (name: string) => {
     });
   });
 };
+
+export const getProcessInfo = (name: string): Promise<{ status: string; proc: pm2.ProcessDescription | undefined }> =>
+  new Promise((resolve, reject) => {
+    pm2.connect((err) => {
+      if (err) return reject(err);
+      pm2.describe(name, (descErr, list) => {
+        pm2.disconnect();
+        if (descErr) return reject(descErr);
+        const proc = list?.[0];
+        const env = proc?.pm2_env as any;
+        const status = env?.status ?? 'stopped';
+        resolve({ status, proc });
+      });
+    });
+  });
         

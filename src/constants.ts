@@ -7,4 +7,4 @@ dotenv.config({path: path.join(ROOT_DIR, '.env')});
 export const APP_DIR =
   process.env?.APP_DIR ?? path.join(ROOT_DIR, '.applications');
 export const LOCK_DIR = path.resolve(ROOT_DIR, '.locks');
-export const PM2_BIN = path.join(ROOT_DIR, 'node_modules', '.bin', 'pm2');
+
