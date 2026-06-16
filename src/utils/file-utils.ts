@@ -37,14 +37,15 @@ export const ensureDirectories = (appDir: string) => {
   return { relDir, envDir, logDir };
 };
 
-export const createBuildDir =  (appDir: string): string => {
+export const createBuildDir = (appDir: string, projectDir?: string): string => {
   const buildDir = path.join(appDir, 'builds','build-' + Date.now());
   const releaseDir = path.join(appDir, 'release');
   const envDir = path.join(appDir, 'env');
+  const sourceRoot = projectDir ? path.join(releaseDir, projectDir) : releaseDir;
    const nextConfigExts = ['.mjs','.js', '.ts','.cjs', '.json'];
 
-  const nextFolder = path.join(releaseDir, '.next');
-  const publicFolder = path.join(releaseDir, 'public');
+  const nextFolder = path.join(sourceRoot, '.next');
+  const publicFolder = path.join(sourceRoot, 'public');
   if(fs.existsSync(publicFolder)){
   const publicFolderDest = path.join(buildDir, 'public');
   fsExtra.copySync(publicFolder, publicFolderDest);}
@@ -53,7 +54,7 @@ if(!fs.existsSync(nextFolder)){
 }
    fs.mkdirSync(buildDir, { recursive: true });
 
-  const nodeModulesSrc = path.join(releaseDir, 'node_modules');
+  const nodeModulesSrc = path.join(sourceRoot, 'node_modules');
   if(!fs.existsSync(nodeModulesSrc)){
     throw new Error('Node modules not found.');
   }
@@ -74,7 +75,7 @@ if(!fs.existsSync(nextFolder)){
   fsExtra.removeSync(nextFolder);
 
   nextConfigExts.forEach((ext)=>{
-    const nextConfig = path.join(releaseDir, 'next.config'+ext);
+    const nextConfig = path.join(sourceRoot, 'next.config'+ext);
     if( fs.existsSync(nextConfig)){
       const nextConfigDest = path.join(buildDir, 'next.config'+ext);
        fs.copyFileSync(nextConfig, nextConfigDest);
@@ -83,12 +84,13 @@ if(!fs.existsSync(nextFolder)){
   return buildDir;
 };
 
-export const createBuildDirForNestJS = (appDir: string): string => {
+export const createBuildDirForNestJS = (appDir: string, projectDir?: string): string => {
   const buildDir = path.join(appDir, 'builds', 'build-' + Date.now());
   const releaseDir = path.join(appDir, 'release');
   const envDir = path.join(appDir, 'env');
+  const sourceRoot = projectDir ? path.join(releaseDir, projectDir) : releaseDir;
 
-  const distFolder = path.join(releaseDir, 'dist');
+  const distFolder = path.join(sourceRoot, 'dist');
   
   if (!fs.existsSync(distFolder)) {
     throw new Error('NestJS build not found. Make sure to run "npm run build" first.');
@@ -97,7 +99,7 @@ export const createBuildDirForNestJS = (appDir: string): string => {
   fs.mkdirSync(buildDir, { recursive: true });
 
   // Link node_modules
-  const nodeModulesSrc = path.join(releaseDir, 'node_modules');
+  const nodeModulesSrc = path.join(sourceRoot, 'node_modules');
   if (!fs.existsSync(nodeModulesSrc)) {
     throw new Error('Node modules not found.');
   }
@@ -127,7 +129,7 @@ export const createBuildDirForNestJS = (appDir: string): string => {
   fsExtra.removeSync(distFolder);
 
   // Copy package.json (needed for production dependencies info)
-  const packageJsonSrc = path.join(releaseDir, 'package.json');
+  const packageJsonSrc = path.join(sourceRoot, 'package.json');
   if (fs.existsSync(packageJsonSrc)) {
     const packageJsonDest = path.join(buildDir, 'package.json');
     fs.copyFileSync(packageJsonSrc, packageJsonDest);
@@ -135,11 +137,12 @@ export const createBuildDirForNestJS = (appDir: string): string => {
   return buildDir;
 };
 
-export const createBuildDirForDotnet = (appDir: string): string => {
+export const createBuildDirForDotnet = (appDir: string, projectDir?: string): string => {
   const buildDir = path.join(appDir, 'builds', 'build-' + Date.now());
   const releaseDir = path.join(appDir, 'release');
+  const sourceRoot = projectDir ? path.join(releaseDir, projectDir) : releaseDir;
 
-  const publishFolder = path.join(releaseDir, 'publish');
+  const publishFolder = path.join(sourceRoot, 'publish');
 
   fs.mkdirSync(buildDir, { recursive: true });
 
@@ -157,19 +160,20 @@ export const createBuildDirForDotnet = (appDir: string): string => {
  * Creates a build directory based on the project type
  * @param appDir The application directory
  * @param projectType The type of project ('nextjs' | 'nestjs' | 'dotnet')
- * @param appName The application name (required for dotnet builds)
+ * @param projectDir Optional subdirectory within the release dir (for monorepos)
  * @returns The path to the created build directory
  */
 export const createBuildDirByType = (
   appDir: string,
-  projectType: 'nextjs' | 'nestjs' | 'dotnet'): string => {
+  projectType: 'nextjs' | 'nestjs' | 'dotnet',
+  projectDir?: string): string => {
   switch (projectType) {
     case 'nestjs':
-      return createBuildDirForNestJS(appDir);
+      return createBuildDirForNestJS(appDir, projectDir);
     case 'dotnet':
-      return createBuildDirForDotnet(appDir);
+      return createBuildDirForDotnet(appDir, projectDir);
     case 'nextjs':
     default:
-      return createBuildDir(appDir);
+      return createBuildDir(appDir, projectDir);
   }
 };

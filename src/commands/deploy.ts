@@ -35,6 +35,7 @@ export const deploy = async ({
   Logger.info(`Deploying ${Logger.highlight(name)}...`);
 
   const { relDir, envDir, logDir } = ensureDirectories(app.appDir);
+  const buildRelDir = app.projectDir ? path.join(relDir, app.projectDir) : relDir;
   Logger.info('Checking Git repository...');
   const isGitChanged = await handleGitRepo({
     dir: relDir,
@@ -48,13 +49,13 @@ export const deploy = async ({
   const isRunning = appStatus == 'online';
 
   Logger.info('Checking environment variables...');
-  const isEnvChanged = await checkEnv(relDir, envDir,app.projectType==="nextjs"?".env.local":".env");
+  const isEnvChanged = await checkEnv(buildRelDir, envDir,app.projectType==="nextjs"?".env.local":".env");
 
   let isAppSettingsChanged = false;
   if (app.projectType === 'dotnet') {
-    await checkDotnetSdk(relDir);
-    await checkAssemblyName(relDir, app.name);
-    isAppSettingsChanged = await checkAppSettings(relDir, envDir);
+    await checkDotnetSdk(buildRelDir);
+    await checkAssemblyName(buildRelDir, app.name);
+    isAppSettingsChanged = await checkAppSettings(buildRelDir, envDir);
   }
 
   if (!isEnvChanged && !isAppSettingsChanged && !isGitChanged && !isFirstDeploy) {
@@ -70,9 +71,9 @@ export const deploy = async ({
   }
 
   if (app.projectType === 'dotnet') {
-    await prepareDotnet(relDir, { logDir });
+    await prepareDotnet(buildRelDir, { logDir });
   } else {
-    await prepare(relDir, {
+    await prepare(buildRelDir, {
       withInstall: force || isFirstDeploy || isGitChanged || !isRunning,
       withBuild:
         force || !isRunning || isFirstDeploy || isGitChanged || isEnvChanged,
@@ -81,7 +82,7 @@ export const deploy = async ({
     });
   }
   Logger.info('Creating build version...');
- const buildDir= createBuildDirByType(app.appDir, app.projectType);
+  const buildDir = createBuildDirByType(app.appDir, app.projectType, app.projectDir);
   await runApp(buildDir, {
     name: app.name,
     port: app.port,

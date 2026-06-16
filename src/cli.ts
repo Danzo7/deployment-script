@@ -32,6 +32,7 @@ interface InitArgs {
   port?: number;
   type?: 'nextjs' | 'nestjs' | 'dotnet';
   url?: string;
+  projectDir?: string;
 }
 
 interface DeployArgs {
@@ -112,10 +113,15 @@ try {
             type: 'string',
             alias: 'u',
             describe: 'The public URL or domain of the application',
+          })
+          .option('project-dir', {
+            type: 'string',
+            alias: 'd',
+            describe: 'Subdirectory within the repo that contains the project (for monorepos)',
           }),
       async (args) => {
         try {
-          await init({ ...args, appsDir: APP_DIR });
+          await init({ ...args, appsDir: APP_DIR, projectDir: args.projectDir });
         } catch (error) {          Logger.error(error);
           process.exit(1);
         }

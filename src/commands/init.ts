@@ -13,6 +13,7 @@ export const init = async ({
   appsDir,
   type="nextjs",
   url,
+  projectDir,
 }: {
   name: string;
   repo: string;
@@ -22,6 +23,7 @@ export const init = async ({
   appsDir: string;
   type?: 'nextjs' | 'nestjs' | 'dotnet';
   url?: string;
+  projectDir?: string;
 }) => {
   if (!repo) throw new Error('Repository URL is required.');
 
@@ -49,6 +51,7 @@ export const init = async ({
     appDir,
     projectType: type,
     url,
+    ...(projectDir ? { projectDir } : {}),
    });
 
   Logger.success(`The app "${Logger.highlight(name)}" (${type || 'nextjs'}) was successfully added!`);

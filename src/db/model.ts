@@ -13,4 +13,5 @@ export interface App {
   builds?: string[];
   activeBuild?: string; // path to the active build directory
   projectType: 'nextjs' | 'nestjs' | 'dotnet'; // Project framework type
+  projectDir?: string; // Optional subdirectory within the repo that contains the project (for monorepos)
 }
