@@ -63,10 +63,9 @@ export const info = async ({ name }: { name: string }) => {
   }
 
   // Active build
-  const activeBuildPath =
-    app.builds && app.activeBuild !== undefined
-      ? path.basename(app.builds[app.activeBuild])
-      : 'N/A';
+  const activeBuildPath = app.activeBuild
+    ? path.basename(AppRepo.resolveActiveBuild(name) ?? app.activeBuild)
+    : 'N/A';
 
   const row = (label: string, value: string) =>
     console.log(`  ${chalk.gray(label.padEnd(18))} ${value}`);

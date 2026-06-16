@@ -61,7 +61,7 @@ export const pruneOldBuilds = async (appName: string): Promise<void> => {
 
   const buildsToRemove = app.builds
     .map((buildPath, index) => ({ buildPath, index }))
-    .filter(({ index }) => index !== app.activeBuild)
+    .filter(({ buildPath }) => buildPath !== app.activeBuild)
     .slice(0, app.builds.length - MAX_BUILDS);
 
   await removeBuilds(appName, buildsToRemove.map((b) => b.buildPath));
@@ -79,7 +79,7 @@ export const pruneAllBuilds = async (appName: string): Promise<void> => {
 
   const buildsToRemove = app.builds
     .map((buildPath, index) => ({ buildPath, index }))
-    .filter(({ index }) => index !== app.activeBuild)
+    .filter(({ buildPath }) => buildPath !== app.activeBuild)
     .map((b) => b.buildPath);
 
   if (buildsToRemove.length === 0) {

@@ -14,7 +14,8 @@ export const rollback = async ({ name, to }: { name: string; to?: number }) => {
     throw new Error(`Not enough builds to rollback. Only ${builds.length} build(s) available.`);
   }
 
-  const currentIndex = app.activeBuild ?? builds.length - 1;
+  const activePath = AppRepo.resolveActiveBuild(name);
+  const currentIndex = activePath ? builds.indexOf(activePath) : builds.length - 1;
 
   // If no --to flag, list available builds and default to previous
   if (to === undefined) {
@@ -53,6 +54,6 @@ export const rollback = async ({ name, to }: { name: string; to?: number }) => {
     projectType: app.projectType,
   });
 
-  AppRepo.update(name, { activeBuild: to });
+  AppRepo.update(name, { activeBuild: targetBuild });
   Logger.success(`${Logger.highlight(name)} rolled back to build ${to} successfully.`);
 };

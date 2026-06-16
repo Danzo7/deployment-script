@@ -10,7 +10,7 @@ export interface App {
   branch: string; // Branch name
   url?: string; // Public URL or domain for the app
   lastDeploy?: string; // Optional ISO string for last deployment date
-  builds?: string[]; 
-  activeBuild?: number;
+  builds?: string[];
+  activeBuild?: string; // path to the active build directory
   projectType: 'nextjs' | 'nestjs'; // Project framework type
 }

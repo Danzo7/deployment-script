@@ -12,7 +12,7 @@ export async function startAllApplications() {
         const appStatus = await getAppStatus(app.name);
         if (appStatus !== 'online') {
               const {  logDir } = ensureDirectories(app.appDir);
-            const buildDir=app.builds?.[app.activeBuild??(app.builds.length-1)];
+            const buildDir = AppRepo.resolveActiveBuild(app.name) ?? app.builds?.[app.builds.length - 1];
             if(!buildDir){
                 Logger.warn(`No build found for ${app.name}`);
                 continue;

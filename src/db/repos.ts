@@ -57,9 +57,26 @@ export const AppRepo = {
     app.lastDeploy = new Date().toISOString();
     if (!app.builds) app.builds = [];
     app.builds.push(buildPath);
-    app.activeBuild = app.builds.length - 1;
+    app.activeBuild = buildPath;
     db.write();
     return app;
+  },
+  /**
+   * Resolves activeBuild to a path string, handling legacy numeric-index values
+   * stored by older versions of the tool.
+   */
+  resolveActiveBuild: function (name: string): string | undefined {
+    const app = this.findByName(name);
+    if (!app.builds?.length) return undefined;
+    const raw = app.activeBuild as unknown;
+    if (typeof raw === 'number') {
+      // backward-compat: migrate the stored index to a path
+      const resolved = app.builds[raw] ?? app.builds[app.builds.length - 1];
+      app.activeBuild = resolved;
+      getDB().write();
+      return resolved;
+    }
+    return typeof raw === 'string' ? raw : app.builds[app.builds.length - 1];
   },
   removeBuild: function (name: string, buildPath: string) {
     const db = getDB();
