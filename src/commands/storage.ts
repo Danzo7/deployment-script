@@ -1,6 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import fsExtra from 'fs-extra';
+import Table from 'cli-table3';
+import chalk from 'chalk';
+import { format } from 'date-fns';
 import { STORAGE_DIR } from '../constants.js';
 import { AppRepo, StorageRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
@@ -211,7 +214,19 @@ export const storageLs = async (): Promise<void> => {
   const apps = AppRepo.getAll();
   let totalBytes = 0;
 
-  for (const storage of storages) {
+  const table = new Table({
+    head: [
+      chalk.cyan('#'),
+      chalk.whiteBright('Name'),
+      chalk.blue('Link Name'),
+      chalk.magenta('Path'),
+      chalk.yellow('Created'),
+      chalk.whiteBright('Apps'),
+      chalk.green('Size'),
+    ],
+  });
+
+  storages.forEach((storage, index) => {
     const sizeBytes = getDirectorySize(storage.path);
     totalBytes += sizeBytes;
 
@@ -219,16 +234,28 @@ export const storageLs = async (): Promise<void> => {
       .filter((app) => app.linkedStorages?.includes(storage.name))
       .map((app) => app.name);
 
-    const attachedAppsDisplay = attachedApps.length > 0 ? attachedApps.join(', ') : '(none)';
+    const attachedAppsDisplay =
+      attachedApps.length > 0 ? chalk.whiteBright(attachedApps.join(', ')) : chalk.gray('—');
 
-    console.log(`Name:      ${storage.name}`);
-    console.log(`Link name: ${storage.linkName}`);
-    console.log(`Path:      ${storage.path}`);
-    console.log(`Created:   ${storage.createdAt}`);
-    console.log(`Apps:      ${attachedAppsDisplay}`);
-    console.log(`Size:      ${formatSize(sizeBytes)}`);
-    console.log('');
-  }
+    const createdAt = storage.createdAt
+      ? format(new Date(storage.createdAt), 'yyyy-MM-dd HH:mm:ss')
+      : 'N/A';
 
-  console.log(`Total size: ${formatSize(totalBytes)}`);
+    table.push([
+      chalk.cyan(index + 1),
+      chalk.whiteBright(storage.name),
+      chalk.blue(storage.linkName),
+      chalk.magenta(storage.path),
+      chalk.yellow(createdAt),
+      attachedAppsDisplay,
+      chalk.green(formatSize(sizeBytes)),
+    ]);
+  });
+
+  table.push([
+    { colSpan: 6, content: chalk.gray('Total'), hAlign: 'right' },
+    chalk.green(formatSize(totalBytes)),
+  ]);
+
+  console.log(table.toString());
 };
