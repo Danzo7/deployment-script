@@ -3,7 +3,7 @@ import yargs from 'yargs';
 import { initializeDB } from './db/db.js';
 import { deploy } from './commands/deploy.js';
 import { init } from './commands/init.js';
-import { APP_DIR } from './constants.js';
+import { APP_DIR, NEXT_DIR, NEST_DIR, DOTNET_DIR } from './constants.js';
 import { acquireLock, releaseLock } from './utils/lock-utils.js';
 import { Logger } from './utils/logger.js';
 import { listApps } from './commands/list.js';
@@ -57,6 +57,15 @@ const setupCleanup = (name: string) => {
 };
 if (!existsSync(APP_DIR)) {
   mkdirSync(APP_DIR, { recursive: true });
+}
+if (!existsSync(NEXT_DIR)) {
+  mkdirSync(NEXT_DIR, { recursive: true });
+}
+if (!existsSync(NEST_DIR)) {
+  mkdirSync(NEST_DIR, { recursive: true });
+}
+if (!existsSync(DOTNET_DIR)) {
+  mkdirSync(DOTNET_DIR, { recursive: true });
 }
 const startTime = Date.now(); // Start the timer
 
@@ -122,7 +131,8 @@ try {
           }),
       async (args) => {
         try {
-          await init({ ...args, appsDir: APP_DIR, projectDir: args.projectDir });
+        const appsDir = args.type === 'nestjs' ? NEST_DIR : args.type === 'dotnet' ? DOTNET_DIR : NEXT_DIR;
+          await init({ ...args, appsDir, projectDir: args.projectDir });
         } catch (error) {          Logger.error(error);
           process.exit(1);
         }
