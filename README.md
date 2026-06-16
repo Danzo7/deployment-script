@@ -148,6 +148,181 @@ dm update
 
 ---
 
+### `dm rollback <name>`
+
+Roll back an application to a previous build.
+
+```bash
+dm rollback <name> [--to <index>]
+```
+
+| Option | Description |
+|---|---|
+| `--to` | Build index to roll back to. If omitted, lists available builds and defaults to the previous one. |
+
+---
+
+### `dm restart <name>`
+
+Restart an application using its current active build.
+
+```bash
+dm restart <name>
+```
+
+---
+
+### `dm stop <name>`
+
+Stop a running application without removing it.
+
+```bash
+dm stop <name>
+```
+
+---
+
+### `dm logs <name>`
+
+Stream live PM2 logs for an application.
+
+```bash
+dm logs <name>
+```
+
+---
+
+### `dm monit`
+
+Open the PM2 monitor dashboard for all applications.
+
+```bash
+dm monit
+```
+
+---
+
+### `dm info <name>`
+
+Show detailed information about an application including port, status, build history, and attached storages.
+
+```bash
+dm info <name>
+```
+
+---
+
+### `dm clean-all`
+
+Discard uncommitted changes and prune old builds for all registered applications at once.
+
+```bash
+dm clean-all
+```
+
+---
+
+### `dm set-url <name> <url>`
+
+Set or update the public URL/domain for an application.
+
+```bash
+dm set-url <name> https://myapp.example.com
+```
+
+---
+
+## Storage Volumes
+
+Storages are persistent, named directories that live outside any individual build. They survive deploys, rollbacks, and restarts. Apps opt in by attaching a named storage; `dm` automatically creates a symlink inside each build directory so the app can read and write persistent files at a predictable path.
+
+Common uses: user uploads, generated files, shared caches, SQLite databases.
+
+### `dm storage new <name>`
+
+Create a new named storage directory.
+
+```bash
+dm storage new uploads
+```
+
+The directory is created at `$STORAGE_DIR/<name>` (defaults to `<APP_DIR>/storages/<name>`).
+
+---
+
+### `dm storage attach <app> <storage>`
+
+Attach a storage to an app. A symlink is immediately created in the app's active build if one exists.
+
+```bash
+dm storage attach my-app uploads
+```
+
+From that point on, every new build (deploy or rollback) will have a symlink at `<buildDir>/uploads → <STORAGE_DIR>/uploads`.
+
+`dm` will refuse to attach if a real file or directory already exists at that path inside the active build — rename or remove it first.
+
+---
+
+### `dm storage detach <app> <storage>`
+
+Remove the association between an app and a storage. The symlink in the active build is removed; future builds will no longer include it. The storage directory and its contents are left untouched.
+
+```bash
+dm storage detach my-app uploads
+```
+
+---
+
+### `dm storage rm <name>`
+
+Delete a storage entirely — removes the DB record and the directory from disk. The command will refuse if any app still has the storage attached; detach it from all apps first.
+
+```bash
+dm storage rm uploads
+```
+
+---
+
+### `dm storage ls`
+
+List all storages with their path, creation date, attached apps, and disk usage. A total row is shown at the bottom.
+
+```bash
+dm storage ls
+```
+
+---
+
+### Storage and environment variable
+
+By default storages live under `<APP_DIR>/storages/`. To place them on a different volume, set the `STORAGE_DIR` environment variable before starting `dm`.
+
+```bash
+export STORAGE_DIR=/mnt/data/storages
+dm storage new uploads
+```
+
+---
+
+### Typical workflow
+
+```bash
+# 1. Create the storage once
+dm storage new uploads
+
+# 2. Attach it to your app
+dm storage attach my-app uploads
+
+# 3. Deploy as normal — symlink is created automatically in each build
+dm deploy my-app
+
+# 4. Inspect storages at any time
+dm storage ls
+```
+
+---
+
 ## How It Works
 
 - Apps are tracked in a local database (lowdb) with metadata like port, repo, branch, build history, and last deploy time.
