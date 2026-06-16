@@ -1,6 +1,6 @@
 import path from 'path';
 import chalk from 'chalk';
-import { AppRepo } from '../db/repos.js';
+import { AppRepo, StorageRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 import { applyStorageSymlinks, ensureDirectories } from '../utils/file-utils.js';
 import { getAppStatus, runApp } from '../utils/pm2-helper.js';
@@ -55,6 +55,9 @@ export const rollback = async ({ name, to }: { name: string; to?: number }) => {
   });
 
   AppRepo.update(name, { activeBuild: targetBuild });
-  applyStorageSymlinks(targetBuild, app.linkedStorages);
+  const linkedStorages = (app.linkedStorages ?? [])
+    .map((n) => { try { return StorageRepo.findByName(n); } catch { return null; } })
+    .filter((s): s is NonNullable<typeof s> => s !== null);
+  applyStorageSymlinks(targetBuild, linkedStorages);
   Logger.success(`${Logger.highlight(name)} rolled back to build ${to} successfully.`);
 };

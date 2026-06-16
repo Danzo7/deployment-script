@@ -19,7 +19,8 @@ export interface App {
 
 export interface Storage {
   id: string; // UUID v4, generated at creation
-  name: string; // Unique human-readable identifier
+  name: string; // Unique human-readable identifier (used as the storage directory name)
+  linkName: string; // Symlink name created inside each build directory
   path: string; // Absolute path: STORAGE_DIR/name
   createdAt: string; // ISO 8601 timestamp at creation
 }

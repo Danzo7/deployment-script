@@ -419,17 +419,23 @@ try {
           (yargs) => {
             return yargs
               .command(
-                'new <name>',
+                'new <name> <link-name>',
                 'Create a new storage',
                 (yargs) =>
-                  yargs.positional('name', {
-                    type: 'string',
-                    demandOption: true,
-                    describe: 'The name of the storage to create',
-                  }),
+                  yargs
+                    .positional('name', {
+                      type: 'string',
+                      demandOption: true,
+                      describe: 'The storage directory name (e.g. metalunic-storage)',
+                    })
+                    .positional('link-name', {
+                      type: 'string',
+                      demandOption: true,
+                      describe: 'The symlink name created inside each build directory (e.g. Storage)',
+                    }),
                 async (args) => {
                   try {
-                    await storageNew(args.name as string);
+                    await storageNew(args.name as string, args['link-name'] as string);
                   } catch (err) {
                     Logger.error(err);
                     process.exit(1);

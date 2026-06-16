@@ -103,14 +103,18 @@ export const StorageRepo = {
     return storage;
   },
 
-  add: (data: { name: string; path: string }): Storage => {
+  add: (data: { name: string; linkName: string; path: string }): Storage => {
     const db = getDB();
     if (db.data.storages.find((s: Storage) => s.name === data.name)) {
       throw new Error(`Storage "${data.name}" already exists`);
     }
+    if (db.data.storages.find((s: Storage) => s.linkName === data.linkName)) {
+      throw new Error(`A storage with link name "${data.linkName}" already exists`);
+    }
     const storage: Storage = {
       id: randomUUID(),
       name: data.name,
+      linkName: data.linkName,
       path: data.path,
       createdAt: new Date().toISOString(),
     };

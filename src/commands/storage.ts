@@ -5,12 +5,12 @@ import { STORAGE_DIR } from '../constants.js';
 import { AppRepo, StorageRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 
-export const storageNew = async (name: string): Promise<void> => {
+export const storageNew = async (name: string, linkName: string): Promise<void> => {
   const storagePath = path.join(STORAGE_DIR, name);
   fs.mkdirSync(storagePath, { recursive: true });
-  StorageRepo.add({ name, path: storagePath });
+  StorageRepo.add({ name, linkName, path: storagePath });
   Logger.success(
-    `Storage ${Logger.highlight(name)} created at ${Logger.highlight(storagePath)}.`
+    `Storage ${Logger.highlight(name)} created at ${Logger.highlight(storagePath)} (symlink name: ${Logger.highlight(linkName)}).`
   );
 };
 
@@ -18,20 +18,14 @@ export const storageAttach = async (
   appName: string,
   storageName: string
 ): Promise<void> => {
-  // Verify app exists (throws if not found)
   const app = AppRepo.findByName(appName);
+  const storage = StorageRepo.findByName(storageName);
 
-  // Verify storage exists (throws if not found)
-  StorageRepo.findByName(storageName);
-
-  // Check if storage is already attached
   if (app.linkedStorages?.includes(storageName)) {
-    throw new Error(
-      `Storage "${storageName}" is already attached to "${appName}"`
-    );
+    throw new Error(`Storage "${storageName}" is already attached to "${appName}"`);
   }
 
-  // If app has an activeBuild that exists on disk, check for conflicts before writing to DB
+  // Conflict checks against linkName path in active build — before any DB write
   if (app.activeBuild) {
     let activeBuildExists = false;
     try {
@@ -42,30 +36,26 @@ export const storageAttach = async (
     }
 
     if (activeBuildExists) {
-      const symlinkPath = path.join(app.activeBuild, storageName);
+      const symlinkPath = path.join(app.activeBuild, storage.linkName);
       let stat: fs.Stats | null = null;
       try {
         stat = fs.lstatSync(symlinkPath);
       } catch (err: any) {
         if (err.code !== 'ENOENT') throw err;
-        // path does not exist — no conflict
       }
 
       if (stat !== null) {
         if (stat.isSymbolicLink()) {
-          // Check if it points to the correct target
           const currentTarget = fs.readlinkSync(symlinkPath);
-          const expectedTarget = path.join(STORAGE_DIR, storageName);
-          if (currentTarget !== expectedTarget) {
+          if (currentTarget !== storage.path) {
             throw new Error(
-              `Cannot attach: a symlink "${storageName}" already exists in the active build pointing to a different target ("${currentTarget}").`
+              `Cannot attach: a symlink "${storage.linkName}" already exists in the active build pointing to a different target ("${currentTarget}").`
             );
           }
-          // Correct symlink already exists — no conflict, fall through to DB update
+          // Correct symlink — no conflict, fall through
         } else {
-          // Real file or directory — Path_Conflict
           throw new Error(
-            `Cannot attach: a real directory "${storageName}" already exists in the active build. Remove or rename it first.`
+            `Cannot attach: a real directory "${storage.linkName}" already exists in the active build. Remove or rename it first.`
           );
         }
       }
@@ -77,7 +67,7 @@ export const storageAttach = async (
     linkedStorages: [...(app.linkedStorages ?? []), storageName],
   });
 
-  // Create symlink in active build if it exists on disk and no correct symlink is already there
+  // Create symlink in active build if it doesn't already exist correctly
   if (app.activeBuild) {
     let activeBuildExists = false;
     try {
@@ -88,33 +78,26 @@ export const storageAttach = async (
     }
 
     if (activeBuildExists) {
-      const symlinkPath = path.join(app.activeBuild, storageName);
-      const expectedTarget = path.join(STORAGE_DIR, storageName);
-
-      // Only create symlink if path doesn't already exist
+      const symlinkPath = path.join(app.activeBuild, storage.linkName);
       let symlinkExists = false;
       try {
         const existingStat = fs.lstatSync(symlinkPath);
-        if (existingStat.isSymbolicLink()) {
-          const currentTarget = fs.readlinkSync(symlinkPath);
-          if (currentTarget === expectedTarget) {
-            symlinkExists = true; // Already correct, skip
-          }
+        if (existingStat.isSymbolicLink() && fs.readlinkSync(symlinkPath) === storage.path) {
+          symlinkExists = true;
         }
       } catch (err: any) {
         if (err.code !== 'ENOENT') throw err;
-        // Does not exist — we'll create it
       }
 
       if (!symlinkExists) {
-        fs.mkdirSync(expectedTarget, { recursive: true });
-        fs.symlinkSync(expectedTarget, symlinkPath);
+        fs.mkdirSync(storage.path, { recursive: true });
+        fs.symlinkSync(storage.path, symlinkPath);
       }
     }
   }
 
   Logger.success(
-    `Storage ${Logger.highlight(storageName)} attached to ${Logger.highlight(appName)}.`
+    `Storage ${Logger.highlight(storageName)} attached to ${Logger.highlight(appName)} as ${Logger.highlight(storage.linkName)}.`
   );
 };
 
@@ -122,28 +105,25 @@ export const storageDetach = async (
   appName: string,
   storageName: string
 ): Promise<void> => {
-  // Verify app exists (throws if not found)
   const app = AppRepo.findByName(appName);
+  const storage = StorageRepo.findByName(storageName);
 
-  // Check that storage is actually attached
   if (!app.linkedStorages?.includes(storageName)) {
     throw new Error(`Storage "${storageName}" is not attached to "${appName}"`);
   }
 
-  // Remove storage from linkedStorages
   AppRepo.update(appName, {
     linkedStorages: (app.linkedStorages ?? []).filter((s) => s !== storageName),
   });
 
-  // Remove symlink from active build if it exists
+  // Remove symlink using linkName
   if (app.activeBuild) {
-    const symlinkPath = path.join(app.activeBuild, storageName);
+    const symlinkPath = path.join(app.activeBuild, storage.linkName);
     try {
       fs.lstatSync(symlinkPath);
       fs.unlinkSync(symlinkPath);
     } catch (err: any) {
       if (err.code !== 'ENOENT') throw err;
-      // path does not exist — nothing to unlink
     }
   }
 
@@ -153,10 +133,8 @@ export const storageDetach = async (
 };
 
 export const storageRm = async (name: string): Promise<void> => {
-  // Verify storage exists (throws if not found)
   StorageRepo.findByName(name);
 
-  // Check if any apps still have this storage attached
   const attachedApps = AppRepo.getAll()
     .filter((app) => app.linkedStorages?.includes(name))
     .map((app) => app.name);
@@ -167,10 +145,8 @@ export const storageRm = async (name: string): Promise<void> => {
     );
   }
 
-  // Remove from DB
   StorageRepo.remove(name);
 
-  // Remove directory from disk if it exists
   const storagePath = path.join(STORAGE_DIR, name);
   if (fs.existsSync(storagePath)) {
     await fsExtra.remove(storagePath);
@@ -185,7 +161,6 @@ export const storageRm = async (name: string): Promise<void> => {
 
 /**
  * Recursively sums the size of all files in a directory.
- * Uses fs.readdirSync with { withFileTypes: true } for efficient traversal.
  * Returns 0 if the directory does not exist.
  */
 export const getDirectorySize = (dirPath: string): number => {
@@ -215,10 +190,7 @@ export const getDirectorySize = (dirPath: string): number => {
 
 /**
  * Converts a byte count into a human-readable string.
- * < 1024        → X B
- * < 1024²       → X.XX KB
- * < 1024³       → X.XX MB
- * else          → X.XX GB
+ * < 1024 → X B, < 1024² → X.XX KB, < 1024³ → X.XX MB, else → X.XX GB
  */
 export const formatSize = (bytes: number): string => {
   if (bytes < 1024) return `${bytes} B`;
@@ -237,7 +209,6 @@ export const storageLs = async (): Promise<void> => {
   }
 
   const apps = AppRepo.getAll();
-
   let totalBytes = 0;
 
   for (const storage of storages) {
@@ -248,10 +219,10 @@ export const storageLs = async (): Promise<void> => {
       .filter((app) => app.linkedStorages?.includes(storage.name))
       .map((app) => app.name);
 
-    const attachedAppsDisplay =
-      attachedApps.length > 0 ? attachedApps.join(', ') : '(none)';
+    const attachedAppsDisplay = attachedApps.length > 0 ? attachedApps.join(', ') : '(none)';
 
     console.log(`Name:      ${storage.name}`);
+    console.log(`Link name: ${storage.linkName}`);
     console.log(`Path:      ${storage.path}`);
     console.log(`Created:   ${storage.createdAt}`);
     console.log(`Apps:      ${attachedAppsDisplay}`);

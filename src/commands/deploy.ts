@@ -1,5 +1,5 @@
 import path from 'path';
-import { AppRepo } from '../db/repos.js';
+import { AppRepo, StorageRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 import {  createBuildDirByType, ensureDirectories } from '../utils/file-utils.js';
 import { prepare } from '../utils/npm-helper.js';
@@ -82,7 +82,10 @@ export const deploy = async ({
     });
   }
   Logger.info('Creating build version...');
-  const buildDir = createBuildDirByType(app.appDir, app.projectType, app.projectDir, app.linkedStorages);
+  const linkedStorages = (app.linkedStorages ?? [])
+    .map((name) => { try { return StorageRepo.findByName(name); } catch { return null; } })
+    .filter((s): s is NonNullable<typeof s> => s !== null);
+  const buildDir = createBuildDirByType(app.appDir, app.projectType, app.projectDir, linkedStorages);
   await runApp(buildDir, {
     name: app.name,
     port: app.port,
