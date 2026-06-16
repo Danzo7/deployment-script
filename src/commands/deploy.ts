@@ -82,7 +82,7 @@ export const deploy = async ({
     });
   }
   Logger.info('Creating build version...');
-  const buildDir = createBuildDirByType(app.appDir, app.projectType, app.projectDir);
+  const buildDir = createBuildDirByType(app.appDir, app.projectType, app.projectDir, app.linkedStorages);
   await runApp(buildDir, {
     name: app.name,
     port: app.port,

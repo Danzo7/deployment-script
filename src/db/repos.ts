@@ -1,5 +1,5 @@
 import { getDB } from './db.js';
-import { App } from './model.js';
+import { App, Storage } from './model.js';
 import { randomUUID } from 'crypto';
 
 export const AppRepo = {
@@ -85,5 +85,43 @@ export const AppRepo = {
     app.builds = app.builds.filter((build) => build !== buildPath);
     db.write();
     return app;
+  },
+};
+
+export const StorageRepo = {
+  getAll: (): Storage[] => {
+    const db = getDB();
+    return db.data.storages;
+  },
+
+  findByName: (name: string): Storage => {
+    const db = getDB();
+    const storage = db.data.storages.find((s: Storage) => s.name === name);
+    if (!storage) {
+      throw new Error(`Storage "${name}" not found`);
+    }
+    return storage;
+  },
+
+  add: (data: { name: string; path: string }): Storage => {
+    const db = getDB();
+    if (db.data.storages.find((s: Storage) => s.name === data.name)) {
+      throw new Error(`Storage "${data.name}" already exists`);
+    }
+    const storage: Storage = {
+      id: randomUUID(),
+      name: data.name,
+      path: data.path,
+      createdAt: new Date().toISOString(),
+    };
+    db.data.storages.push(storage);
+    db.write();
+    return storage;
+  },
+
+  remove: (name: string): void => {
+    const db = getDB();
+    db.data.storages = db.data.storages.filter((s: Storage) => s.name !== name);
+    db.write();
   },
 };

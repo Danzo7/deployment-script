@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import { Logger } from './logger.js';
+import { STORAGE_DIR } from '../constants.js';
 import fs from  'fs';
 import path from 'path';
 import fsExtra from 'fs-extra';
@@ -161,19 +162,81 @@ export const createBuildDirForDotnet = (appDir: string, projectDir?: string): st
  * @param appDir The application directory
  * @param projectType The type of project ('nextjs' | 'nestjs' | 'dotnet')
  * @param projectDir Optional subdirectory within the release dir (for monorepos)
+ * @param linkedStorages Optional array of storage names to symlink into the build dir
  * @returns The path to the created build directory
  */
 export const createBuildDirByType = (
   appDir: string,
   projectType: 'nextjs' | 'nestjs' | 'dotnet',
-  projectDir?: string): string => {
+  projectDir?: string,
+  linkedStorages?: string[]): string => {
+  let buildDir: string;
   switch (projectType) {
     case 'nestjs':
-      return createBuildDirForNestJS(appDir, projectDir);
+      buildDir = createBuildDirForNestJS(appDir, projectDir);
+      break;
     case 'dotnet':
-      return createBuildDirForDotnet(appDir, projectDir);
+      buildDir = createBuildDirForDotnet(appDir, projectDir);
+      break;
     case 'nextjs':
     default:
-      return createBuildDir(appDir, projectDir);
+      buildDir = createBuildDir(appDir, projectDir);
+      break;
+  }
+  applyStorageSymlinks(buildDir, linkedStorages ?? []);
+  return buildDir;
+};
+
+/**
+ * Creates storage symlinks inside a build directory for each linked storage.
+ * Non-fatal: logs and skips on conflicts rather than throwing.
+ *
+ * @param buildDir The build directory to create symlinks in
+ * @param linkedStorages Array of storage names to link
+ */
+export const applyStorageSymlinks = (buildDir: string, linkedStorages: string[] = []): void => {
+  for (const name of linkedStorages) {
+    const linkPath = path.join(buildDir, name);
+    const targetPath = path.join(STORAGE_DIR, name);
+
+    let stat: fs.Stats | null = null;
+    try {
+      stat = fs.lstatSync(linkPath);
+    } catch (err: any) {
+      if (err.code !== 'ENOENT') {
+        // Unexpected error reading path — log and skip
+        Logger.warn(`applyStorageSymlinks: could not stat "${linkPath}": ${err.message}`);
+        continue;
+      }
+      // ENOENT — path does not exist, proceed to create symlink
+    }
+
+    if (stat !== null) {
+      if (stat.isSymbolicLink()) {
+        // Path is a symlink — check if it points to the correct target
+        const existingTarget = fs.readlinkSync(linkPath);
+        if (existingTarget === targetPath) {
+          // Correct symlink already exists — skip (idempotent, no log)
+          continue;
+        } else {
+          // Stale symlink pointing to a different target
+          Logger.error(
+            `applyStorageSymlinks: stale symlink at "${linkPath}" points to "${existingTarget}" instead of "${targetPath}". Skipping.`
+          );
+          continue;
+        }
+      } else {
+        // Real file or directory — Path_Conflict
+        Logger.warn(
+          `applyStorageSymlinks: a real file or directory already exists at "${linkPath}" (storage: "${name}"). Skipping.`
+        );
+        continue;
+      }
+    }
+
+    // Path does not exist — ensure storage directory exists and create symlink
+    fs.mkdirSync(targetPath, { recursive: true });
+    fs.symlinkSync(targetPath, linkPath);
+    Logger.success(`Linked storage "${name}" → "${targetPath}"`);
   }
 };

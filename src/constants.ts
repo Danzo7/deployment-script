@@ -6,5 +6,7 @@ export const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)),"..");
 dotenv.config({path: path.join(ROOT_DIR, '.env')});
 export const APP_DIR =
   process.env?.APP_DIR ?? path.join(ROOT_DIR, '.applications');
+export const STORAGE_DIR =
+  process.env.STORAGE_DIR ?? path.join(APP_DIR, 'storages');
 export const LOCK_DIR = path.resolve(ROOT_DIR, '.locks');
 

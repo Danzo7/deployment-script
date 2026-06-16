@@ -14,4 +14,12 @@ export interface App {
   activeBuild?: string; // path to the active build directory
   projectType: 'nextjs' | 'nestjs' | 'dotnet'; // Project framework type
   projectDir?: string; // Optional subdirectory within the repo that contains the project (for monorepos)
+  linkedStorages?: string[]; // Names of storages attached to this app
+}
+
+export interface Storage {
+  id: string; // UUID v4, generated at creation
+  name: string; // Unique human-readable identifier
+  path: string; // Absolute path: STORAGE_DIR/name
+  createdAt: string; // ISO 8601 timestamp at creation
 }

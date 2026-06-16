@@ -4,6 +4,7 @@ import fsExtra from 'fs-extra';
 import { AppRepo } from '../db/repos.js';
 import { Logger } from './logger.js';
 import { withBackoffRetry } from './retry-helper.js';
+import { STORAGE_DIR } from '../constants.js';
 
 const MAX_BUILDS = 3;
 
@@ -18,6 +19,31 @@ const removeBuildDir = async (buildPath: string): Promise<void> => {
       fs.unlinkSync(symlink);
     } catch {
       // non-fatal — removal will retry below
+    }
+  }
+
+  // Unlink any storage symlinks before removing the build directory.
+  // This prevents dangling references into STORAGE_DIR from being removed
+  // along with the build, as STORAGE_DIR contents must persist.
+  if (fs.existsSync(buildPath)) {
+    let entries: fs.Dirent[] = [];
+    try {
+      entries = fs.readdirSync(buildPath, { withFileTypes: true });
+    } catch {
+      // non-fatal — proceed with removal
+    }
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) {
+        const entryPath = path.join(buildPath, entry.name);
+        try {
+          const target = fs.realpathSync(entryPath);
+          if (target.startsWith(STORAGE_DIR)) {
+            fs.unlinkSync(entryPath);
+          }
+        } catch (err) {
+          Logger.warn(`Could not remove storage symlink "${entry.name}" in build "${path.basename(buildPath)}": ${err}`);
+        }
+      }
     }
   }
 

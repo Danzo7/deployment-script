@@ -23,6 +23,7 @@ import { rollback } from './commands/rollback.js';
 import { logs } from './commands/logs.js';
 import { monit } from './commands/monit.js';
 import { cleanAll } from './commands/clean-all.js';
+import { storageNew, storageAttach, storageDetach, storageRm, storageLs } from './commands/storage.js';
 
 interface InitArgs {
   name: string;
@@ -410,6 +411,111 @@ try {
               Logger.error(err);
               process.exit(1);
             }
+          }
+        )
+        .command(
+          'storage',
+          'Manage persistent storage volumes',
+          (yargs) => {
+            return yargs
+              .command(
+                'new <name>',
+                'Create a new storage',
+                (yargs) =>
+                  yargs.positional('name', {
+                    type: 'string',
+                    demandOption: true,
+                    describe: 'The name of the storage to create',
+                  }),
+                async (args) => {
+                  try {
+                    await storageNew(args.name as string);
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .command(
+                'attach <app> <storage>',
+                'Attach a storage to an app',
+                (yargs) =>
+                  yargs
+                    .positional('app', {
+                      type: 'string',
+                      demandOption: true,
+                      describe: 'The name of the application',
+                    })
+                    .positional('storage', {
+                      type: 'string',
+                      demandOption: true,
+                      describe: 'The name of the storage to attach',
+                    }),
+                async (args) => {
+                  try {
+                    await storageAttach(args.app as string, args.storage as string);
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .command(
+                'detach <app> <storage>',
+                'Detach a storage from an app',
+                (yargs) =>
+                  yargs
+                    .positional('app', {
+                      type: 'string',
+                      demandOption: true,
+                      describe: 'The name of the application',
+                    })
+                    .positional('storage', {
+                      type: 'string',
+                      demandOption: true,
+                      describe: 'The name of the storage to detach',
+                    }),
+                async (args) => {
+                  try {
+                    await storageDetach(args.app as string, args.storage as string);
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .command(
+                'rm <name>',
+                'Delete a storage',
+                (yargs) =>
+                  yargs.positional('name', {
+                    type: 'string',
+                    demandOption: true,
+                    describe: 'The name of the storage to delete',
+                  }),
+                async (args) => {
+                  try {
+                    await storageRm(args.name as string);
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .command(
+                'ls',
+                'List all storages',
+                (yargs) => yargs,
+                async () => {
+                  try {
+                    await storageLs();
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .demandCommand(1);
           }
         )
     .demandCommand(1, 'You must specify a command to run.')
