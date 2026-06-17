@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import { AppRepo, StorageRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
-import { simpleGit } from 'simple-git';
+import { getLastRevision } from '../utils/vcs-helper.js';
 import { ensureDirectories } from '../utils/file-utils.js';
 import { format } from 'date-fns';
 import { getProcessInfo } from '../utils/pm2-helper.js';
@@ -20,13 +20,12 @@ export const info = async ({ name }: { name: string }) => {
   let commitAuthor = 'N/A';
   let commitDate = 'N/A';
   try {
-    const git = simpleGit(relDir);
-    const log = await git.log({ maxCount: 1 });
-    if (log.latest) {
-      commitHash = log.latest.hash.slice(0, 7);
-      commitMessage = log.latest.message;
-      commitAuthor = log.latest.author_name;
-      commitDate = format(new Date(log.latest.date), 'yyyy-MM-dd HH:mm:ss');
+    const commit = await getLastRevision(app, relDir);
+    if (commit) {
+      commitHash = commit.hash;
+      commitMessage = commit.message;
+      commitAuthor = commit.author;
+      commitDate = format(new Date(commit.date), 'yyyy-MM-dd HH:mm:ss');
     }
   } catch {
     // release dir may not be cloned yet
@@ -77,7 +76,8 @@ export const info = async ({ name }: { name: string }) => {
   row('URL', app.url ? chalk.magenta(app.url) : chalk.gray('—'));
   row('Port', chalk.blue(app.port.toString()));
   row('Type', chalk.white(app.projectType));
-  row('Branch', chalk.white(app.branch));
+  row('VCS', chalk.white(app.vcsType ?? 'git'));
+  row(app.vcsType === 'svn' ? 'SVN Path' : 'Branch', chalk.white(app.branch));
   row('Status', status === 'online' ? chalk.green(status) : chalk.red(status));
   row('Memory', chalk.white(memory));
   row('Uptime', chalk.white(uptime));

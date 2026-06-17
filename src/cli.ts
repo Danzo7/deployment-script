@@ -34,6 +34,7 @@ interface InitArgs {
   type?: 'nextjs' | 'nestjs' | 'dotnet';
   url?: string;
   projectDir?: string;
+  vcs?: 'git' | 'svn';
 }
 
 interface DeployArgs {
@@ -128,11 +129,17 @@ try {
             type: 'string',
             alias: 'd',
             describe: 'Subdirectory within the repo that contains the project (for monorepos)',
+          })
+          .option('vcs', {
+            type: 'string',
+            choices: ['git', 'svn'],
+            default: 'git',
+            describe: 'Version control system to use (git or svn)',
           }),
       async (args) => {
         try {
         const appsDir = args.type === 'nestjs' ? NEST_DIR : args.type === 'dotnet' ? DOTNET_DIR : NEXT_DIR;
-          await init({ ...args, appsDir, projectDir: args.projectDir });
+          await init({ ...args, appsDir, projectDir: args.projectDir, vcsType: args.vcs ?? 'git' });
         } catch (error) {          Logger.error(error);
           process.exit(1);
         }

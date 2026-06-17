@@ -95,6 +95,18 @@ export const pushChanges = async ({
   }  
 
 };
+export const getLastCommit = async (dir: string): Promise<{ hash: string; message: string; author: string; date: string } | null> => {
+  const git = simpleGit(dir);
+  const log = await git.log({ maxCount: 1 });
+  if (!log.latest) return null;
+  return {
+    hash: log.latest.hash.slice(0, 7),
+    message: log.latest.message,
+    author: log.latest.author_name,
+    date: log.latest.date,
+  };
+};
+
 export const discardUncommittedChanges = async (dir: string) => {
   const git = simpleGit(dir);
 

@@ -14,6 +14,7 @@ export const init = async ({
   type="nextjs",
   url,
   projectDir,
+  vcsType = 'git',
 }: {
   name: string;
   repo: string;
@@ -24,6 +25,7 @@ export const init = async ({
   type?: 'nextjs' | 'nestjs' | 'dotnet';
   url?: string;
   projectDir?: string;
+  vcsType?: 'git' | 'svn';
 }) => {
   if (!repo) throw new Error('Repository URL is required.');
 
@@ -51,6 +53,7 @@ export const init = async ({
     appDir,
     projectType: type,
     url,
+    vcsType,
     ...(projectDir ? { projectDir } : {}),
    });
 

@@ -7,7 +7,8 @@ export interface App {
   port: number; // Unique port number for the app
   instances?: number; // Number of instances (default 1)
   repo: string; // Repository URL or path
-  branch: string; // Branch name
+  branch: string; // Branch name or SVN path suffix (e.g. trunk, branches/x)
+  vcsType?: 'git' | 'svn'; // Version control system (default: git)
   url?: string; // Public URL or domain for the app
   lastDeploy?: string; // Optional ISO string for last deployment date
   builds?: string[];

@@ -1,6 +1,6 @@
 import { AppRepo } from '../db/repos.js';
 import { ensureDirectories } from '../utils/file-utils.js';
-import { discardUncommittedChanges, handleGitRepo } from '../utils/git-helper.js';
+import { handleRepo, discardLocalChanges } from '../utils/vcs-helper.js';
 import { Logger } from '../utils/logger.js';
 import { pruneAllBuilds } from '../utils/build-pruner.js';
 
@@ -23,12 +23,12 @@ export const cleanAll = async () => {
 
       try {
         Logger.isMuted = true;
-        await handleGitRepo({ dir: relDir, repo: app.repo, branch: app.branch });
+        await handleRepo(app, relDir);
         Logger.isMuted = false;
-        Logger.info(`[${app.name}] Local git repo is already clean`);
+        Logger.info(`[${app.name}] Local repository is already clean`);
       } catch {
         Logger.isMuted = false;
-        await discardUncommittedChanges(relDir);
+        await discardLocalChanges(app, relDir);
       }
 
       await pruneAllBuilds(app.name);
