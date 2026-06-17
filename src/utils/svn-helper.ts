@@ -3,6 +3,48 @@ import { Logger } from './logger.js';
 import { withRetry } from './retry-helper.js';
 import { isDirectoryEmpty } from './file-utils.js';
 
+const MIN_SVN_MAJOR = 1;
+const MIN_SVN_MINOR = 9;
+
+/**
+ * Verifies SVN is installed and meets the minimum version requirement.
+ * @param throwOnMissing - throw an Error if SVN is missing/outdated (deploy); otherwise warn (init)
+ */
+export const checkSvn = (throwOnMissing = false): boolean => {
+  let out: string | null = null;
+  try {
+    out = execSync('svn --version --quiet', { stdio: 'pipe', encoding: 'utf8' }).trim();
+  } catch {
+    // not installed
+  }
+
+  if (!out) {
+    const msg =
+      `SVN is not installed or not on your PATH.\n` +
+      `  → Install Subversion ${MIN_SVN_MAJOR}.${MIN_SVN_MINOR}+ from https://subversion.apache.org/packages.html`;
+    if (throwOnMissing) throw new Error(msg);
+    Logger.warn(msg);
+    return false;
+  }
+
+  const match = out.match(/^(\d+)\.(\d+)/);
+  if (match) {
+    const major = parseInt(match[1], 10);
+    const minor = parseInt(match[2], 10);
+    const ok = major > MIN_SVN_MAJOR || (major === MIN_SVN_MAJOR && minor >= MIN_SVN_MINOR);
+    if (!ok) {
+      const msg =
+        `SVN ${out} is too old (minimum required: ${MIN_SVN_MAJOR}.${MIN_SVN_MINOR}).\n` +
+        `  → Upgrade Subversion from https://subversion.apache.org/packages.html`;
+      if (throwOnMissing) throw new Error(msg);
+      Logger.warn(msg);
+      return false;
+    }
+  }
+
+  return true;
+};
+
 const svn = (cmd: string, cwd: string) =>
   execSync(`svn ${cmd}`, { cwd, stdio: 'pipe' }).toString().trim();
 
@@ -36,6 +78,7 @@ export const handleSvnRepo = async ({
   repo: string;
   branch: string;
 }): Promise<boolean> => {
+  checkSvn(true);
   const url = buildSvnUrl(repo, branch);
 
   const isWc = isSvnWorkingCopy(dir);

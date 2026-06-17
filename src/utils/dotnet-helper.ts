@@ -5,6 +5,23 @@ import { calculateFileHash } from './file-utils.js';
 import { Logger } from './logger.js';
 
 /**
+ * Checks that the .NET SDK is installed. Warns at init time (no throw).
+ */
+export const checkDotnetInstalled = (): boolean => {
+  try {
+    execSync('dotnet --version', { stdio: 'pipe', encoding: 'utf8' });
+    return true;
+  } catch {
+    Logger.warn(
+      '.NET SDK is not installed or not on your PATH.\n' +
+      '  → Install it from https://dotnet.microsoft.com/download\n' +
+      "  → The app was registered but 'dm deploy' will fail until .NET is available."
+    );
+    return false;
+  }
+};
+
+/**
  * Executes a shell command in a specified directory and logs output to a file.
  * @param command The command to execute.
  * @param options The options containing the working directory and log file path.

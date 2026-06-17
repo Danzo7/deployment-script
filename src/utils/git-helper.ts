@@ -1,7 +1,22 @@
+import { execSync } from 'child_process';
 import { simpleGit, CheckRepoActions, ResetMode } from 'simple-git';
 import { Logger } from './logger.js';
 import { withRetry } from './retry-helper.js';
 import { isDirectoryEmpty } from './file-utils.js';
+
+/**
+ * Checks that git is installed. Throws if not — required for all operations.
+ */
+export const checkGit = (): void => {
+  try {
+    execSync('git --version', { stdio: 'pipe' });
+  } catch {
+    throw new Error(
+      "git is not installed or not on your PATH.\n" +
+      "  → Install git from https://git-scm.com/downloads and re-run the command."
+    );
+  }
+};
 
 export const handleGitRepo = async ({
   dir,
@@ -12,6 +27,7 @@ export const handleGitRepo = async ({
   repo: string;
   branch: string;
 }) => {
+  checkGit();
   const git = simpleGit(dir);
 
   const isGitRepo = await withRetry('Checking Git status', () =>

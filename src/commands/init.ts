@@ -3,6 +3,9 @@ import { Logger } from '../utils/logger.js';
 import { findAvailablePort } from '../utils/network-utils.js';
 import path from 'path';
 import { ensureDirectories } from '../utils/file-utils.js';
+import { checkSvn } from '../utils/svn-helper.js';
+import { checkDotnetInstalled } from '../utils/dotnet-helper.js';
+import { checkGit } from '../utils/git-helper.js';
 
 export const init = async ({
   name,
@@ -28,6 +31,10 @@ export const init = async ({
   vcsType?: 'git' | 'svn';
 }) => {
   if (!repo) throw new Error('Repository URL is required.');
+
+  if (vcsType === 'svn') checkSvn();
+  if (vcsType === 'git') checkGit();
+  if (type === 'dotnet') checkDotnetInstalled();
 
   // Check if app already exists
   let app = AppRepo.getAll().find((app) => app.name === name);
