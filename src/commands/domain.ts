@@ -129,12 +129,3 @@ export async function domainShow(name: string): Promise<void> {
   console.log();
 }
 
-export async function domainSsl(
-  name: string,
-  mode: 'none' | 'letsencrypt' | 'custom'
-): Promise<void> {
-  const normalized = normalizeDomainName(name);
-  DomainRepo.findByName(normalized);
-  DomainRepo.update(normalized, { ssl: { mode } });
-  Logger.success(`SSL mode for ${Logger.highlight(normalized)} set to ${Logger.highlight(mode)}.`);
-}

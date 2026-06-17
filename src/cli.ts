@@ -24,7 +24,7 @@ import { logs } from './commands/logs.js';
 import { monit } from './commands/monit.js';
 import { cleanAll } from './commands/clean-all.js';
 import { storageNew, storageAttach, storageDetach, storageRm, storageLs } from './commands/storage.js';
-import { domainAdd, domainRemove, domainList, domainShow, domainSsl } from './commands/domain.js';
+import { domainAdd, domainRemove, domainList, domainShow } from './commands/domain.js';
 import { domainSetCert } from './commands/domain-set-cert.js';
 import { domainCertStatus } from './commands/domain-cert-status.js';
 import { domainRemoveCert } from './commands/domain-remove-cert.js';
@@ -618,31 +618,6 @@ try {
                 async (args) => {
                   try {
                     await domainShow(args.name as string);
-                  } catch (err) {
-                    Logger.error(err);
-                    process.exit(1);
-                  }
-                }
-              )
-              .command(
-                'ssl <name> <mode>',
-                'Set SSL mode for a domain',
-                (yargs) =>
-                  yargs
-                    .positional('name', {
-                      type: 'string',
-                      demandOption: true,
-                      describe: 'The domain name',
-                    })
-                    .positional('mode', {
-                      type: 'string',
-                      demandOption: true,
-                      choices: ['none', 'letsencrypt', 'custom'] as const,
-                      describe: 'SSL mode to apply',
-                    }),
-                async (args) => {
-                  try {
-                    await domainSsl(args.name as string, args.mode as any);
                   } catch (err) {
                     Logger.error(err);
                     process.exit(1);
