@@ -25,6 +25,9 @@ import { monit } from './commands/monit.js';
 import { cleanAll } from './commands/clean-all.js';
 import { storageNew, storageAttach, storageDetach, storageRm, storageLs } from './commands/storage.js';
 import { domainAdd, domainRemove, domainList, domainShow, domainSsl } from './commands/domain.js';
+import { domainSetCert } from './commands/domain-set-cert.js';
+import { domainCertStatus } from './commands/domain-cert-status.js';
+import { domainRemoveCert } from './commands/domain-remove-cert.js';
 import { routeAdd, routeRemove, routeList } from './commands/route.js';
 
 interface InitArgs {
@@ -640,6 +643,61 @@ try {
                 async (args) => {
                   try {
                     await domainSsl(args.name as string, args.mode as any);
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .command(
+                'set-cert <name>',
+                'Attach an SSL certificate to a domain',
+                (yargs) =>
+                  yargs
+                    .positional('name', { type: 'string', demandOption: true, describe: 'The domain name' })
+                    .option('cert', { type: 'string', describe: 'Path to certificate file (any extension)' })
+                    .option('key', { type: 'string', describe: 'Path to private key file (any extension)' })
+                    .option('pfx', { type: 'string', describe: 'Path to PFX/PKCS#12 bundle (any extension)' })
+                    .option('password', { type: 'string', describe: 'Password for PFX bundle (use "" for empty)' })
+                    .option('force', { type: 'boolean', default: false, describe: 'Attach certificate even if it does not cover the domain name' }),
+                async (args) => {
+                  try {
+                    const hasPem = args.cert || args.key;
+                    const hasPfx = args.pfx || args.password !== undefined;
+                    if (hasPem && hasPfx) throw new Error('Use either --cert/--key or --pfx/--password, not both.');
+                    if (!hasPem && !hasPfx) throw new Error('Provide --cert and --key, or --pfx and --password.');
+                    if (args.cert && !args.key) throw new Error('--cert requires --key.');
+                    if (args.key && !args.cert) throw new Error('--key requires --cert.');
+                    if (args.pfx && args.password === undefined) throw new Error('--pfx requires --password.');
+                    await domainSetCert(args.name as string, args as any);
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .command(
+                'cert-status <name>',
+                'Show SSL certificate status for a domain',
+                (yargs) =>
+                  yargs.positional('name', { type: 'string', demandOption: true, describe: 'The domain name' }),
+                async (args) => {
+                  try {
+                    await domainCertStatus(args.name as string);
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .command(
+                'remove-cert <name>',
+                'Remove the SSL certificate from a domain',
+                (yargs) =>
+                  yargs.positional('name', { type: 'string', demandOption: true, describe: 'The domain name' }),
+                async (args) => {
+                  try {
+                    await domainRemoveCert(args.name as string);
                   } catch (err) {
                     Logger.error(err);
                     process.exit(1);

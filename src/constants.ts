@@ -11,5 +11,7 @@ export const NEST_DIR = process.env?.NEST_DIR ?? APP_DIR;
 export const DOTNET_DIR = process.env?.DOTNET_DIR ?? APP_DIR;
 export const STORAGE_DIR =
   process.env.STORAGE_DIR ?? path.join(APP_DIR, 'storages');
+export const DOMAINS_DIR =
+  process.env.DOMAINS_DIR ?? path.join(ROOT_DIR, '.domains');
 export const LOCK_DIR = path.resolve(ROOT_DIR, '.locks');
 

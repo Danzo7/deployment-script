@@ -32,14 +32,23 @@ export interface Storage {
   createdAt: string; // ISO 8601 timestamp at creation
 }
 
+export interface DomainSsl {
+  mode: 'none' | 'letsencrypt' | 'custom';
+  certPath?: string;      // Absolute path to cert.pem in the Cert_Store
+  keyPath?: string;       // Absolute path to key.pem in the Cert_Store
+  uploadedAt?: string;    // ISO 8601 timestamp when cert was attached
+  expiresAt?: string;     // ISO 8601, parsed from cert via crypto.X509Certificate
+  issuedTo?: string;      // CN from cert subject
+  issuer?: string;        // Issuer CN
+  sanDomains?: string[];  // Subject Alternative Names
+}
+
 export interface Domain {
   id: string; // UUID v4, generated at creation
   name: string; // Normalized hostname, unique
   createdAt: string; // ISO 8601 timestamp at creation
   updatedAt: string; // ISO 8601 timestamp of last update
-  ssl: {
-    mode: 'none' | 'letsencrypt' | 'custom';
-  };
+  ssl: DomainSsl;
 }
 
 export interface Route {
