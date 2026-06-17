@@ -25,3 +25,22 @@ export interface Storage {
   path: string; // Absolute path: STORAGE_DIR/name
   createdAt: string; // ISO 8601 timestamp at creation
 }
+
+export interface Domain {
+  id: string; // UUID v4, generated at creation
+  name: string; // Normalized hostname, unique
+  createdAt: string; // ISO 8601 timestamp at creation
+  updatedAt: string; // ISO 8601 timestamp of last update
+  ssl: {
+    mode: 'none' | 'letsencrypt' | 'custom';
+  };
+}
+
+export interface Route {
+  id: string; // UUID v4, generated at creation
+  domainId: string; // References Domain.id
+  path: string; // Normalized path (always starts with /)
+  appName: string; // References App.name
+  createdAt: string; // ISO 8601 timestamp at creation
+  updatedAt: string; // ISO 8601 timestamp of last update
+}

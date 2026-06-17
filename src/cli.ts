@@ -24,6 +24,8 @@ import { logs } from './commands/logs.js';
 import { monit } from './commands/monit.js';
 import { cleanAll } from './commands/clean-all.js';
 import { storageNew, storageAttach, storageDetach, storageRm, storageLs } from './commands/storage.js';
+import { domainAdd, domainRemove, domainList, domainShow, domainSsl } from './commands/domain.js';
+import { routeAdd, routeRemove, routeList } from './commands/route.js';
 
 interface InitArgs {
   name: string;
@@ -532,6 +534,199 @@ try {
                 async () => {
                   try {
                     await storageLs();
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .demandCommand(1);
+          }
+        )
+        .command(
+          'domain',
+          'Manage reverse proxy domains',
+          (yargs) => {
+            return yargs
+              .command(
+                'add <name>',
+                'Add a new domain',
+                (yargs) =>
+                  yargs.positional('name', {
+                    type: 'string',
+                    demandOption: true,
+                    describe: 'The domain name to add',
+                  }),
+                async (args) => {
+                  try {
+                    await domainAdd(args.name as string);
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .command(
+                'remove <name>',
+                'Remove a domain',
+                (yargs) =>
+                  yargs
+                    .positional('name', {
+                      type: 'string',
+                      demandOption: true,
+                      describe: 'The domain name to remove',
+                    })
+                    .option('force', {
+                      type: 'boolean',
+                      default: false,
+                      describe: 'Cascade delete all routes for this domain',
+                    }),
+                async (args) => {
+                  try {
+                    await domainRemove(args.name as string, args.force as boolean);
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .command(
+                'list',
+                'List all domains',
+                (yargs) => yargs,
+                async () => {
+                  try {
+                    await domainList();
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .command(
+                'show <name>',
+                'Show details for a domain',
+                (yargs) =>
+                  yargs.positional('name', {
+                    type: 'string',
+                    demandOption: true,
+                    describe: 'The domain name to show',
+                  }),
+                async (args) => {
+                  try {
+                    await domainShow(args.name as string);
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .command(
+                'ssl <name> <mode>',
+                'Set SSL mode for a domain',
+                (yargs) =>
+                  yargs
+                    .positional('name', {
+                      type: 'string',
+                      demandOption: true,
+                      describe: 'The domain name',
+                    })
+                    .positional('mode', {
+                      type: 'string',
+                      demandOption: true,
+                      choices: ['none', 'letsencrypt', 'custom'] as const,
+                      describe: 'SSL mode to apply',
+                    }),
+                async (args) => {
+                  try {
+                    await domainSsl(args.name as string, args.mode as any);
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .demandCommand(1);
+          }
+        )
+        .command(
+          'route',
+          'Manage reverse proxy routes',
+          (yargs) => {
+            return yargs
+              .command(
+                'add <appName> <domainName>',
+                'Add a route for an app on a domain',
+                (yargs) =>
+                  yargs
+                    .positional('appName', {
+                      type: 'string',
+                      demandOption: true,
+                      describe: 'The name of the application',
+                    })
+                    .positional('domainName', {
+                      type: 'string',
+                      demandOption: true,
+                      describe: 'The domain name',
+                    })
+                    .option('location', {
+                      type: 'string',
+                      alias: 'l',
+                      default: '/',
+                      describe: 'The path/location for the route',
+                    })
+                    .option('force', {
+                      type: 'boolean',
+                      alias: 'f',
+                      default: false,
+                      describe: 'Allow routing the app even if it is already routed elsewhere',
+                    }),
+                async (args) => {
+                  try {
+                    await routeAdd(args.appName as string, args.domainName as string, args.location as string, args.force as boolean);
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .command(
+                'remove <domainName>',
+                'Remove a route from a domain',
+                (yargs) =>
+                  yargs
+                    .positional('domainName', {
+                      type: 'string',
+                      demandOption: true,
+                      describe: 'The domain name',
+                    })
+                    .option('location', {
+                      type: 'string',
+                      alias: 'l',
+                      default: '/',
+                      describe: 'The path/location of the route to remove',
+                    }),
+                async (args) => {
+                  try {
+                    await routeRemove(args.domainName as string, args.location as string);
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .command(
+                'list <domainName>',
+                'List all routes for a domain',
+                (yargs) =>
+                  yargs.positional('domainName', {
+                    type: 'string',
+                    demandOption: true,
+                    describe: 'The domain name',
+                  }),
+                async (args) => {
+                  try {
+                    await routeList(args.domainName as string);
                   } catch (err) {
                     Logger.error(err);
                     process.exit(1);
