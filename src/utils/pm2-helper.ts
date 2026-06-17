@@ -80,14 +80,15 @@ const getPM2Config = (
       }
       
     case 'dotnet': {
-      const dllPath = path.join(dir, 'publish', `${config.name}.dll`);
+      const publishDir = path.join(dir, 'publish')
+      const dllPath = path.join(publishDir, `${config.name}.dll`);
       if (!fs.existsSync(dllPath)) {
         throw new Error(`DLL not found at ${dllPath}`);
       }
       return {
         ...rest,
         exec_mode: 'fork',
-        cwd: dir,
+        cwd: publishDir,
         max_memory_restart: '250M',
         script: 'dotnet',
         args: dllPath,
