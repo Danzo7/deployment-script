@@ -8,6 +8,7 @@ import { handleRepo, pushVcsChanges } from '../utils/vcs-helper.js';
 import { checkEnv } from '../utils/env-heper.js';
 import { checkDotnetSdk, checkAssemblyName, checkAppSettings, prepareDotnet } from '../utils/dotnet-helper.js';
 import { pruneOldBuilds } from '../utils/build-pruner.js';
+import { requireSymlinkPermission } from '../utils/os-helper.js';
 
 export const deploy = async ({
   name,
@@ -18,6 +19,8 @@ export const deploy = async ({
   lint?: boolean;
   force?: boolean;
 }) => {
+
+  requireSymlinkPermission();
 
   const app = AppRepo.getAll().find((app) => app.name === name);
   const isFirstDeploy = app?.lastDeploy == undefined;

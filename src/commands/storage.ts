@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { STORAGE_DIR } from '../constants.js';
 import { AppRepo, StorageRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
+import { requireSymlinkPermission } from '../utils/os-helper.js';
 
 export const storageNew = async (name: string, linkName: string): Promise<void> => {
   const storagePath = path.join(STORAGE_DIR, name);
@@ -21,6 +22,8 @@ export const storageAttach = async (
   appName: string,
   storageName: string
 ): Promise<void> => {
+  requireSymlinkPermission();
+
   const app = AppRepo.findByName(appName);
   const storage = StorageRepo.findByName(storageName);
 
