@@ -3,10 +3,8 @@ import { Logger } from './logger.js';
 import { withRetry } from './retry-helper.js';
 import { isDirectoryEmpty } from './file-utils.js';
 
-const SVN_SSL_FLAGS = '--trust-server-cert --non-interactive';
-
 const svn = (cmd: string, cwd: string) =>
-  execSync(`svn ${cmd} ${SVN_SSL_FLAGS}`, { cwd, stdio: 'pipe' }).toString().trim();
+  execSync(`svn ${cmd}`, { cwd, stdio: 'pipe' }).toString().trim();
 
 const isSvnWorkingCopy = (dir: string): boolean => {
   try {
