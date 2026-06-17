@@ -13,6 +13,7 @@ import {
 } from '../utils/ssl-helper.js';
 import { DomainRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
+import { toISO } from '../utils/date-helper.js';
 
 export async function domainSetCert(
   name: string,
@@ -117,7 +118,7 @@ async function _pemPath(
       mode: 'custom',
       certPath,
       keyPath,
-      uploadedAt: new Date().toISOString(),
+      uploadedAt: toISO(),
       expiresAt,
       issuedTo,
       issuer,
@@ -219,7 +220,7 @@ async function _pfxPath(
       mode: 'custom',
       certPath,
       keyPath,
-      uploadedAt: new Date().toISOString(),
+      uploadedAt: toISO(),
       expiresAt,
       issuedTo,
       issuer,

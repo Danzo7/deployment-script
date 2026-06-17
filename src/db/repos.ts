@@ -1,6 +1,7 @@
 import { getDB } from './db.js';
 import { App, Domain, Route, Storage } from './model.js';
 import { randomUUID } from 'crypto';
+import { toISO } from '../utils/date-helper.js';
 
 export const AppRepo = {
   getAll: () => {
@@ -27,8 +28,8 @@ export const AppRepo = {
       );
     }
     const app = {
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: toISO(),
+      updatedAt: toISO(),
       id: randomUUID(),
       ...data,
     };
@@ -46,7 +47,7 @@ export const AppRepo = {
   update: function (name: string, updatedData: Partial<App>) {
     const db = getDB();
     const app = this.findByName(name);
-    Object.assign(app, updatedData, { updatedAt: new Date().toISOString() });
+    Object.assign(app, updatedData, { updatedAt: toISO() });
     db.write();
     return app;
   },
@@ -54,7 +55,7 @@ export const AppRepo = {
   addBuild: function (name: string, buildPath: string) {
     const db = getDB();
     const app = this.findByName(name);
-    app.lastDeploy = new Date().toISOString();
+    app.lastDeploy = toISO();
     if (!app.builds) app.builds = [];
     app.builds.push(buildPath);
     app.activeBuild = buildPath;
@@ -126,7 +127,7 @@ export const StorageRepo = {
       name: data.name,
       linkName: data.linkName,
       path: data.path,
-      createdAt: new Date().toISOString(),
+      createdAt: toISO(),
     };
     db.data.storages.push(storage);
     db.write();
@@ -163,8 +164,8 @@ export const DomainRepo = {
     const domain: Domain = {
       id: randomUUID(),
       name: data.name,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: toISO(),
+      updatedAt: toISO(),
       ssl: { mode: 'none' },
     };
     db.data.domains.push(domain);
@@ -181,7 +182,7 @@ export const DomainRepo = {
   update: function (name: string, data: Partial<Domain>): Domain {
     const db = getDB();
     const domain = this.findByName(name);
-    Object.assign(domain, data, { updatedAt: new Date().toISOString() });
+    Object.assign(domain, data, { updatedAt: toISO() });
     db.write();
     return domain;
   },
@@ -205,8 +206,8 @@ export const RouteRepo = {
       domainId: data.domainId,
       path: data.path,
       appName: data.appName,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: toISO(),
+      updatedAt: toISO(),
     };
     db.data.routes.push(route);
     db.write();

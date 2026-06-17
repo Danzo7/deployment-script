@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { X509Certificate, createPrivateKey, createPublicKey } from 'crypto';
 import { DOMAINS_DIR } from '../constants.js';
+import { toISO } from './date-helper.js';
 
 /**
  * Number of days before certificate expiry at which a warning is shown.
@@ -112,7 +113,7 @@ export function parseCertMetadata(certPem: string): {
 } {
   const cert = new X509Certificate(certPem);
 
-  const expiresAt = new Date(cert.validTo).toISOString();
+  const expiresAt = toISO(cert.validTo);
 
   const issuedTo =
     cert.subject

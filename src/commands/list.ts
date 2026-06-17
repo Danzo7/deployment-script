@@ -3,7 +3,7 @@ import chalk from 'chalk';
 import { AppRepo, StorageRepo } from '../db/repos.js';
 import { App } from '../db/model.js';
 import { getAppStatus } from '../utils/pm2-helper.js';
-import { format } from 'date-fns';
+import { formatDate } from '../utils/date-helper.js';
 import { getDirectorySize, formatSize } from './storage.js';
 
 export const listApps = async () => {
@@ -45,9 +45,7 @@ export const listApps = async () => {
             ? chalk.yellow(app.status)
             : chalk.gray.italic(app.status);
 
-    const lastDeployed = app.lastDeploy
-      ? format(new Date(app.lastDeploy), 'yyyy-MM-dd HH:mm:ss')
-      : 'N/A';
+    const lastDeployed = formatDate(app.lastDeploy, 'N/A');
 
     const storageDisplay =
       (app.linkedStorages ?? []).length === 0

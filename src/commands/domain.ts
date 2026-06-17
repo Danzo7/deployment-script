@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import Table from 'cli-table3';
-import { format } from 'date-fns';
+import { formatDate, formatRelative } from '../utils/date-helper.js';
 import  {DomainRepo, RouteRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 import { normalizeDomainName, validateHostname } from '../utils/route-validation.js';
@@ -54,9 +54,50 @@ function expiryColored(expiresAt?: string): string {
   const warningThreshold = new Date(
     now.getTime() + CERT_EXPIRY_WARNING_DAYS * 24 * 60 * 60 * 1000
   );
-  if (expiry < now) return chalk.red(expiresAt + ' (EXPIRED)');
-  if (expiry < warningThreshold) return chalk.yellow(expiresAt + ' (expiring soon)');
-  return chalk.green(expiresAt);
+  const formatted = `${formatDate(expiresAt)} (${formatRelative(expiresAt)})`;
+  if (expiry < now) return chalk.red(formatted + ' EXPIRED');
+  if (expiry < warningThreshold) return chalk.yellow(formatted + ' expiring soon');
+  return chalk.green(formatted);
+}
+
+/** Returns formatted route lines for an app, used by the info command. */
+export function getAppRouteLines(appName: string): string[] {
+  const allRoutes = RouteRepo.getAll().filter((r) => r.appName === appName);
+  if (allRoutes.length === 0) return [];
+
+  const domains = DomainRepo.getAll();
+  const lines: string[] = [];
+
+  for (const route of allRoutes) {
+    const domain = domains.find((d) => d.id === route.domainId);
+    if (!domain) continue;
+
+    const pathPart = route.path === '' ? '/' : `/${route.path}`;
+    const ssl = domain.ssl;
+    const protocol = ssl.mode === 'none' ? 'http' : 'https';
+    const url = `${protocol}://${domain.name}${pathPart}`;
+
+    let sslLabel: string;
+    if (ssl.mode === 'none') {
+      sslLabel = chalk.gray('no SSL');
+    } else if (ssl.mode === 'custom' && ssl.expiresAt) {
+      const expiry = new Date(ssl.expiresAt);
+      const now = new Date();
+      const warning = new Date(now.getTime() + CERT_EXPIRY_WARNING_DAYS * 24 * 60 * 60 * 1000);
+      const distance = formatRelative(ssl.expiresAt);
+      if (expiry < now) sslLabel = chalk.red(`SSL expired ${distance}`);
+      else if (expiry < warning) sslLabel = chalk.yellow(`SSL expires ${distance}`);
+      else sslLabel = chalk.green(`SSL valid · expires ${distance}`);
+    } else if (ssl.mode === 'custom') {
+      sslLabel = chalk.yellow('custom SSL (no cert)');
+    } else {
+      sslLabel = chalk.cyan(ssl.mode);
+    }
+
+    lines.push(`${chalk.magenta(url)}  ${sslLabel}`);
+  }
+
+  return lines;
 }
 
 export async function domainList(): Promise<void> {
@@ -111,11 +152,11 @@ export async function domainShow(name: string): Promise<void> {
     } else {
       row('Issued To', chalk.white(domain.ssl.issuedTo ?? '—'));
       row('Expires', expiryColored(domain.ssl.expiresAt));
-      row('Uploaded', chalk.yellow(domain.ssl.uploadedAt ?? '—'));
+      row('Uploaded', chalk.yellow(formatDate(domain.ssl.uploadedAt)));
     }
   }
-  row('Created', chalk.yellow(format(new Date(domain.createdAt), 'yyyy-MM-dd HH:mm:ss')));
-  row('Updated', chalk.yellow(format(new Date(domain.updatedAt), 'yyyy-MM-dd HH:mm:ss')));
+  row('Created', chalk.yellow(formatDate(domain.createdAt)));
+  row('Updated', chalk.yellow(formatDate(domain.updatedAt)));
   console.log(chalk.gray('  ' + '─'.repeat(40)));
 
   if (routes.length === 0) {

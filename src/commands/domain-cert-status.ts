@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import { DomainRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 import { CERT_EXPIRY_WARNING_DAYS } from '../utils/ssl-helper.js';
+import { formatDate, formatRelative } from '../utils/date-helper.js';
 
 function expiryColored(expiresAt?: string): string {
   if (!expiresAt) return chalk.gray('—');
@@ -11,9 +12,10 @@ function expiryColored(expiresAt?: string): string {
   const warningThreshold = new Date(
     now.getTime() + CERT_EXPIRY_WARNING_DAYS * 24 * 60 * 60 * 1000
   );
-  if (expiry < now) return chalk.red(expiresAt + ' (EXPIRED)');
-  if (expiry < warningThreshold) return chalk.yellow(expiresAt + ' (expiring soon)');
-  return chalk.green(expiresAt);
+  const formatted = `${formatDate(expiresAt)} (${formatRelative(expiresAt)})`;
+  if (expiry < now) return chalk.red(formatted + ' EXPIRED');
+  if (expiry < warningThreshold) return chalk.yellow(formatted + ' expiring soon');
+  return chalk.green(formatted);
 }
 
 export async function domainCertStatus(name: string): Promise<void> {
@@ -59,7 +61,7 @@ export async function domainCertStatus(name: string): Promise<void> {
   row('Issued To', chalk.white(ssl.issuedTo ?? '—'));
   row('Issuer', chalk.white(ssl.issuer ?? '—'));
   row('SANs', chalk.white(ssl.sanDomains?.join(', ') ?? '—'));
-  row('Uploaded At', chalk.yellow(ssl.uploadedAt ?? '—'));
+  row('Uploaded At', chalk.yellow(formatDate(ssl.uploadedAt)));
   row('Expires', expiryColored(ssl.expiresAt));
   console.log();
 }

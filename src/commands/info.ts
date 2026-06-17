@@ -3,9 +3,10 @@ import { AppRepo, StorageRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 import { getLastRevision } from '../utils/vcs-helper.js';
 import { ensureDirectories } from '../utils/file-utils.js';
-import { format } from 'date-fns';
+import { formatDate } from '../utils/date-helper.js';
 import { getProcessInfo } from '../utils/pm2-helper.js';
 import { getDirectorySize, formatSize } from './storage.js';
+import { getAppRouteLines } from './domain.js';
 import path from 'path';
 
 export const info = async ({ name }: { name: string }) => {
@@ -24,7 +25,7 @@ export const info = async ({ name }: { name: string }) => {
       commitHash = commit.hash;
       commitMessage = commit.message;
       commitAuthor = commit.author;
-      commitDate = format(new Date(commit.date), 'yyyy-MM-dd HH:mm:ss');
+      commitDate = formatDate(commit.date);
     }
   } catch {
     // repo may not be cloned yet
@@ -83,7 +84,7 @@ export const info = async ({ name }: { name: string }) => {
   row('Restarts', chalk.white(restarts.toString()));
   row('Builds', chalk.white((app.builds?.length ?? 0).toString()));
   row('Active Build', chalk.white(activeBuildPath));
-  row('Last Deploy', app.lastDeploy ? chalk.yellow(format(new Date(app.lastDeploy), 'yyyy-MM-dd HH:mm:ss')) : chalk.gray('Never'));
+  row('Last Deploy', chalk.yellow(formatDate(app.lastDeploy,chalk.gray('Never'))));
   console.log(chalk.gray('  ' + '─'.repeat(40)));
   row('Script', chalk.white(scriptPath));
   row('Script Args', chalk.white(scriptArgs));
@@ -105,6 +106,15 @@ export const info = async ({ name }: { name: string }) => {
       } catch {
         row('Storage', chalk.gray(`${storageName} (not found)`));
       }
+    }
+  }
+
+  // Routes & Domains
+  const routeLines = getAppRouteLines(name);
+  if (routeLines.length > 0) {
+    console.log(chalk.gray('  ' + '─'.repeat(40)));
+    for (const line of routeLines) {
+      row('Route', line);
     }
   }
 

@@ -3,7 +3,7 @@ import path from 'path';
 import fsExtra from 'fs-extra';
 import Table from 'cli-table3';
 import chalk from 'chalk';
-import { format } from 'date-fns';
+import { formatDate } from '../utils/date-helper.js';
 import { STORAGE_DIR } from '../constants.js';
 import { AppRepo, StorageRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
@@ -240,9 +240,7 @@ export const storageLs = async (): Promise<void> => {
     const attachedAppsDisplay =
       attachedApps.length > 0 ? chalk.whiteBright(attachedApps.join(', ')) : chalk.gray('—');
 
-    const createdAt = storage.createdAt
-      ? format(new Date(storage.createdAt), 'yyyy-MM-dd HH:mm:ss')
-      : 'N/A';
+    const createdAt = formatDate(storage.createdAt, 'N/A');
 
     table.push([
       chalk.cyan(index + 1),
