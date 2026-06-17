@@ -1,5 +1,6 @@
 import Table from 'cli-table3';
 import chalk from 'chalk';
+import { Logger } from '../utils/logger.js';
 import { AppRepo, StorageRepo } from '../db/repos.js';
 import { App } from '../db/model.js';
 import { getAppStatus } from '../utils/pm2-helper.js';
@@ -71,7 +72,7 @@ export const listApps = async () => {
       chalk.magenta(app.projectType),
       chalk.yellow(lastDeployed),
       statusColor,
-      app.appDir,
+      Logger.fileLink(app.appDir),
       storageDisplay,
     ]);
   });

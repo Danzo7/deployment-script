@@ -55,6 +55,16 @@ export class Logger {
   }
 
   /**
+   * Transforms a file system path into a clickable OSC 8 terminal hyperlink.
+   * Falls back to the plain path in environments that don't support hyperlinks.
+   */
+  static fileLink(filePath: string, label?: string) {
+    const url = `file://${filePath.replace(/\\/g, '/')}`;
+    const display = label ?? filePath;
+    return `\x1b]8;;${url}\x1b\\${chalk.cyan.underline(display)}\x1b]8;;\x1b\\`;
+  }
+
+  /**
    * Formats a command or code snippet in bold magenta.
    */
   static command(cmd: string) {
