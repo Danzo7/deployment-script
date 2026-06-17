@@ -16,6 +16,12 @@ export interface App {
   projectType: 'nextjs' | 'nestjs' | 'dotnet'; // Project framework type
   projectDir?: string; // Optional subdirectory within the repo that contains the project (for monorepos)
   linkedStorages?: string[]; // Names of storages attached to this app
+  lastDeployedCommit?: {
+    hash: string;    // Short commit hash (7 chars) or SVN revision
+    message: string; // Commit message
+    author: string;  // Commit author
+    date: string;    // ISO date string
+  };
 }
 
 export interface Storage {

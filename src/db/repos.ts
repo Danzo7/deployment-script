@@ -78,6 +78,16 @@ export const AppRepo = {
     }
     return typeof raw === 'string' ? raw : app.builds[app.builds.length - 1];
   },
+  updateDeployedCommit: function (
+    name: string,
+    commit: { hash: string; message: string; author: string; date: string }
+  ) {
+    const db = getDB();
+    const app = this.findByName(name);
+    app.lastDeployedCommit = commit;
+    db.write();
+    return app;
+  },
   removeBuild: function (name: string, buildPath: string) {
     const db = getDB();
     const app = this.findByName(name);

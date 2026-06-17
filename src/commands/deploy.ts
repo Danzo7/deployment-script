@@ -4,7 +4,7 @@ import { Logger } from '../utils/logger.js';
 import {  createBuildDirByType, ensureDirectories } from '../utils/file-utils.js';
 import { prepare } from '../utils/npm-helper.js';
 import { getAppStatus, runApp } from '../utils/pm2-helper.js';
-import { handleRepo, pushVcsChanges } from '../utils/vcs-helper.js';
+import { handleRepo, getLastRevision, pushVcsChanges } from '../utils/vcs-helper.js';
 import { checkEnv } from '../utils/env-heper.js';
 import { checkDotnetSdk, checkAssemblyName, checkAppSettings, prepareDotnet } from '../utils/dotnet-helper.js';
 import { pruneOldBuilds } from '../utils/build-pruner.js';
@@ -40,7 +40,9 @@ export const deploy = async ({
   const { relDir, envDir, logDir } = ensureDirectories(app.appDir);
   const buildRelDir = app.projectDir ? path.join(relDir, app.projectDir) : relDir;
   Logger.info('Checking repository...');
-  const isGitChanged = await handleRepo(app, relDir);
+  await handleRepo(app, relDir);
+  const currentRevision = await getLastRevision(app, relDir);
+  const isGitChanged = currentRevision?.hash !== app.lastDeployedCommit?.hash;
 
   Logger.info('Checking app status...');
   const appStatus = await getAppStatus(name);
@@ -95,6 +97,9 @@ export const deploy = async ({
     projectType: app.projectType
   });
   AppRepo.addBuild(name, buildDir);
+  if (currentRevision) {
+    AppRepo.updateDeployedCommit(name, currentRevision);
+  }
   pruneOldBuilds(name).catch(() => {}); // fire-and-forget, non-blocking
   if(lint){
     Logger.info('Pushing lint fix...');

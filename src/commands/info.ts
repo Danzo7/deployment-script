@@ -14,13 +14,12 @@ export const info = async ({ name }: { name: string }) => {
 
   const { relDir } = ensureDirectories(app.appDir);
 
-  // Git last commit
   let commitHash = 'N/A';
   let commitMessage = 'N/A';
   let commitAuthor = 'N/A';
   let commitDate = 'N/A';
   try {
-    const commit = await getLastRevision(app, relDir);
+    const commit = app.lastDeployedCommit ?? await getLastRevision(app, relDir);
     if (commit) {
       commitHash = commit.hash;
       commitMessage = commit.message;
@@ -28,7 +27,7 @@ export const info = async ({ name }: { name: string }) => {
       commitDate = format(new Date(commit.date), 'yyyy-MM-dd HH:mm:ss');
     }
   } catch {
-    // release dir may not be cloned yet
+    // repo may not be cloned yet
   }
 
   // PM2 process info
