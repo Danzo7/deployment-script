@@ -20,7 +20,9 @@ export function normalizeDomainName(s: string): string {
  * - Strips leading slashes
  * - Collapses consecutive / into single /
  * - Strips trailing /
- * - Empty string means root path
+ * - Empty string means root path ("/")
+ * NOTE: The path is stored WITHOUT a leading slash. Add "/" when displaying or
+ * generating nginx config (e.g. '/' + route.path, or '/' for empty root).
  */
 export function normalizePath(s: string): string {
   let result = s.toLowerCase();
@@ -112,8 +114,9 @@ export function assertAppNotRoutedElsewhere(
   if (existing) {
     const domain = domains.find((d) => d.id === existing.domainId);
     const domainName = domain ? domain.name : existing.domainId;
+    const displayPath = existing.path === '' ? '/' : '/' + existing.path;
     throw new Error(
-      `App "${appName}" is already routed at ${domainName}/${existing.path}. Use --force to add another route.`
+      `App "${appName}" is already routed at ${domainName}${displayPath}. Use --force to add another route.`
     );
   }
 }

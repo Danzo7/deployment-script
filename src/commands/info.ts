@@ -73,7 +73,6 @@ export const info = async ({ name }: { name: string }) => {
   console.log();
   console.log(chalk.bold.cyan(`  ${name}`));
   console.log(chalk.gray('  ' + '─'.repeat(40)));
-  row('URL', app.url ? chalk.magenta(app.url) : chalk.gray('—'));
   row('Port', chalk.blue(app.port.toString()));
   row('Type', chalk.white(app.projectType));
   row('VCS', chalk.white(app.vcsType ?? 'git'));

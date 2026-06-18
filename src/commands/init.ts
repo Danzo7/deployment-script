@@ -15,7 +15,6 @@ export const init = async ({
   port,
   appsDir,
   type="nextjs",
-  url,
   projectDir,
   vcsType = 'git',
 }: {
@@ -26,7 +25,6 @@ export const init = async ({
   port?: number;
   appsDir: string;
   type?: 'nextjs' | 'nestjs' | 'dotnet';
-  url?: string;
   projectDir?: string;
   vcsType?: 'git' | 'svn';
 }) => {
@@ -59,7 +57,6 @@ export const init = async ({
     name,
     appDir,
     projectType: type,
-    url,
     vcsType,
     ...(projectDir ? { projectDir } : {}),
    });

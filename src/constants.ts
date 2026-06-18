@@ -14,4 +14,4 @@ export const STORAGE_DIR =
 export const DOMAINS_DIR =
   process.env.DOMAINS_DIR ?? path.join(ROOT_DIR, '.domains');
 export const LOCK_DIR = path.resolve(ROOT_DIR, '.locks');
-
+export const PROXY_TARGET_HOST = process.env?.PROXY_TARGET_HOST ?? '127.0.0.1';

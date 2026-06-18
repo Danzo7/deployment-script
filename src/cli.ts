@@ -15,7 +15,6 @@ import { Delete } from './commands/delete.js';
 import { startAllApplications } from './commands/start-all.js';
 import { stopAllApplications } from './commands/stop-all.js';
 import { update } from './commands/update.js';
-import { setUrl } from './commands/set-url.js';
 import { info } from './commands/info.js';
 import { restart } from './commands/restart.js';
 import { stop } from './commands/stop.js';
@@ -29,6 +28,12 @@ import { domainSetCert } from './commands/domain-set-cert.js';
 import { domainCertStatus } from './commands/domain-cert-status.js';
 import { domainRemoveCert } from './commands/domain-remove-cert.js';
 import { routeAdd, routeRemove, routeList } from './commands/route.js';
+import { domainSetHeader } from './commands/domain-set-header.js';
+import { domainRemoveHeader } from './commands/domain-remove-header.js';
+import { domainCompile } from './commands/domain-compile.js';
+import { domainShowConfig } from './commands/domain-show-config.js';
+import { routeSetHeader } from './commands/route-set-header.js';
+import { routeRemoveHeader } from './commands/route-remove-header.js';
 
 interface InitArgs {
   name: string;
@@ -37,7 +42,6 @@ interface InitArgs {
   instances: number;
   port?: number;
   type?: 'nextjs' | 'nestjs' | 'dotnet';
-  url?: string;
   projectDir?: string;
   vcs?: 'git' | 'svn';
 }
@@ -124,11 +128,6 @@ try {
             default: 'nextjs',
             alias: 't',
             describe: 'The type of application (nextjs, nestjs, or dotnet)',
-          })
-          .option('url', {
-            type: 'string',
-            alias: 'u',
-            describe: 'The public URL or domain of the application',
           })
           .option('project-dir', {
             type: 'string',
@@ -328,22 +327,6 @@ try {
               await update();
             } catch (error) {
               Logger.error(error);
-              process.exit(1);
-            }
-          }
-        )
-        .command(
-          'set-url <name> <url>',
-          'Set or update the public URL/domain for an application',
-          (yargs) =>
-            yargs
-              .positional('name', { type: 'string', demandOption: true, describe: 'Application name' })
-              .positional('url', { type: 'string', demandOption: true, describe: 'Public URL or domain' }),
-          (args) => {
-            try {
-              setUrl(args as any);
-            } catch (err) {
-              Logger.error(err);
               process.exit(1);
             }
           }
@@ -679,6 +662,67 @@ try {
                   }
                 }
               )
+              .command(
+                'set-header <name>',
+                'Set or update an HTTP response header on a domain',
+                (yargs) =>
+                  yargs
+                    .positional('name', { type: 'string', demandOption: true, describe: 'The domain name' })
+                    .option('key', { type: 'string', demandOption: true, describe: 'Header name' })
+                    .option('value', { type: 'string', demandOption: true, describe: 'Header value' }),
+                async (args) => {
+                  try {
+                    await domainSetHeader(args.name as string, args.key as string, args.value as string);
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .command(
+                'remove-header <name>',
+                'Remove an HTTP response header from a domain',
+                (yargs) =>
+                  yargs
+                    .positional('name', { type: 'string', demandOption: true, describe: 'The domain name' })
+                    .option('key', { type: 'string', demandOption: true, describe: 'Header name to remove' }),
+                async (args) => {
+                  try {
+                    await domainRemoveHeader(args.name as string, args.key as string);
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .command(
+                'compile <name>',
+                'Compile and write the Nginx config for a domain',
+                (yargs) =>
+                  yargs.positional('name', { type: 'string', demandOption: true, describe: 'The domain name' }),
+                async (args) => {
+                  try {
+                    await domainCompile(args.name as string);
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .command(
+                'show-config <name>',
+                'Preview the Nginx config for a domain without writing to disk',
+                (yargs) =>
+                  yargs.positional('name', { type: 'string', demandOption: true, describe: 'The domain name' }),
+                async (args) => {
+                  try {
+                    await domainShowConfig(args.name as string);
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
               .demandCommand(1);
           }
         )
@@ -705,8 +749,8 @@ try {
                     .option('location', {
                       type: 'string',
                       alias: 'l',
-                      default: '/',
-                      describe: 'The path/location for the route',
+                      default: '',
+                      describe: 'Route path without leading slash (e.g. "api", "admin/dashboard"). Root = omit or leave empty.',
                     })
                     .option('force', {
                       type: 'boolean',
@@ -736,8 +780,8 @@ try {
                     .option('location', {
                       type: 'string',
                       alias: 'l',
-                      default: '/',
-                      describe: 'The path/location of the route to remove',
+                      default: '',
+                      describe: 'Route path without leading slash (e.g. "api"). Root = omit or leave empty.',
                     }),
                 async (args) => {
                   try {
@@ -760,6 +804,41 @@ try {
                 async (args) => {
                   try {
                     await routeList(args.domainName as string);
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .command(
+                'set-header <domainName>',
+                'Set or update an HTTP response header on a route',
+                (yargs) =>
+                  yargs
+                    .positional('domainName', { type: 'string', demandOption: true, describe: 'The domain name' })
+                    .option('location', { type: 'string', alias: 'l', default: '', describe: 'Route path without leading slash (e.g. "api"). Root = omit or leave empty.' })
+                    .option('key', { type: 'string', demandOption: true, describe: 'Header name' })
+                    .option('value', { type: 'string', demandOption: true, describe: 'Header value' }),
+                async (args) => {
+                  try {
+                    await routeSetHeader(args.domainName as string, args.location as string, args.key as string, args.value as string);
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .command(
+                'remove-header <domainName>',
+                'Remove an HTTP response header from a route',
+                (yargs) =>
+                  yargs
+                    .positional('domainName', { type: 'string', demandOption: true, describe: 'The domain name' })
+                    .option('location', { type: 'string', alias: 'l', default: '', describe: 'Route path without leading slash (e.g. "api"). Root = omit or leave empty.' })
+                    .option('key', { type: 'string', demandOption: true, describe: 'Header name to remove' }),
+                async (args) => {
+                  try {
+                    await routeRemoveHeader(args.domainName as string, args.location as string, args.key as string);
                   } catch (err) {
                     Logger.error(err);
                     process.exit(1);

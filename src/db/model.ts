@@ -9,7 +9,6 @@ export interface App {
   repo: string; // Repository URL or path
   branch: string; // Branch name or SVN path suffix (e.g. trunk, branches/x)
   vcsType?: 'git' | 'svn'; // Version control system (default: git)
-  url?: string; // Public URL or domain for the app
   lastDeploy?: string; // Optional ISO string for last deployment date
   builds?: string[];
   activeBuild?: string; // path to the active build directory
@@ -49,13 +48,15 @@ export interface Domain {
   createdAt: string; // ISO 8601 timestamp at creation
   updatedAt: string; // ISO 8601 timestamp of last update
   ssl: DomainSsl;
+  headers?: Record<string, string>; // HTTP response headers applied to all routes under this domain
 }
 
 export interface Route {
   id: string; // UUID v4, generated at creation
   domainId: string; // References Domain.id
-  path: string; // Normalized path (always starts with /)
+  path: string; // Normalized path stored without leading slash (e.g. "api", "admin/dashboard", "" for root); prepend "/" when displaying or generating nginx config
   appName: string; // References App.name
   createdAt: string; // ISO 8601 timestamp at creation
   updatedAt: string; // ISO 8601 timestamp of last update
+  headers?: Record<string, string>; // HTTP response headers for this location block only
 }
