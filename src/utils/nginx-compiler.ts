@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Domain, Route, App } from '../db/model.js';
-import { PROXY_TARGET_HOST, DOMAINS_DIR } from '../constants.js';
+import { PROXY_TARGET_HOST, DOMAINS_DIR, CERT_DIR } from '../constants.js';
 import { PROXY_SET_HEADERS, mergeHeaders } from './header-merge.js';
 import { normalizeDomainName } from './route-validation.js';
 import { DomainRepo, RouteRepo, AppRepo } from '../db/repos.js';
@@ -13,24 +13,33 @@ function isApex(domainName: string): boolean {
   return domainName.split('.').length === 2;
 }
 
-function evaluateHasSsl(domain: Domain): boolean {
+function evaluateHasSsl(domain: Domain): { hasSsl: boolean; certPath?: string; keyPath?: string } {
   const { mode, certPath, keyPath } = domain.ssl;
 
   if (mode === 'letsencrypt') {
     throw new Error(`Let's Encrypt mode is not yet supported by the compiler`);
   }
 
-  if (mode !== 'custom') return false;
+  if (mode !== 'custom') return { hasSsl: false };
 
-  if (!certPath || !fs.existsSync(certPath)) {
-    throw new Error(`SSL certificate file missing for domain "${domain.name}": ${certPath ?? ''}`);
+  let resolvedCert: string;
+  let resolvedKey: string;
+
+  if (CERT_DIR) {
+    resolvedCert = path.join(CERT_DIR, domain.name, 'cert.pem');
+    resolvedKey  = path.join(CERT_DIR, domain.name, 'key.pem');
+  } else {
+    if (!certPath || !fs.existsSync(certPath)) {
+      throw new Error(`SSL certificate file missing for domain "${domain.name}": ${certPath ?? ''}`);
+    }
+    if (!keyPath || !fs.existsSync(keyPath)) {
+      throw new Error(`SSL key file missing for domain "${domain.name}": ${keyPath ?? ''}`);
+    }
+    resolvedCert = certPath;
+    resolvedKey  = keyPath;
   }
 
-  if (!keyPath || !fs.existsSync(keyPath)) {
-    throw new Error(`SSL certificate file missing for domain "${domain.name}": ${keyPath ?? ''}`);
-  }
-
-  return true;
+  return { hasSsl: true, certPath: resolvedCert, keyPath: resolvedKey };
 }
 
 /** Returns true if the wildcard SAN covers www.<parent>. */
@@ -100,7 +109,9 @@ function buildServerBlocks(
   domain: Domain,
   locationBlocks: string,
   hasSsl: boolean,
-  wwwIsRegisteredDomain: boolean
+  wwwIsRegisteredDomain: boolean,
+  certPath?: string,
+  keyPath?: string
 ): string {
   const { name: domainName } = domain;
   const apex = isApex(domainName);
@@ -123,9 +134,9 @@ function buildServerBlocks(
   }
 
   // Paths relative to the domain's nginx.conf dir — no absolute paths in the output.
-  const domainDir = path.join(DOMAINS_DIR, domainName);
-  const certPath = path.relative(domainDir, domain.ssl.certPath!);
-  const keyPath = path.relative(domainDir, domain.ssl.keyPath!);
+  const domainDir = path.join(DOMAINS_DIR, domain.name);
+  const relCert = path.relative(domainDir, certPath!);
+  const relKey  = path.relative(domainDir, keyPath!);
 
   if (apex && !wwwIsRegisteredDomain) {
     // Three blocks: http redirect, www→apex SSL redirect, apex SSL content
@@ -142,7 +153,7 @@ function buildServerBlocks(
         `${INDENT}listen 443 ssl;`,
         `${INDENT}server_name www.${domainName};`,
         '',
-        sslDirectives(certPath, keyPath),
+        sslDirectives(relCert, relKey),
         '',
         `${INDENT}return 301 https://${domainName}$request_uri;`,
         '}',
@@ -152,7 +163,7 @@ function buildServerBlocks(
         `${INDENT}listen 443 ssl;`,
         `${INDENT}server_name ${domainName};`,
         '',
-        sslDirectives(certPath, keyPath),
+        sslDirectives(relCert, relKey),
         '',
         COMMON_DIRECTIVES,
         '',
@@ -176,7 +187,7 @@ function buildServerBlocks(
       `${INDENT}listen 443 ssl;`,
       `${INDENT}server_name ${domainName};`,
       '',
-      sslDirectives(certPath, keyPath),
+      sslDirectives(relCert, relKey),
       '',
       COMMON_DIRECTIVES,
       '',
@@ -201,9 +212,9 @@ export function compileDomainConfig(
   allDomains: Domain[]
 ): string {
   const wwwIsRegisteredDomain = allDomains.some((d) => d.name === 'www.' + domain.name);
-  const hasSsl = evaluateHasSsl(domain);
+  const { hasSsl, certPath, keyPath } = evaluateHasSsl(domain);
   const locationBlocks = buildLocationBlocks(domain, routes, apps, hasSsl);
-  const config = buildServerBlocks(domain, locationBlocks, hasSsl, wwwIsRegisteredDomain);
+  const config = buildServerBlocks(domain, locationBlocks, hasSsl, wwwIsRegisteredDomain, certPath, keyPath);
   return config.endsWith('\n') ? config : config + '\n';
 }
 

@@ -13,5 +13,6 @@ export const STORAGE_DIR =
   process.env.STORAGE_DIR ?? path.join(APP_DIR, 'storages');
 export const DOMAINS_DIR =
   process.env.DOMAINS_DIR ?? path.join(ROOT_DIR, '.domains');
+export const CERT_DIR = process.env.CERT_DIR ?? undefined;
 export const LOCK_DIR = path.resolve(ROOT_DIR, '.locks');
-export const PROXY_TARGET_HOST = process.env?.PROXY_TARGET_HOST ?? '127.0.0.1';
+export const PROXY_TARGET_HOST = process.env?.PROXY_TARGET_HOST ?? 'localhost';
