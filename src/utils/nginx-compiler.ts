@@ -133,10 +133,9 @@ function buildServerBlocks(
     ].join('\n');
   }
 
-  // Paths relative to the domain's nginx.conf dir — no absolute paths in the output.
   const domainDir = path.join(DOMAINS_DIR, domain.name);
-  const relCert = path.relative(domainDir, certPath!);
-  const relKey  = path.relative(domainDir, keyPath!);
+  const relCert = path.join(domainDir, certPath!);
+  const relKey  = path.join(domainDir, keyPath!);
 
   if (apex && !wwwIsRegisteredDomain) {
     // Three blocks: http redirect, www→apex SSL redirect, apex SSL content
