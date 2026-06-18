@@ -1,6 +1,62 @@
-# Deployment Manager CLI
+# Deployment Manager (dm)
 
-A CLI tool for managing the full lifecycle of Next.js, NestJS, and .NET Core API applications — from initialization and deployment to process management and environment config. Built on top of PM2 and Git.
+A CLI tool for managing the full lifecycle of **Next.js**, **NestJS**, and **.NET Core** applications — from initialization and deployment to process management, reverse proxy configuration, and SSL. Built on PM2 and supports Git and SVN.
+
+---
+
+## Table of Contents
+
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Core Concepts](#core-concepts)
+- [Application Lifecycle](#application-lifecycle)
+  - [init](#dm-init-name)
+  - [deploy](#dm-deploy-name)
+  - [update](#dm-update)
+  - [rollback](#dm-rollback-name)
+  - [delete](#dm-delete-name-secret)
+- [Process Management](#process-management)
+  - [start-all](#dm-start-all)
+  - [stop-all](#dm-stop-all)
+  - [stop](#dm-stop-name)
+  - [restart](#dm-restart-name)
+  - [list](#dm-list)
+  - [info](#dm-info-name)
+  - [logs](#dm-logs-name)
+  - [monit](#dm-monit)
+- [Environment Variables](#environment-variables)
+  - [set-env](#dm-set-env-name-varvalue)
+- [Storage Volumes](#storage-volumes)
+  - [storage new](#dm-storage-new-name-link-name)
+  - [storage attach](#dm-storage-attach-app-storage)
+  - [storage detach](#dm-storage-detach-app-storage)
+  - [storage rm](#dm-storage-rm-name)
+  - [storage ls](#dm-storage-ls)
+- [Domains and Reverse Proxy](#domains-and-reverse-proxy)
+  - [domain add](#dm-domain-add-name)
+  - [domain remove](#dm-domain-remove-name)
+  - [domain list](#dm-domain-list)
+  - [domain show](#dm-domain-show-name)
+  - [domain set-header](#dm-domain-set-header-name)
+  - [domain remove-header](#dm-domain-remove-header-name)
+  - [domain compile](#dm-domain-compile-name)
+  - [domain show-config](#dm-domain-show-config-name)
+- [SSL Certificates](#ssl-certificates)
+  - [domain set-cert](#dm-domain-set-cert-name)
+  - [domain cert-status](#dm-domain-cert-status-name)
+  - [domain remove-cert](#dm-domain-remove-cert-name)
+- [Routes](#routes)
+  - [route add](#dm-route-add-appname-domainname)
+  - [route remove](#dm-route-remove-domainname)
+  - [route list](#dm-route-list-domainname)
+  - [route set-header](#dm-route-set-header-domainname)
+  - [route remove-header](#dm-route-remove-header-domainname)
+- [Maintenance](#maintenance)
+  - [clean](#dm-clean-name)
+  - [clean-all](#dm-clean-all)
+  - [unlock](#dm-unlock-name)
+- [Monorepo Support](#monorepo-support)
+- [How It Works](#how-it-works)
 
 ---
 
@@ -8,52 +64,86 @@ A CLI tool for managing the full lifecycle of Next.js, NestJS, and .NET Core API
 
 ```bash
 git clone <repository-url>
-cd <project-directory>
+cd deployment-manager
 npm install
 npm run build
 npm link
 ```
 
+After linking, `dm` is available globally.
+
 ---
 
-## Commands
+## Configuration
+
+`dm` reads a `.env` file from its own root directory. All settings have sensible defaults but can be overridden:
+
+| Variable | Default | Description |
+|---|---|---|
+| `APP_DIR` | `.applications` | Root directory for all app data |
+| `NEXT_DIR` | same as `APP_DIR` | Directory for Next.js apps |
+| `NEST_DIR` | same as `APP_DIR` | Directory for NestJS apps |
+| `DOTNET_DIR` | same as `APP_DIR` | Directory for .NET apps |
+| `STORAGE_DIR` | `APP_DIR/storages` | Persistent storage volumes root |
+| `DOMAINS_DIR` | `.domains` | Output directory for compiled Nginx configs |
+| `PROXY_TARGET_HOST` | `127.0.0.1` | Host used in nginx `proxy_pass` directives |
+| `SECRET_KEY` | — | Required for `dm delete` |
+
+---
+
+## Core Concepts
+
+- **App** — A registered application with a name, repo, branch, port, and type.
+- **Build** — A timestamped snapshot of a compiled release. Multiple builds are kept for rollback.
+- **Active Build** — The build currently serving traffic. Rollback switches the active build.
+- **Storage** — A persistent named directory that lives outside builds and is symlinked into every new build automatically.
+- **Domain** — A hostname registered for reverse proxying.
+- **Route** — A mapping from a domain path to an app (e.g., `example.com/api` → `my-api`).
+- **Lock** — A per-app file lock that prevents concurrent operations on the same app.
+
+---
+
+## Application Lifecycle
 
 ### `dm init <name>`
 
-Register a new application.
+Register a new application. This does not deploy — it records the app configuration and prepares directories.
 
 ```bash
-dm init <name> --repo <repo-url> [options]
+dm init <name> --repo <url> [options]
 ```
 
 | Option | Alias | Default | Description |
 |---|---|---|---|
-| `--repo` | `-r` | required | Git repository URL |
-| `--branch` | `-b` | `main` | Branch to deploy from |
-| `--instances` | `-i` | `1` | Number of PM2 instances |
-| `--port` | `-p` | auto | Port number (auto-assigned if omitted) |
+| `--repo` | `-r` | required | Git or SVN repository URL |
+| `--branch` | `-b` | `main` | Branch to deploy from (or SVN path like `trunk`, `branches/x`) |
+| `--instances` | `-i` | `1` | Number of PM2 cluster workers |
+| `--port` | `-p` | auto | Port number (auto-assigned from 50xxx range if omitted) |
 | `--type` | `-t` | `nextjs` | App type: `nextjs`, `nestjs`, or `dotnet` |
-| `--project-dir` | `-d` | none | Subdirectory within the repo that contains the project (for monorepos) |
-
-#### Monorepo support
-
-If your repository contains multiple apps (e.g. a shared `Common/` library alongside `PublicApi/` and `AdminApi/` projects), use `--project-dir` to point `dm` at the specific subfolder to build and deploy.
+| `--project-dir` | `-d` | — | Subdirectory within the repo (for monorepos) |
+| `--vcs` | — | `git` | Version control: `git` or `svn` |
 
 ```bash
-# Register the public API from a monorepo
-dm init public-api --repo https://github.com/org/monorepo --type dotnet --project-dir PublicApi
+# Basic Next.js app
+dm init my-app --repo https://github.com/org/my-app --branch main
 
-# Register the admin API from the same repo
-dm init admin-api --repo https://github.com/org/monorepo --type dotnet --project-dir AdminApi
+# NestJS with explicit port and instances
+dm init my-api --repo https://github.com/org/my-api --type nestjs --port 3001 --instances 2
+
+# .NET app
+dm init my-dotnet-api --repo https://github.com/org/dotnet-app --type dotnet
+
+# SVN repository
+dm init legacy-app --repo https://svn.example.com/repo --branch trunk --vcs svn
 ```
 
-This works for all project types — `nextjs`, `nestjs`, and `dotnet`. The git clone always targets the repo root; `--project-dir` only affects where the build runs and where build artifacts are looked for.
+After init, run `dm deploy <name>` to perform the first deployment.
 
 ---
 
 ### `dm deploy <name>`
 
-Pull latest changes, install dependencies, build, and start/restart the app via PM2.
+Pull latest changes, install dependencies, build, and start or restart the app via PM2.
 
 ```bash
 dm deploy <name> [--force] [--lint]
@@ -61,24 +151,79 @@ dm deploy <name> [--force] [--lint]
 
 | Option | Alias | Default | Description |
 |---|---|---|---|
-| `--force` | `-f` | `false` | Force redeploy even if nothing changed |
-| `--lint` | `-l` | `false` | Run linting and push fixes before deploying |
+| `--force` | `-f` | `false` | Force full redeploy even if nothing changed |
+| `--lint` | `-l` | `false` | Run ESLint and push any auto-fixes before deploying |
 
----
+**Smart change detection** — deploy exits early (no rebuild) if the git commit hash, environment variables, and app settings are all unchanged and the app is already running. Use `--force` to bypass this.
 
-### `dm list`
+**What deploy does:**
 
-Display all registered apps with their port, status, last deploy time, and directory.
+1. Clones the repo on first deploy, or fetches and pulls latest changes
+2. Detects changes (git hash, env vars, appsettings)
+3. For Node.js: runs `npm install` and `npm run build`
+4. For .NET: runs `dotnet restore` and `dotnet publish -c Release`
+5. Creates a timestamped build snapshot
+6. Symlinks attached storage volumes into the new build
+7. Starts or restarts the app via PM2
+8. Records the deployed commit hash and build path
 
 ```bash
-dm list
+dm deploy my-app
+dm deploy my-app --force
+dm deploy my-app --lint
 ```
 
 ---
 
+### `dm update`
+
+Update the `dm` tool itself. Pulls latest changes from its own git repo and rebuilds if source files or `package.json` changed.
+
+```bash
+dm update
+```
+
+---
+
+### `dm rollback <name>`
+
+Roll back an application to a previous build.
+
+```bash
+dm rollback <name> [--to <index>]
+```
+
+Running without `--to` lists all available builds and rolls back to the previous one. Use `--to <index>` to target a specific build.
+
+```bash
+# Roll back to the previous build
+dm rollback my-app
+
+# Roll back to a specific build index shown in the list
+dm rollback my-app --to 2
+```
+
+The rollback switches the active build pointer, reapplies storage symlinks, and restarts the PM2 process.
+
+---
+
+### `dm delete <name> <secret>`
+
+Permanently remove an application. Stops the PM2 process, deletes the app directory, and removes it from the database.
+
+```bash
+dm delete my-app <secret>
+```
+
+Requires the `SECRET_KEY` environment variable to be set. The `<secret>` argument must match it.
+
+---
+
+## Process Management
+
 ### `dm start-all`
 
-Start all registered applications that are not currently running, using their last known build.
+Start all registered applications that are not currently running, using their last known active build.
 
 ```bash
 dm start-all
@@ -96,69 +241,13 @@ dm stop-all
 
 ---
 
-### `dm set-env <name> <VAR=VALUE>`
+### `dm stop <name>`
 
-Set or update an environment variable for an application. For .NET apps the variable is written to `.env` in the app's `env/` directory.
-
-```bash
-dm set-env <name> API_URL=https://example.com
-```
-
-> **dotnet apps — appsettings files:** `dm set-env` manages key/value pairs in `.env`. For `appsettings.json` and `appsettings.Production.json`, place the files directly in the app's `env/` directory on the server (`<APP_DIR>/<name>/env/`). They will be injected into the release directory automatically on the next `dm deploy`.
-
----
-
-### `dm clean <name>`
-
-Discard local git changes and remove old builds, keeping only the active one.
+Stop a single running application without removing it.
 
 ```bash
-dm clean <name>
+dm stop my-app
 ```
-
----
-
-### `dm delete <name> <secret>`
-
-Fully remove an application — stops the PM2 process, deletes the app directory, and removes it from the database. Requires a secret key (`SECRET_KEY` env var).
-
-```bash
-dm delete <name> <secret>
-```
-
----
-
-### `dm unlock <name>`
-
-Force-release a stuck lock on an application by killing the associated process.
-
-```bash
-dm unlock <name>
-```
-
----
-
-### `dm update`
-
-Pull the latest version of the `dm` tool itself, reinstall dependencies if needed, and rebuild.
-
-```bash
-dm update
-```
-
----
-
-### `dm rollback <name>`
-
-Roll back an application to a previous build.
-
-```bash
-dm rollback <name> [--to <index>]
-```
-
-| Option | Description |
-|---|---|
-| `--to` | Build index to roll back to. If omitted, lists available builds and defaults to the previous one. |
 
 ---
 
@@ -167,34 +256,51 @@ dm rollback <name> [--to <index>]
 Restart an application using its current active build.
 
 ```bash
-dm restart <name>
+dm restart my-app
 ```
 
 ---
 
-### `dm stop <name>`
+### `dm list`
 
-Stop a running application without removing it.
+Display all registered apps in a table: name, port, status, type, branch, and last deploy time.
 
 ```bash
-dm stop <name>
+dm list
+```
+
+---
+
+### `dm info <name>`
+
+Show comprehensive details about an application:
+
+- Port, status, type, branch, directory
+- PM2 details: memory usage, uptime, restart count, script path
+- Last deployed commit: hash, message, author, date
+- Build history with the active build highlighted
+- Attached storage volumes with disk usage
+- Configured routes (domain + path + SSL status)
+
+```bash
+dm info my-app
 ```
 
 ---
 
 ### `dm logs <name>`
 
-Stream live PM2 logs for an application.
+Stream live PM2 logs (stdout and stderr) for an application. Press `Ctrl+C` to stop.
 
 ```bash
-dm logs <name>
+dm logs my-app
 ```
 
 ---
 
 ### `dm monit`
 
-Open the PM2 monitor dashboard for all applications.
+Open the PM2 monitoring dashboard showing CPU, memory, status, and restart count for all apps.
 
 ```bash
 dm monit
@@ -202,71 +308,55 @@ dm monit
 
 ---
 
-### `dm info <name>`
+## Environment Variables
 
-Show detailed information about an application including port, status, build history, and attached storages.
+### `dm set-env <name> <VAR=VALUE>`
 
-```bash
-dm info <name>
-```
-
----
-
-### `dm clean-all`
-
-Discard uncommitted changes and prune old builds for all registered applications at once.
+Set or update an environment variable for an application. Written to the app's env file and picked up on the next deploy.
 
 ```bash
-dm clean-all
+dm set-env my-app DATABASE_URL=postgres://localhost/mydb
+dm set-env my-app API_KEY=abc123
 ```
 
----
+- **Next.js**: written to `.env.local`
+- **NestJS**: written to `.env`
+- **.NET**: written to `.env` in the app's env directory (injected into the publish output on deploy)
 
-### `dm set-url <name> <url>`
-
-Set or update the public URL/domain for an application.
-
-```bash
-dm set-url <name> https://myapp.example.com
-```
+A change in env vars triggers a rebuild on the next `dm deploy`.
 
 ---
 
 ## Storage Volumes
 
-Storages are persistent, named directories that live outside any individual build. They survive deploys, rollbacks, and restarts. Apps opt in by attaching a named storage; `dm` automatically creates a symlink inside each build directory so the app can read and write persistent files at a predictable path.
+Persistent named directories that live outside any build directory. They survive deployments and rollbacks. A symlink is automatically created in every new build directory when a storage is attached.
 
-Common uses: user uploads, generated files, shared caches, SQLite databases.
+### `dm storage new <name> <link-name>`
 
-### `dm storage new <name>`
+Create a new storage volume.
 
-Create a new named storage directory.
+- `<name>` — The storage's directory name on disk (e.g., `uploads`)
+- `<link-name>` — The symlink name that appears inside each build directory (e.g., `Storage`)
 
 ```bash
-dm storage new uploads
+dm storage new uploads Storage
 ```
-
-The directory is created at `$STORAGE_DIR/<name>` (defaults to `<APP_DIR>/storages/<name>`).
 
 ---
 
 ### `dm storage attach <app> <storage>`
 
-Attach a storage to an app. A symlink is immediately created in the app's active build if one exists.
+Attach a storage to an app. The symlink is immediately created in the active build and in all future builds.
 
 ```bash
 dm storage attach my-app uploads
 ```
 
-From that point on, every new build (deploy or rollback) will have a symlink at `<buildDir>/uploads → <STORAGE_DIR>/uploads`.
-
-`dm` will refuse to attach if a real file or directory already exists at that path inside the active build — rename or remove it first.
-
 ---
 
 ### `dm storage detach <app> <storage>`
 
-Remove the association between an app and a storage. The symlink in the active build is removed; future builds will no longer include it. The storage directory and its contents are left untouched.
+Remove a storage association from an app. The symlink is removed from the active build, but the storage directory and its contents are preserved.
 
 ```bash
 dm storage detach my-app uploads
@@ -276,7 +366,7 @@ dm storage detach my-app uploads
 
 ### `dm storage rm <name>`
 
-Delete a storage entirely — removes the DB record and the directory from disk. The command will refuse if any app still has the storage attached; detach it from all apps first.
+Delete a storage entirely. Refuses if the storage is still attached to any app — detach it first.
 
 ```bash
 dm storage rm uploads
@@ -286,7 +376,7 @@ dm storage rm uploads
 
 ### `dm storage ls`
 
-List all storages with their path, creation date, attached apps, and disk usage. A total row is shown at the bottom.
+List all storages with their path, creation date, disk usage, and which apps they are attached to.
 
 ```bash
 dm storage ls
@@ -294,82 +384,327 @@ dm storage ls
 
 ---
 
-### Storage and environment variable
+## Domains and Reverse Proxy
 
-By default storages live under `<APP_DIR>/storages/`. To place them on a different volume, set the `STORAGE_DIR` environment variable before starting `dm`.
+Domains define the hostnames your apps are accessible on. Routes map paths on a domain to specific apps. `dm` generates Nginx configuration files that you include in your Nginx setup.
+
+### `dm domain add <name>`
+
+Register a new domain.
 
 ```bash
-export STORAGE_DIR=/mnt/data/storages
-dm storage new uploads
+dm domain add example.com
 ```
 
 ---
 
-### Typical workflow
+### `dm domain remove <name>`
+
+Remove a domain. Fails if routes still exist unless `--force` is used.
 
 ```bash
-# 1. Create the storage once
-dm storage new uploads
-
-# 2. Attach it to your app
-dm storage attach my-app uploads
-
-# 3. Deploy as normal — symlink is created automatically in each build
-dm deploy my-app
-
-# 4. Inspect storages at any time
-dm storage ls
+dm domain remove example.com
+dm domain remove example.com --force   # also removes all routes
 ```
+
+---
+
+### `dm domain list`
+
+List all domains with route count and SSL status.
+
+```bash
+dm domain list
+```
+
+---
+
+### `dm domain show <name>`
+
+Show detailed information for a domain: SSL mode, certificate expiry, creation date, and all configured routes.
+
+```bash
+dm domain show example.com
+```
+
+---
+
+### `dm domain set-header <name>`
+
+Set or update an HTTP response header applied to all routes under this domain.
+
+```bash
+dm domain set-header example.com --key X-Frame-Options --value DENY
+dm domain set-header example.com --key Cache-Control --value "no-store"
+```
+
+---
+
+### `dm domain remove-header <name>`
+
+Remove an HTTP response header from a domain.
+
+```bash
+dm domain remove-header example.com --key X-Frame-Options
+```
+
+---
+
+### `dm domain compile <name>`
+
+Compile and write the Nginx configuration file for a domain to disk (into `DOMAINS_DIR`). Shows a diff if the file already exists. Re-run after any domain, route, SSL, or header change.
+
+```bash
+dm domain compile example.com
+```
+
+Include the generated file in your Nginx config:
+
+```nginx
+include /path/to/.domains/example.com.conf;
+```
+
+---
+
+### `dm domain show-config <name>`
+
+Preview the Nginx configuration that would be generated, without writing to disk.
+
+```bash
+dm domain show-config example.com
+```
+
+---
+
+## SSL Certificates
+
+### `dm domain set-cert <name>`
+
+Attach an SSL certificate to a domain. Supports two formats:
+
+**PEM format** (separate certificate and key files):
+
+```bash
+dm domain set-cert example.com --cert /path/to/cert.pem --key /path/to/key.pem
+```
+
+**PFX/PKCS#12 format** (single bundle, common from Windows/IIS exports):
+
+```bash
+dm domain set-cert example.com --pfx /path/to/cert.pfx --password "your-password"
+dm domain set-cert example.com --pfx /path/to/cert.pfx --password ""   # empty password
+```
+
+| Option | Description |
+|---|---|
+| `--cert` | Path to certificate file |
+| `--key` | Path to private key file |
+| `--pfx` | Path to PFX/PKCS#12 bundle |
+| `--password` | Password for PFX bundle |
+| `--force` | Attach even if the cert does not cover the domain name |
+
+The tool validates that:
+- The certificate is not expired
+- The private key matches the certificate
+- The certificate covers the domain name or its SANs (bypass with `--force`)
+
+After attaching a cert, recompile the domain config:
+
+```bash
+dm domain compile example.com
+```
+
+---
+
+### `dm domain cert-status <name>`
+
+Show SSL certificate status: validity dates, expiry, issued-to, and issuer.
+
+```bash
+dm domain cert-status example.com
+```
+
+---
+
+### `dm domain remove-cert <name>`
+
+Remove the SSL certificate from a domain. The domain reverts to HTTP-only mode.
+
+```bash
+dm domain remove-cert example.com
+```
+
+---
+
+## Routes
+
+Routes map a path on a domain to a specific application. The app must be registered with `dm init` before adding a route.
+
+Paths are stored **without** a leading `/`. The slash is prepended automatically when displaying routes and generating Nginx config. Pass `api`, not `/api`.
+
+### `dm route add <appName> <domainName>`
+
+Add a route for an app on a domain.
+
+```bash
+# Route the root (/) to my-app -- omit --location
+dm route add my-app example.com
+
+# Route /api to my-api
+dm route add my-api example.com --location api
+
+# Route /admin/dashboard to my-admin
+dm route add my-admin example.com --location admin/dashboard
+```
+
+| Option | Alias | Default | Description |
+|---|---|---|---|
+| `--location` | `-l` | `""` (root) | Path without leading slash -- e.g. `api`, `admin/dashboard` |
+| `--force` | `-f` | `false` | Allow routing even if the app is already routed elsewhere |
+
+More specific paths take priority over less specific ones in the generated Nginx config.
+
+---
+
+### `dm route remove <domainName>`
+
+Remove a route from a domain by location.
+
+```bash
+dm route remove example.com --location api
+dm route remove example.com   # removes the root route
+```
+
+---
+
+### `dm route list <domainName>`
+
+List all routes configured for a domain.
+
+```bash
+dm route list example.com
+```
+
+---
+
+### `dm route set-header <domainName>`
+
+Set or update an HTTP response header for a specific route. Route headers override domain-level headers for the same key.
+
+```bash
+dm route set-header example.com --location api --key X-API-Version --value "2"
+```
+
+---
+
+### `dm route remove-header <domainName>`
+
+Remove an HTTP response header from a specific route.
+
+```bash
+dm route remove-header example.com --location api --key X-API-Version
+```
+
+---
+
+## Maintenance
+
+### `dm clean <name>`
+
+Discard uncommitted local git changes in the app's working directory and remove all old builds, keeping only the active one.
+
+```bash
+dm clean my-app
+```
+
+---
+
+### `dm clean-all`
+
+Run `clean` for every registered application.
+
+```bash
+dm clean-all
+```
+
+---
+
+### `dm unlock <name>`
+
+Force-release a stuck per-app lock by killing the associated process. Use this if a `dm` command was interrupted and left an app locked.
+
+```bash
+dm unlock my-app
+```
+
+---
+
+## Monorepo Support
+
+If your repo contains multiple projects (e.g., a shared library alongside `PublicApi/` and `AdminApi/` directories), use `--project-dir` on init to point `dm` at the specific subdirectory.
+
+```bash
+# Two .NET projects from the same repo
+dm init public-api --repo https://github.com/org/monorepo --type dotnet --project-dir PublicApi
+dm init admin-api  --repo https://github.com/org/monorepo --type dotnet --project-dir AdminApi
+
+# Node.js monorepo
+dm init frontend --repo https://github.com/org/monorepo --type nextjs --project-dir apps/web
+```
+
+The repo is always cloned at its root. `--project-dir` only affects where builds run and where artifacts are expected.
 
 ---
 
 ## How It Works
 
-- Apps are tracked in a local database (lowdb) with metadata like port, repo, branch, build history, and last deploy time.
-- Each command acquires a per-app lock to prevent concurrent operations on the same app.
-- Deployment checks for git changes and env changes before deciding whether to rebuild, so unchanged apps are skipped unless `--force` is used.
-- PM2 is used for process management — Next.js and NestJS apps run in cluster mode; .NET apps run in fork mode using the `dotnet` interpreter.
-- Builds are versioned and stored; `clean` prunes old ones while preserving the active build.
-
----
-
-## .NET Core API support
-
-`dm` can manage ASP.NET Core APIs registered with `--type dotnet`.
-
-### Requirements
-
-- .NET SDK installed on the server and available on `PATH`
-- A `.csproj` file at the repository root
-- The `.csproj` assembly name (or filename stem) must match the `dm` app name — this is how dm locates the compiled DLL
-
-### Deploy flow
+### Deployment pipeline
 
 ```
-1. dotnet --version check        ← SDK present and version ≥ <TargetFramework>
-2. Assembly name pre-check       ← <AssemblyName> or .csproj stem matches app name
-3. .env sync                     ← same as NestJS
-4. appsettings sync              ← appsettings.json / appsettings.Production.json copied from env/ if changed
-5. dotnet restore
-6. dotnet publish -c Release -o ./publish
-7. DLL verification              ← <appName>.dll must exist in publish output
-8. Build snapshot                ← publish/ moved to builds/build-<timestamp>/publish/
-9. PM2 start (fork mode)         ← dotnet <appName>.dll with ASPNETCORE_ENVIRONMENT=Production
+dm init       → register app, create directories
+dm deploy     → clone/pull → detect changes → build → snapshot → link storages → PM2 start/restart
+dm rollback   → switch active build → reapply storage symlinks → PM2 restart
 ```
 
-### Example
+### Build versioning
+
+Each deployment creates a timestamped build directory (`builds/build-<timestamp>/`). The database tracks all builds and the currently active one. Old builds are pruned asynchronously after a successful deploy.
+
+### Process management
+
+Apps run under PM2:
+- **Next.js / NestJS** — cluster mode, scaled by `--instances`
+- **.NET** — fork mode (single process), `dotnet <appName>.dll`
+
+Log files land in `<APP_DIR>/<name>/logs/`.
+
+### Nginx integration
+
+`dm` generates Nginx server block configurations but does not reload Nginx itself. After any domain, route, SSL, or header change, compile the config and reload Nginx manually:
 
 ```bash
-dm init myapi --repo https://github.com/org/myapi --type dotnet
-dm deploy myapi
+dm domain compile example.com
+nginx -s reload
 ```
 
-### appsettings management
+The generated config handles:
+- HTTP to HTTPS redirects
+- `www` to apex redirects for apex domains
+- TLSv1.2 / TLSv1.3 with session caching
+- gzip for common content types
+- Per-route and per-domain custom headers
+- Project-type-specific proxy settings (WebSocket upgrade for Next.js, etc.)
 
-Place `appsettings.json` and/or `appsettings.Production.json` in the app's `env/` directory on the server. `dm deploy` will copy them into the release directory before building if they are new or changed. They flow into the build snapshot automatically via `dotnet publish`.
+### Locking
 
-```
-<APP_DIR>/myapi/env/
-  appsettings.json             ← server-managed, never committed to repo
-  appsettings.Production.json  ← production overrides
-```
+Each app has a file-based lock preventing concurrent `dm` operations on the same app. The lock is released automatically on exit or SIGINT. Use `dm unlock <name>` if a lock gets stuck.
+
+### VCS support
+
+| Feature | Git | SVN |
+|---|---|---|
+| First deploy | `git clone` | `svn checkout` |
+| Update | `git fetch` + `git pull` | `svn update` |
+| Change detection | commit hash | revision number |
+| Lint auto-push | supported (`--lint`) | not supported |
+| Branch syntax | branch name | `trunk`, `branches/x`, `tags/x` |
