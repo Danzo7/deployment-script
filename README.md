@@ -89,7 +89,8 @@ After linking, `dm` is available globally.
 | `DOMAINS_DIR` | `.domains` | Output directory for compiled Nginx configs |
 | `PROXY_TARGET_HOST` | `127.0.0.1` | Host used in nginx `proxy_pass` directives |
 | `NGINX_REMOTE_HOST` | — | Remote host for domain push (user@host format) |
-| `NGINX_REMOTE_KEY` | `~/.ssh/id_rsa` | SSH private key path for remote pushes |
+| `NGINX_REMOTE_KEY` | — | SSH private key path for remote pushes |
+| `NGINX_REMOTE_PASSWORD` | — | SSH password for remote pushes (takes priority over key) |
 | `CERT_DIR` | — | Target directory for SSL certificates on push |
 | `SECRET_KEY` | — | Required for `dm delete` |
 
@@ -509,14 +510,21 @@ The target is determined by the `NGINX_REMOTE_HOST` environment variable. If set
 | Variable | Default | Description |
 |---|---|---|
 | `NGINX_REMOTE_HOST` | — | Remote host for push (user@host format). If not set, pushes locally |
-| `NGINX_REMOTE_KEY` | `~/.ssh/id_rsa` | SSH private key path for remote pushes |
+| `NGINX_REMOTE_PASSWORD` | — | SSH password for remote pushes. If set, password auth is used |
+| `NGINX_REMOTE_KEY` | — | SSH private key path for remote pushes. Used if no password is set |
 | `CERT_DIR` | — | Target directory for SSL certificates. If not set, cert copy is skipped |
 
 ```bash
 # Push locally
 dm domain push example.com
 
-# Push to remote (configured via environment)
+# Push to remote with password authentication
+export NGINX_REMOTE_HOST=user@nginx-server.com
+export NGINX_REMOTE_PASSWORD=your-password
+export CERT_DIR=/etc/nginx/ssl
+dm domain push example.com
+
+# Push to remote with key-based authentication
 export NGINX_REMOTE_HOST=user@nginx-server.com
 export NGINX_REMOTE_KEY=/path/to/key.pem
 export CERT_DIR=/etc/nginx/ssl
@@ -760,7 +768,7 @@ The push command handles the complete deployment lifecycle:
 - **Local push**: Direct filesystem operations on the same machine
 - **Remote push**: Uses SCP for file transfer and SSH for command execution
 
-Configure remote targets via environment variables (`NGINX_REMOTE_HOST`, `NGINX_REMOTE_KEY`).
+Configure remote targets via environment variables (`NGINX_REMOTE_HOST`, `NGINX_REMOTE_PASSWORD` or `NGINX_REMOTE_KEY`). Password authentication takes priority if both are set.
 
 **Config staleness detection:**
 

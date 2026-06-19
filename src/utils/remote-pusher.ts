@@ -43,16 +43,16 @@ export class RemotePusher extends NginxPusher {
         readyTimeout: 30000,
       };
 
-      // Use key-based auth if provided, otherwise fall back to password
-      if (this.sshKeyPath) {
+      // Use password auth if provided, otherwise fall back to key-based auth
+      if (this.sshPassword) {
+        config.password = this.sshPassword;
+      } else if (this.sshKeyPath) {
         try {
           config.privateKey = fs.readFileSync(this.sshKeyPath);
         } catch (err: any) {
           reject(new Error(`Failed to read SSH key at ${this.sshKeyPath}: ${err.message}`));
           return;
         }
-      } else if (this.sshPassword) {
-        config.password = this.sshPassword;
       } else {
         reject(new Error('No SSH authentication method provided. Set NGINX_REMOTE_KEY or NGINX_REMOTE_PASSWORD.'));
         return;
