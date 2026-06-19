@@ -259,7 +259,12 @@ export class RemotePusher extends NginxPusher {
    */
   private async validateNginx(): Promise<void> {
     try {
-      await this.executeSSH('sudo nginx -t');
+      // Try without sudo first, fall back to sudo if needed
+      try {
+        await this.executeSSH('nginx -t');
+      } catch {
+        await this.executeSSH('sudo -n nginx -t');
+      }
     } catch (err: any) {
       throw this.formatError('validate nginx config', this.remoteHost, err, err.message);
     }
@@ -270,7 +275,12 @@ export class RemotePusher extends NginxPusher {
    */
   private async reloadNginx(): Promise<void> {
     try {
-      await this.executeSSH('sudo nginx -s reload');
+      // Try without sudo first, fall back to sudo if needed
+      try {
+        await this.executeSSH('nginx -s reload');
+      } catch {
+        await this.executeSSH('sudo -n nginx -s reload');
+      }
     } catch (err: any) {
       throw this.formatError('reload nginx', this.remoteHost, err, err.message);
     }
@@ -346,7 +356,12 @@ export class RemotePusher extends NginxPusher {
       }
 
       try {
-        await this.executeSSH('sudo nginx -t');
+        // Try without sudo first, fall back to sudo if needed
+        try {
+          await this.executeSSH('nginx -t');
+        } catch {
+          await this.executeSSH('sudo -n nginx -t');
+        }
         Logger.info('Rollback completed successfully. Nginx config restored to previous state.');
       } catch (err: any) {
         throw new Error(
