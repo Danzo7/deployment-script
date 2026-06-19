@@ -92,3 +92,63 @@ export function constructSitesEnabledPath(domainName: string): string {
   const filename = normalizeDomainFilename(domainName);
   return `/etc/nginx/sites-enabled/${filename}.conf`;
 }
+
+/**
+ * Safely single-quote a value for interpolation into a POSIX shell command.
+ * Wraps the value in single quotes and escapes any embedded single quotes,
+ * which is the standard safe-quoting technique for sh/bash.
+ *
+ * Always use this (never raw template interpolation) when a path, domain
+ * name, or any other externally-influenced value is placed into a shell
+ * command string sent over SSH or to execSync/exec.
+ *
+ * @param value - The raw value to quote
+ * @returns A shell-safe, single-quoted string including the surrounding quotes
+ */
+export function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * One slot of a PushSnapshot paired with the live path it corresponds to,
+ * and a human-readable label for logging/error messages. Used to drive
+ * generic, loop-based rollback instead of repeating the same
+ * remove/restore logic once per file type.
+ */
+export interface RollbackTarget {
+  label: string;
+  path: string;
+  snapshot: FileSnapshot;
+}
+
+/**
+ * Build the ordered list of rollback targets for a push snapshot.
+ * Centralizes "which files did we touch and in what order should they be
+ * rolled back" so local and remote pushers don't each hand-roll the list.
+ *
+ * Order matters: symlink first (so nginx never momentarily points at a
+ * half-restored config), then the config file, then certs.
+ */
+export function buildRollbackTargets(
+  snapshot: PushSnapshot,
+  paths: {
+    configPath: string;
+    symlinkPath: string;
+    certPath?: string;
+    keyPath?: string;
+  }
+): RollbackTarget[] {
+  const targets: RollbackTarget[] = [
+    { label: 'symlink', path: paths.symlinkPath, snapshot: snapshot.symlink },
+    { label: 'config file', path: paths.configPath, snapshot: snapshot.configFile },
+  ];
+
+  if (snapshot.certs && paths.certPath && paths.keyPath) {
+    targets.push(
+      { label: 'certificate', path: paths.certPath, snapshot: snapshot.certs.cert },
+      { label: 'private key', path: paths.keyPath, snapshot: snapshot.certs.key }
+    );
+  }
+
+  return targets;
+}

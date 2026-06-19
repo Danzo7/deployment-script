@@ -42,7 +42,7 @@ export abstract class NginxPusher {
       throw new Error(`SSL certificate file missing: ${certPath}`);
     }
     if (keyPath && !fs.existsSync(keyPath)) {
-      throw new Error(`SSL certificate file missing: ${keyPath}`);
+      throw new Error(`SSL private key file missing: ${keyPath}`);
     }
   }
 

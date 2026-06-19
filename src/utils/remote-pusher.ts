@@ -1,173 +1,52 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
-import { Client, ConnectConfig } from 'ssh2';
 import { NginxPusher } from './nginx-pusher.js';
 import { DomainRepo } from '../db/repos.js';
 import { CERT_DIR } from '../constants.js';
 import { Logger } from './logger.js';
 import { toISO } from './date-helper.js';
+import { SshConnection, SshCredentials } from './ssh-connection.js';
 import {
   constructSitesAvailablePath,
   constructSitesEnabledPath,
+  buildRollbackTargets,
+  shellQuote,
   PushSnapshot,
-  FileSnapshot
+  FileSnapshot,
+  RollbackTarget,
 } from './domain-push-utils.js';
 
 /**
- * Remote Nginx pusher - uses ssh2 library with persistent connection
+ * Remote Nginx pusher - pushes config/certs to a remote host over SSH and
+ * reloads nginx there. Transport concerns (connecting, exec, sftp) live in
+ * SshConnection; this class only orchestrates the push/rollback workflow.
  */
 export class RemotePusher extends NginxPusher {
-  private client: Client;
-  private connected: boolean = false;
+  private readonly ssh: SshConnection;
 
   constructor(
     domainName: string,
-    private remoteHost: string,
-    private sshKeyPath?: string,
-    private sshPassword?: string,
-    private sudoPassword?: string
+    remoteHost: string,
+    sshKeyPath?: string,
+    sshPassword?: string,
+    sudoPassword?: string
   ) {
     super(domainName);
-    this.client = new Client();
-    // Default sudo password to SSH password if not explicitly set
-    if (!this.sudoPassword && this.sshPassword) {
-      this.sudoPassword = this.sshPassword;
-    }
+    const creds: SshCredentials = { remoteHost, sshKeyPath, sshPassword, sudoPassword };
+    this.ssh = new SshConnection(creds);
   }
 
-  /**
-   * Connect to remote host via SSH
-   */
-  private async connect(): Promise<void> {
-    if (this.connected) return;
-
-    return new Promise((resolve, reject) => {
-      const config: ConnectConfig = {
-        host: this.remoteHost.includes('@') ? this.remoteHost.split('@')[1] : this.remoteHost,
-        username: this.remoteHost.includes('@') ? this.remoteHost.split('@')[0] : 'root',
-        readyTimeout: 30000,
-      };
-
-      // Use password auth if provided, otherwise fall back to key-based auth
-      if (this.sshPassword) {
-        config.password = this.sshPassword;
-      } else if (this.sshKeyPath) {
-        try {
-          config.privateKey = fs.readFileSync(this.sshKeyPath);
-        } catch (err: any) {
-          reject(new Error(`Failed to read SSH key at ${this.sshKeyPath}: ${err.message}`));
-          return;
-        }
-      } else {
-        reject(new Error('No SSH authentication method provided. Set NGINX_REMOTE_KEY or NGINX_REMOTE_PASSWORD.'));
-        return;
-      }
-
-      this.client
-        .on('ready', () => {
-          this.connected = true;
-          resolve();
-        })
-        .on('error', (err) => {
-          reject(new Error(`Failed to connect to ${this.remoteHost}: ${err.message}`));
-        })
-        .connect(config);
-    });
+  /** Remote path for the SSL certificate, if certs are in play. */
+  private get remoteCertPath(): string | undefined {
+    if (!this.shouldCopyCerts() || !CERT_DIR) return undefined;
+    return toPosixPath(path.join(CERT_DIR, this.domain.name, 'cert.pem'));
   }
 
-  /**
-   * Disconnect from remote host
-   */
-  private disconnect(): void {
-    if (this.connected) {
-      this.client.end();
-      this.connected = false;
-    }
-  }
-
-  /**
-   * Execute SSH command on remote host
-   */
-  private async executeSSH(command: string, sendSudoPassword: boolean = false): Promise<string> {
-    return new Promise((resolve, reject) => {
-      this.client.exec(command, (err, stream) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-
-        let stdout = '';
-        let stderr = '';
-
-        // If sudo password needed, send it to stdin
-        if (sendSudoPassword && this.sudoPassword) {
-          stream.write(this.sudoPassword + '\n');
-        }
-
-        stream
-          .on('close', (code: number) => {
-            if (code !== 0) {
-              reject(new Error(stderr || stdout || `Command exited with code ${code}`));
-            } else {
-              resolve(stdout);
-            }
-          })
-          .on('data', (data: Buffer) => {
-            stdout += data.toString();
-          })
-          .stderr.on('data', (data: Buffer) => {
-            stderr += data.toString();
-          });
-      });
-    });
-  }
-
-  /**
-   * Transfer file via SFTP
-   */
-  private async transferFile(localPath: string, remotePath: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.client.sftp((err, sftp) => {
-        if (err) {
-          reject(new Error(`Failed to start SFTP: ${err.message}`));
-          return;
-        }
-
-        sftp.fastPut(localPath, remotePath, (err) => {
-          if (err) {
-            reject(new Error(`Failed to transfer ${localPath} to ${this.remoteHost}: ${err.message}`));
-          } else {
-            resolve();
-          }
-        });
-      });
-    });
-  }
-
-  /**
-   * Read remote file content
-   */
-  private async readRemoteFile(remotePath: string): Promise<Buffer | null> {
-    return new Promise((resolve, reject) => {
-      this.client.sftp((err, sftp) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-
-        sftp.readFile(remotePath, (err, data) => {
-          if (err) {
-            if (err.message.includes('No such file')) {
-              resolve(null);
-            } else {
-              reject(err);
-            }
-          } else {
-            resolve(data);
-          }
-        });
-      });
-    });
+  /** Remote path for the SSL private key, if certs are in play. */
+  private get remoteKeyPath(): string | undefined {
+    if (!this.shouldCopyCerts() || !CERT_DIR) return undefined;
+    return toPosixPath(path.join(CERT_DIR, this.domain.name, 'key.pem'));
   }
 
   /**
@@ -179,15 +58,13 @@ export class RemotePusher extends NginxPusher {
 
     const snapshot: PushSnapshot = {
       configFile: await this.captureRemoteFileSnapshot(configPath),
-      symlink: await this.captureRemoteFileSnapshot(symlinkPath)
+      symlink: await this.captureRemoteFileSnapshot(symlinkPath),
     };
 
-    if (this.shouldCopyCerts() && CERT_DIR) {
-      const certPath = path.join(CERT_DIR, this.domain.name, 'cert.pem').replace(/\\/g, '/');
-      const keyPath = path.join(CERT_DIR, this.domain.name, 'key.pem').replace(/\\/g, '/');
+    if (this.remoteCertPath && this.remoteKeyPath) {
       snapshot.certs = {
-        cert: await this.captureRemoteFileSnapshot(certPath),
-        key: await this.captureRemoteFileSnapshot(keyPath)
+        cert: await this.captureRemoteFileSnapshot(this.remoteCertPath),
+        key: await this.captureRemoteFileSnapshot(this.remoteKeyPath),
       };
     }
 
@@ -198,29 +75,20 @@ export class RemotePusher extends NginxPusher {
    * Capture a single remote file snapshot
    */
   private async captureRemoteFileSnapshot(filePath: string): Promise<FileSnapshot> {
+    const q = shellQuote(filePath);
     try {
-      // Check if file is a symlink
-      const checkCmd = `[ -L "${filePath}" ] && echo "symlink" || ([ -f "${filePath}" ] && echo "file" || echo "none")`;
-      const fileType = (await this.executeSSH(checkCmd)).trim();
+      const checkCmd = `[ -L ${q} ] && echo "symlink" || ([ -f ${q} ] && echo "file" || echo "none")`;
+      const fileType = (await this.ssh.exec(checkCmd)).trim();
 
       if (fileType === 'none') {
         return { path: filePath, existed: false };
-      } else if (fileType === 'symlink') {
-        const target = (await this.executeSSH(`readlink "${filePath}"`)).trim();
-        return {
-          path: filePath,
-          existed: true,
-          isSymlink: true,
-          target
-        };
-      } else {
-        const content = await this.readRemoteFile(filePath);
-        return {
-          path: filePath,
-          existed: true,
-          content: content || undefined
-        };
       }
+      if (fileType === 'symlink') {
+        const target = (await this.ssh.exec(`readlink ${q}`)).trim();
+        return { path: filePath, existed: true, isSymlink: true, target };
+      }
+      const content = await this.ssh.sftpReadFile(filePath);
+      return { path: filePath, existed: true, content: content || undefined };
     } catch {
       return { path: filePath, existed: false };
     }
@@ -231,25 +99,22 @@ export class RemotePusher extends NginxPusher {
    */
   private async transferConfigFile(): Promise<void> {
     const targetPath = constructSitesAvailablePath(this.domain.name);
-    const targetDir = path.dirname(targetPath);
-
-    await this.executeSSH(`mkdir -p "${targetDir}"`);
-    await this.transferFile(this.compiledConfigPath, targetPath);
+    await this.mkdirWithSudo(path.dirname(targetPath));
+    await this.ssh.sftpFastPut(this.compiledConfigPath, targetPath);
   }
 
   /**
    * Transfer SSL certs if applicable
    */
   private async transferCertsIfApplicable(): Promise<void> {
-    if (!this.shouldCopyCerts() || !CERT_DIR) return;
+    if (!this.remoteCertPath || !this.remoteKeyPath) return;
 
     const certPath = this.domain.ssl.certPath!;
     const keyPath = this.domain.ssl.keyPath!;
-    const targetDir = path.join(CERT_DIR, this.domain.name).replace(/\\/g, '/');
 
-    await this.executeSSH(`mkdir -p "${targetDir}"`);
-    await this.transferFile(certPath, path.join(targetDir, 'cert.pem').replace(/\\/g, '/'));
-    await this.transferFile(keyPath, path.join(targetDir, 'key.pem').replace(/\\/g, '/'));
+    await this.mkdirWithSudo(path.dirname(this.remoteCertPath));
+    await this.ssh.sftpFastPut(certPath, this.remoteCertPath);
+    await this.ssh.sftpFastPut(keyPath, this.remoteKeyPath);
   }
 
   /**
@@ -258,10 +123,18 @@ export class RemotePusher extends NginxPusher {
   private async createSymlink(): Promise<void> {
     const sourcePath = constructSitesAvailablePath(this.domain.name);
     const targetPath = constructSitesEnabledPath(this.domain.name);
-    const targetDir = path.dirname(targetPath);
 
-    await this.executeSSH(`mkdir -p "${targetDir}"`);
-    await this.executeSSH(`ln -sf "${sourcePath}" "${targetPath}"`);
+    await this.mkdirWithSudo(path.dirname(targetPath));
+    await this.ssh.exec(`ln -sf ${shellQuote(sourcePath)} ${shellQuote(targetPath)}`);
+  }
+
+  /**
+   * Create a remote directory, retrying with sudo if the plain attempt
+   * fails. Surfaces the original error if the sudo retry also fails,
+   * rather than swallowing it.
+   */
+  private async mkdirWithSudo(dirPath: string): Promise<void> {
+    await this.ssh.execWithSudoFallback(`mkdir -p ${shellQuote(dirPath)}`);
   }
 
   /**
@@ -269,19 +142,9 @@ export class RemotePusher extends NginxPusher {
    */
   private async validateNginx(): Promise<void> {
     try {
-      // Try without sudo first
-      try {
-        await this.executeSSH('nginx -t');
-      } catch {
-        // Try with sudo
-        if (this.sudoPassword) {
-          await this.executeSSH('sudo -S nginx -t', true);
-        } else {
-          await this.executeSSH('sudo -n nginx -t');
-        }
-      }
+      await this.ssh.execWithSudoFallback('nginx -t');
     } catch (err: any) {
-      throw this.formatError('validate nginx config', this.remoteHost, err, err.message);
+      throw this.formatError('validate nginx config', this.ssh.hostLabel, err, err.message);
     }
   }
 
@@ -290,19 +153,9 @@ export class RemotePusher extends NginxPusher {
    */
   private async reloadNginx(): Promise<void> {
     try {
-      // Try without sudo first
-      try {
-        await this.executeSSH('nginx -s reload');
-      } catch {
-        // Try with sudo
-        if (this.sudoPassword) {
-          await this.executeSSH('sudo -S nginx -s reload', true);
-        } else {
-          await this.executeSSH('sudo -n nginx -s reload');
-        }
-      }
+      await this.ssh.execWithSudoFallback('nginx -s reload');
     } catch (err: any) {
-      throw this.formatError('reload nginx', this.remoteHost, err, err.message);
+      throw this.formatError('reload nginx', this.ssh.hostLabel, err, err.message);
     }
   }
 
@@ -310,97 +163,80 @@ export class RemotePusher extends NginxPusher {
    * Update domain metadata in local DB
    */
   private updateMetadata(): void {
-    const configPath = constructSitesAvailablePath(this.domain.name);
     DomainRepo.update(this.domain.name, {
       lastPushedAt: toISO(),
-      configPath: configPath
+      configPath: constructSitesAvailablePath(this.domain.name),
     });
   }
 
   /**
-   * Rollback to previous state on remote
+   * Restore a single rollback target on the remote host: remove whatever
+   * is there now, then restore the snapshot (file content, symlink target,
+   * or nothing if it didn't previously exist).
+   */
+  private async restoreTarget(target: RollbackTarget): Promise<void> {
+    const q = shellQuote(target.path);
+    await this.ssh.exec(`rm -f ${q}`);
+
+    if (!target.snapshot.existed) return;
+
+    if (target.snapshot.isSymlink && target.snapshot.target) {
+      await this.ssh.exec(`ln -sf ${shellQuote(target.snapshot.target)} ${q}`);
+      return;
+    }
+
+    if (target.snapshot.content) {
+      const tempFile = path.join(os.tmpdir(), `nginx-rollback-${process.pid}-${Date.now()}.tmp`);
+      try {
+        fs.writeFileSync(tempFile, target.snapshot.content);
+        await this.ssh.sftpFastPut(tempFile, target.path);
+      } finally {
+        if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+      }
+    }
+  }
+
+  /**
+   * Rollback to previous state on remote. Each target is restored
+   * independently so one failure doesn't prevent the others from being
+   * attempted; all failures are collected and reported together.
    */
   protected async rollback(snapshot: PushSnapshot): Promise<void> {
-    try {
-      const configPath = constructSitesAvailablePath(this.domain.name);
-      await this.executeSSH(`rm -f "${configPath}"`);
+    const targets = buildRollbackTargets(snapshot, {
+      configPath: constructSitesAvailablePath(this.domain.name),
+      symlinkPath: constructSitesEnabledPath(this.domain.name),
+      certPath: this.remoteCertPath,
+      keyPath: this.remoteKeyPath,
+    });
 
-      if (snapshot.configFile.existed && snapshot.configFile.content) {
-        const tempFile = `/tmp/nginx-rollback-${this.domain.name}.conf`;
-        try {
-          fs.writeFileSync(tempFile, snapshot.configFile.content);
-          await this.transferFile(tempFile, configPath);
-        } finally {
-          if (fs.existsSync(tempFile)) {
-            fs.unlinkSync(tempFile);
-          }
-        }
-      }
-
-      const symlinkPath = constructSitesEnabledPath(this.domain.name);
-      await this.executeSSH(`rm -f "${symlinkPath}"`);
-
-      if (snapshot.symlink.existed && snapshot.symlink.isSymlink && snapshot.symlink.target) {
-        await this.executeSSH(`ln -sf "${snapshot.symlink.target}" "${symlinkPath}"`);
-      }
-
-      if (snapshot.certs && CERT_DIR) {
-        const certPath = path.join(CERT_DIR, this.domain.name, 'cert.pem').replace(/\\/g, '/');
-        const keyPath = path.join(CERT_DIR, this.domain.name, 'key.pem').replace(/\\/g, '/');
-
-        await this.executeSSH(`rm -f "${certPath}"`);
-        await this.executeSSH(`rm -f "${keyPath}"`);
-
-        if (snapshot.certs.cert.existed && snapshot.certs.cert.content) {
-          const tempCert = `/tmp/nginx-rollback-cert-${this.domain.name}.pem`;
-          try {
-            fs.writeFileSync(tempCert, snapshot.certs.cert.content);
-            await this.transferFile(tempCert, certPath);
-          } finally {
-            if (fs.existsSync(tempCert)) {
-              fs.unlinkSync(tempCert);
-            }
-          }
-        }
-        if (snapshot.certs.key.existed && snapshot.certs.key.content) {
-          const tempKey = `/tmp/nginx-rollback-key-${this.domain.name}.pem`;
-          try {
-            fs.writeFileSync(tempKey, snapshot.certs.key.content);
-            await this.transferFile(tempKey, keyPath);
-          } finally {
-            if (fs.existsSync(tempKey)) {
-              fs.unlinkSync(tempKey);
-            }
-          }
-        }
-      }
-
+    const failures: string[] = [];
+    for (const target of targets) {
       try {
-        // Try without sudo first
-        try {
-          await this.executeSSH('nginx -t');
-        } catch {
-          // Try with sudo
-          if (this.sudoPassword) {
-            await this.executeSSH('sudo -S nginx -t', true);
-          } else {
-            await this.executeSSH('sudo -n nginx -t');
-          }
-        }
-        Logger.info('Rollback completed successfully. Nginx config restored to previous state.');
+        await this.restoreTarget(target);
       } catch (err: any) {
-        throw new Error(
-          `CRITICAL: Rollback failed and Nginx state may be inconsistent. Manual intervention required. Error: ${err.message}`
-        );
+        failures.push(`${target.label} (${target.path}): ${err.message}`);
       }
-    } catch (err: any) {
-      if (err.message.startsWith('CRITICAL:')) {
-        throw err;
-      }
-      throw new Error(
-        `CRITICAL: Rollback failed and Nginx state may be inconsistent. Manual intervention required. Error: ${err.message}`
-      );
     }
+
+    let validationError: string | undefined;
+    try {
+      await this.ssh.execWithSudoFallback('nginx -t');
+    } catch (err: any) {
+      validationError = err.message;
+    }
+
+    if (failures.length === 0 && !validationError) {
+      Logger.info('Rollback completed successfully. Nginx config restored to previous state.');
+      return;
+    }
+
+    const parts = [
+      ...failures.map((f) => `- failed to restore ${f}`),
+      ...(validationError ? [`- nginx -t failed after rollback: ${validationError}`] : []),
+    ];
+    throw new Error(
+      `CRITICAL: Rollback failed and Nginx state may be inconsistent. Manual intervention required.\n${parts.join('\n')}`
+    );
   }
 
   /**
@@ -408,7 +244,7 @@ export class RemotePusher extends NginxPusher {
    */
   async push(): Promise<void> {
     try {
-      await this.connect();
+      await this.ssh.connect();
 
       const snapshot = await this.captureSnapshot();
 
@@ -424,7 +260,12 @@ export class RemotePusher extends NginxPusher {
         throw err;
       }
     } finally {
-      this.disconnect();
+      this.ssh.disconnect();
     }
   }
+}
+
+/** Normalize Windows-style separators to POSIX for use in remote paths. */
+function toPosixPath(p: string): string {
+  return p.replace(/\\/g, '/');
 }
