@@ -41,6 +41,7 @@ A CLI tool for managing the full lifecycle of **Next.js**, **NestJS**, and **.NE
   - [domain remove-header](#dm-domain-remove-header-name)
   - [domain compile](#dm-domain-compile-name)
   - [domain show-config](#dm-domain-show-config-name)
+  - [domain push](#dm-domain-push-name)
 - [SSL Certificates](#ssl-certificates)
   - [domain set-cert](#dm-domain-set-cert-name)
   - [domain cert-status](#dm-domain-cert-status-name)
@@ -87,6 +88,9 @@ After linking, `dm` is available globally.
 | `STORAGE_DIR` | `APP_DIR/storages` | Persistent storage volumes root |
 | `DOMAINS_DIR` | `.domains` | Output directory for compiled Nginx configs |
 | `PROXY_TARGET_HOST` | `127.0.0.1` | Host used in nginx `proxy_pass` directives |
+| `NGINX_REMOTE_HOST` | — | Remote host for domain push (user@host format) |
+| `NGINX_REMOTE_KEY` | `~/.ssh/id_rsa` | SSH private key path for remote pushes |
+| `CERT_DIR` | — | Target directory for SSL certificates on push |
 | `SECRET_KEY` | — | Required for `dm delete` |
 
 ---
@@ -97,8 +101,10 @@ After linking, `dm` is available globally.
 - **Build** — A timestamped snapshot of a compiled release. Multiple builds are kept for rollback.
 - **Active Build** — The build currently serving traffic. Rollback switches the active build.
 - **Storage** — A persistent named directory that lives outside builds and is symlinked into every new build automatically.
-- **Domain** — A hostname registered for reverse proxying.
+- **Domain** — A hostname registered for reverse proxying with compiled Nginx configuration.
 - **Route** — A mapping from a domain path to an app (e.g., `example.com/api` → `my-api`).
+- **Push** — Deployment of a compiled domain config to a live Nginx installation (local or remote).
+- **Stale Config** — A domain that has been recompiled since its last push, indicating the live Nginx config may be out of date.
 - **Lock** — A per-app file lock that prevents concurrent operations on the same app.
 
 ---
@@ -411,7 +417,7 @@ dm domain remove example.com --force   # also removes all routes
 
 ### `dm domain list`
 
-List all domains with route count and SSL status.
+List all domains with route count, SSL status, and push status.
 
 ```bash
 dm domain list
@@ -421,7 +427,7 @@ dm domain list
 
 ### `dm domain show <name>`
 
-Show detailed information for a domain: SSL mode, certificate expiry, creation date, and all configured routes.
+Show detailed information for a domain: SSL mode, certificate expiry, creation date, push status, and all configured routes.
 
 ```bash
 dm domain show example.com
@@ -458,11 +464,7 @@ Compile and write the Nginx configuration file for a domain to disk (into `DOMAI
 dm domain compile example.com
 ```
 
-Include the generated file in your Nginx config:
-
-```nginx
-include /path/to/.domains/example.com.conf;
-```
+After compiling, push the config to Nginx with `dm domain push <name>` to make it live.
 
 ---
 
@@ -473,6 +475,57 @@ Preview the Nginx configuration that would be generated, without writing to disk
 ```bash
 dm domain show-config example.com
 ```
+
+---
+
+### `dm domain push <name>`
+
+Deploy the compiled Nginx configuration to a live Nginx installation. Pushes the config to `/etc/nginx/sites-available/`, creates symlinks, copies SSL certificates (if configured), validates the configuration, and reloads Nginx.
+
+```bash
+dm domain push example.com
+```
+
+**Local vs Remote Push:**
+
+- **Local**: Pushes directly to Nginx on the same machine using filesystem operations
+- **Remote**: Pushes to a remote Nginx server via SCP and SSH
+
+The target is determined by the `NGINX_REMOTE_HOST` environment variable. If set, pushes go to that remote host. Otherwise, the push is local.
+
+**Push Workflow:**
+
+1. Verifies the domain exists and has a compiled config
+2. Transfers the config file to `/etc/nginx/sites-available/<domainName>.conf`
+3. Copies SSL certificates to `CERT_DIR` (if set and domain uses custom SSL)
+4. Creates a symlink in `/etc/nginx/sites-enabled/`
+5. Validates the complete Nginx config with `nginx -t`
+6. Reloads Nginx to apply changes
+7. Updates domain metadata (lastPushedAt, configPath)
+8. Rolls back on any failure to keep Nginx in a known-good state
+
+**Environment Variables:**
+
+| Variable | Default | Description |
+|---|---|---|
+| `NGINX_REMOTE_HOST` | — | Remote host for push (user@host format). If not set, pushes locally |
+| `NGINX_REMOTE_KEY` | `~/.ssh/id_rsa` | SSH private key path for remote pushes |
+| `CERT_DIR` | — | Target directory for SSL certificates. If not set, cert copy is skipped |
+
+```bash
+# Push locally
+dm domain push example.com
+
+# Push to remote (configured via environment)
+export NGINX_REMOTE_HOST=user@nginx-server.com
+export NGINX_REMOTE_KEY=/path/to/key.pem
+export CERT_DIR=/etc/nginx/ssl
+dm domain push example.com
+```
+
+**Rollback:** If any step fails after files are written (validation fails, reload fails, etc.), the push automatically rolls back by removing the newly written config and symlink, restoring the previous state.
+
+**Push Status:** After pushing, view the push status with `dm domain show <name>` to see when the config was last pushed and whether it's stale (recompiled but not re-pushed).
 
 ---
 
@@ -680,14 +733,41 @@ Log files land in `<APP_DIR>/<name>/logs/`.
 
 ### Nginx integration
 
-`dm` generates Nginx server block configurations but does not reload Nginx itself. After any domain, route, SSL, or header change, compile the config and reload Nginx manually:
+`dm` generates Nginx server block configurations and can deploy them automatically to local or remote Nginx installations.
 
-```bash
-dm domain compile example.com
-nginx -s reload
+**Configuration workflow:**
+
+```
+dm domain add      → register domain
+dm route add       → map paths to apps
+dm domain compile  → generate Nginx config
+dm domain push     → deploy to live Nginx
 ```
 
-The generated config handles:
+**Push deployment:**
+
+The push command handles the complete deployment lifecycle:
+- Transfers compiled config to `/etc/nginx/sites-available/`
+- Copies SSL certificates to the target (if configured)
+- Creates symlinks in `/etc/nginx/sites-enabled/`
+- Validates with `nginx -t` before committing
+- Reloads Nginx to apply changes
+- Tracks deployment metadata (timestamps, paths, staleness)
+- Automatically rolls back on any failure
+
+**Local vs remote:**
+
+- **Local push**: Direct filesystem operations on the same machine
+- **Remote push**: Uses SCP for file transfer and SSH for command execution
+
+Configure remote targets via environment variables (`NGINX_REMOTE_HOST`, `NGINX_REMOTE_KEY`).
+
+**Config staleness detection:**
+
+The system tracks compilation and push timestamps. When a domain is recompiled after being pushed, it's marked as "stale" in `dm domain show` and `dm domain list`, indicating the live Nginx config is out of date. Run `dm domain push <name>` to update.
+
+**Generated config features:**
+
 - HTTP to HTTPS redirects
 - `www` to apex redirects for apex domains
 - TLSv1.2 / TLSv1.3 with session caching
