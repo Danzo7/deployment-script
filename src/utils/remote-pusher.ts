@@ -99,8 +99,20 @@ export class RemotePusher extends NginxPusher {
    */
   private async transferConfigFile(): Promise<void> {
     const targetPath = constructSitesAvailablePath(this.domain.name);
-    await this.mkdirWithSudo(path.dirname(targetPath));
-    await this.ssh.sftpFastPut(this.compiledConfigPath, targetPath);
+    const tempConfig = `/tmp/nginx-push-config-${Date.now()}.conf`;
+
+    try {
+      await this.ssh.sftpFastPut(this.compiledConfigPath, tempConfig);
+      await this.mkdirWithSudo(path.dirname(targetPath));
+      await this.ssh.execWithSudoFallback(`mv ${shellQuote(tempConfig)} ${shellQuote(targetPath)}`);
+    } finally {
+      // Cleanup temp file if it still exists
+      try {
+        await this.ssh.exec(`rm -f ${shellQuote(tempConfig)}`);
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
   }
 
   /**
@@ -112,9 +124,25 @@ export class RemotePusher extends NginxPusher {
     const certPath = this.domain.ssl.certPath!;
     const keyPath = this.domain.ssl.keyPath!;
 
-    await this.mkdirWithSudo(path.dirname(this.remoteCertPath));
-    await this.ssh.sftpFastPut(certPath, this.remoteCertPath);
-    await this.ssh.sftpFastPut(keyPath, this.remoteKeyPath);
+    // Upload to temp location first (user-writable), then move with sudo
+    const tempCert = `/tmp/nginx-push-cert-${Date.now()}.pem`;
+    const tempKey = `/tmp/nginx-push-key-${Date.now()}.pem`;
+
+    try {
+      await this.ssh.sftpFastPut(certPath, tempCert);
+      await this.ssh.sftpFastPut(keyPath, tempKey);
+
+      await this.mkdirWithSudo(path.dirname(this.remoteCertPath));
+      await this.ssh.execWithSudoFallback(`mv ${shellQuote(tempCert)} ${shellQuote(this.remoteCertPath)}`);
+      await this.ssh.execWithSudoFallback(`mv ${shellQuote(tempKey)} ${shellQuote(this.remoteKeyPath)}`);
+    } finally {
+      // Cleanup temp files if they still exist
+      try {
+        await this.ssh.exec(`rm -f ${shellQuote(tempCert)} ${shellQuote(tempKey)}`);
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
   }
 
   /**
