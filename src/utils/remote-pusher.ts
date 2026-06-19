@@ -153,7 +153,7 @@ export class RemotePusher extends NginxPusher {
     const targetPath = constructSitesEnabledPath(this.domain.name);
 
     await this.mkdirWithSudo(path.dirname(targetPath));
-    await this.ssh.exec(`ln -sf ${shellQuote(sourcePath)} ${shellQuote(targetPath)}`);
+    await this.ssh.execWithSudoFallback(`ln -sf ${shellQuote(sourcePath)} ${shellQuote(targetPath)}`);
   }
 
   /**
