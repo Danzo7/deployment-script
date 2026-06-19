@@ -32,6 +32,7 @@ import { domainSetHeader } from './commands/domain-set-header.js';
 import { domainRemoveHeader } from './commands/domain-remove-header.js';
 import { domainCompile } from './commands/domain-compile.js';
 import { domainShowConfig } from './commands/domain-show-config.js';
+import { domainPush } from './commands/domain-push.js';
 import { routeSetHeader } from './commands/route-set-header.js';
 import { routeRemoveHeader } from './commands/route-remove-header.js';
 
@@ -717,6 +718,20 @@ try {
                 async (args) => {
                   try {
                     await domainShowConfig(args.name as string);
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .command(
+                'push <name>',
+                'Push compiled domain config to Nginx (local or remote). Env vars: NGINX_REMOTE_HOST, NGINX_REMOTE_KEY, CERT_DIR',
+                (yargs) =>
+                  yargs.positional('name', { type: 'string', demandOption: true, describe: 'The domain name' }),
+                async (args) => {
+                  try {
+                    await domainPush(args.name as string);
                   } catch (err) {
                     Logger.error(err);
                     process.exit(1);

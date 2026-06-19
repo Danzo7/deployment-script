@@ -116,17 +116,30 @@ export async function domainList(): Promise<void> {
       chalk.whiteBright('Name'),
       chalk.blue('Routes'),
       chalk.magenta('SSL'),
+      chalk.green('Pushed'),
     ],
   });
 
   domains.forEach((domain, index) => {
     const routeCount = allRoutes.filter((r) => r.domainId === domain.id).length;
+    
+    let pushedValue: string;
+    if (domain.lastPushedAt) {
+      const relativeTime = formatRelative(domain.lastPushedAt);
+      const isStale = domain.lastCompiledAt && new Date(domain.lastCompiledAt) > new Date(domain.lastPushedAt);
+      pushedValue = isStale 
+        ? chalk.yellow(`⚠ ${relativeTime}`)
+        : chalk.green(relativeTime);
+    } else {
+      pushedValue = chalk.gray('—');
+    }
 
     table.push([
       chalk.cyan(index + 1),
       chalk.whiteBright(domain.name),
       chalk.blue(routeCount.toString()),
       sslColumnValue(domain),
+      pushedValue,
     ]);
   });
 
@@ -157,6 +170,29 @@ export async function domainShow(name: string): Promise<void> {
   }
   row('Created', chalk.yellow(formatDate(domain.createdAt)));
   row('Updated', chalk.yellow(formatDate(domain.updatedAt)));
+  
+  // Push metadata section
+  console.log(chalk.gray('  ' + '─'.repeat(40)));
+  if (domain.lastPushedAt) {
+    row('Last pushed', chalk.yellow(`${formatDate(domain.lastPushedAt)} (${formatRelative(domain.lastPushedAt)})`));
+  } else {
+    row('Last pushed', chalk.gray('—'));
+  }
+  if (domain.configPath) {
+    row('Config path', chalk.white(domain.configPath));
+  } else {
+    row('Config path', chalk.gray('—'));
+  }
+  
+  // Staleness warnings
+  if (domain.lastCompiledAt && !domain.lastPushedAt) {
+    console.log();
+    console.log(`  ${chalk.yellow('⚠')} Config has been compiled but not yet pushed. Run ${chalk.cyan(`'dm domain push ${name}'`)} to deploy.`);
+  } else if (domain.lastCompiledAt && domain.lastPushedAt && new Date(domain.lastCompiledAt) > new Date(domain.lastPushedAt)) {
+    console.log();
+    console.log(`  ${chalk.yellow('⚠')} Config is stale — recompiled since last push. Run ${chalk.cyan(`'dm domain push ${name}'`)} to update.`);
+  }
+  
   console.log(chalk.gray('  ' + '─'.repeat(40)));
 
   if (routes.length === 0) {

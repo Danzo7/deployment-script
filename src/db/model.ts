@@ -49,6 +49,9 @@ export interface Domain {
   updatedAt: string; // ISO 8601 timestamp of last update
   ssl: DomainSsl;
   headers?: Record<string, string>; // HTTP response headers applied to all routes under this domain
+  lastPushedAt?: string; // ISO 8601 timestamp of most recent successful Nginx push
+  configPath?: string; // Full path where the Nginx config is deployed (e.g. /etc/nginx/sites-available/api_example_com.conf)
+  lastCompiledAt?: string; // ISO 8601 timestamp of most recent successful compilation
 }
 
 export interface Route {
