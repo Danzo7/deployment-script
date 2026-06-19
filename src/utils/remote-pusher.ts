@@ -204,22 +204,30 @@ export class RemotePusher extends NginxPusher {
    */
   private async restoreTarget(target: RollbackTarget): Promise<void> {
     const q = shellQuote(target.path);
-    await this.ssh.exec(`rm -f ${q}`);
+    await this.ssh.execWithSudoFallback(`rm -f ${q}`);
 
     if (!target.snapshot.existed) return;
 
     if (target.snapshot.isSymlink && target.snapshot.target) {
-      await this.ssh.exec(`ln -sf ${shellQuote(target.snapshot.target)} ${q}`);
+      await this.ssh.execWithSudoFallback(`ln -sf ${shellQuote(target.snapshot.target)} ${q}`);
       return;
     }
 
     if (target.snapshot.content) {
-      const tempFile = path.join(os.tmpdir(), `nginx-rollback-${process.pid}-${Date.now()}.tmp`);
+      const localTemp = path.join(os.tmpdir(), `nginx-rollback-${process.pid}-${Date.now()}.tmp`);
+      const remoteTemp = `/tmp/nginx-rollback-${Date.now()}.tmp`;
+      
       try {
-        fs.writeFileSync(tempFile, target.snapshot.content);
-        await this.ssh.sftpFastPut(tempFile, target.path);
+        fs.writeFileSync(localTemp, target.snapshot.content);
+        await this.ssh.sftpFastPut(localTemp, remoteTemp);
+        await this.ssh.execWithSudoFallback(`mv ${shellQuote(remoteTemp)} ${q}`);
       } finally {
-        if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+        if (fs.existsSync(localTemp)) fs.unlinkSync(localTemp);
+        try {
+          await this.ssh.exec(`rm -f ${shellQuote(remoteTemp)}`);
+        } catch {
+          // Ignore cleanup errors
+        }
       }
     }
   }
