@@ -24,10 +24,15 @@ export class RemotePusher extends NginxPusher {
     domainName: string,
     private remoteHost: string,
     private sshKeyPath?: string,
-    private sshPassword?: string
+    private sshPassword?: string,
+    private sudoPassword?: string
   ) {
     super(domainName);
     this.client = new Client();
+    // Default sudo password to SSH password if not explicitly set
+    if (!this.sudoPassword && this.sshPassword) {
+      this.sudoPassword = this.sshPassword;
+    }
   }
 
   /**
@@ -83,7 +88,7 @@ export class RemotePusher extends NginxPusher {
   /**
    * Execute SSH command on remote host
    */
-  private async executeSSH(command: string): Promise<string> {
+  private async executeSSH(command: string, sendSudoPassword: boolean = false): Promise<string> {
     return new Promise((resolve, reject) => {
       this.client.exec(command, (err, stream) => {
         if (err) {
@@ -93,6 +98,11 @@ export class RemotePusher extends NginxPusher {
 
         let stdout = '';
         let stderr = '';
+
+        // If sudo password needed, send it to stdin
+        if (sendSudoPassword && this.sudoPassword) {
+          stream.write(this.sudoPassword + '\n');
+        }
 
         stream
           .on('close', (code: number) => {
@@ -259,11 +269,16 @@ export class RemotePusher extends NginxPusher {
    */
   private async validateNginx(): Promise<void> {
     try {
-      // Try without sudo first, fall back to sudo if needed
+      // Try without sudo first
       try {
         await this.executeSSH('nginx -t');
       } catch {
-        await this.executeSSH('sudo -n nginx -t');
+        // Try with sudo
+        if (this.sudoPassword) {
+          await this.executeSSH('sudo -S nginx -t', true);
+        } else {
+          await this.executeSSH('sudo -n nginx -t');
+        }
       }
     } catch (err: any) {
       throw this.formatError('validate nginx config', this.remoteHost, err, err.message);
@@ -275,11 +290,16 @@ export class RemotePusher extends NginxPusher {
    */
   private async reloadNginx(): Promise<void> {
     try {
-      // Try without sudo first, fall back to sudo if needed
+      // Try without sudo first
       try {
         await this.executeSSH('nginx -s reload');
       } catch {
-        await this.executeSSH('sudo -n nginx -s reload');
+        // Try with sudo
+        if (this.sudoPassword) {
+          await this.executeSSH('sudo -S nginx -s reload', true);
+        } else {
+          await this.executeSSH('sudo -n nginx -s reload');
+        }
       }
     } catch (err: any) {
       throw this.formatError('reload nginx', this.remoteHost, err, err.message);
@@ -356,11 +376,16 @@ export class RemotePusher extends NginxPusher {
       }
 
       try {
-        // Try without sudo first, fall back to sudo if needed
+        // Try without sudo first
         try {
           await this.executeSSH('nginx -t');
         } catch {
-          await this.executeSSH('sudo -n nginx -t');
+          // Try with sudo
+          if (this.sudoPassword) {
+            await this.executeSSH('sudo -S nginx -t', true);
+          } else {
+            await this.executeSSH('sudo -n nginx -t');
+          }
         }
         Logger.info('Rollback completed successfully. Nginx config restored to previous state.');
       } catch (err: any) {

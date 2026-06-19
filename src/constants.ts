@@ -19,5 +19,6 @@ export const CERT_DIR = process.env.CERT_DIR ?? undefined;
 export const NGINX_REMOTE_HOST = process.env.NGINX_REMOTE_HOST ?? undefined;
 export const NGINX_REMOTE_KEY = process.env.NGINX_REMOTE_KEY ?? undefined;
 export const NGINX_REMOTE_PASSWORD = process.env.NGINX_REMOTE_PASSWORD ?? undefined;
+export const NGINX_SUDO_PASSWORD = process.env.NGINX_SUDO_PASSWORD ?? undefined;
 export const LOCK_DIR = path.resolve(ROOT_DIR, '.locks');
 export const PROXY_TARGET_HOST = process.env?.PROXY_TARGET_HOST ?? 'localhost';

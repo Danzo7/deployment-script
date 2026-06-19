@@ -1,4 +1,4 @@
-import { NGINX_REMOTE_HOST, NGINX_REMOTE_KEY, NGINX_REMOTE_PASSWORD } from '../constants.js';
+import { NGINX_REMOTE_HOST, NGINX_REMOTE_KEY, NGINX_REMOTE_PASSWORD, NGINX_SUDO_PASSWORD } from '../constants.js';
 import { LocalPusher } from '../utils/local-pusher.js';
 import { RemotePusher } from '../utils/remote-pusher.js';
 import { Logger } from '../utils/logger.js';
@@ -14,7 +14,7 @@ export async function domainPush(domainName: string): Promise<void> {
   // Instantiate appropriate pusher
   let pusher;
   if (remoteHost) {
-    pusher = new RemotePusher(normalized, remoteHost, NGINX_REMOTE_KEY, NGINX_REMOTE_PASSWORD);
+    pusher = new RemotePusher(normalized, remoteHost, NGINX_REMOTE_KEY, NGINX_REMOTE_PASSWORD, NGINX_SUDO_PASSWORD);
   } else {
     pusher = new LocalPusher(normalized);
   }
