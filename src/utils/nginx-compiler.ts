@@ -1,12 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Domain, Route, App } from '../db/model.js';
-import { PROXY_TARGET_HOST, DOMAINS_DIR, CERT_DIR } from '../constants.js';
+import { PROXY_TARGET_HOST, CERT_DIR } from '../constants.js';
 import { PROXY_SET_HEADERS, mergeHeaders } from './header-merge.js';
 import { normalizeDomainName } from './route-validation.js';
 import { DomainRepo, RouteRepo, AppRepo } from '../db/repos.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Normalize Windows-style separators to POSIX for use in remote paths. */
+function toPosixPath(p: string): string {
+  return p.replace(/\\/g, '/');
+}
 
 // Label-count apex check — not public-suffix-list-aware. `foo.co.uk` will be treated as a subdomain.
 function isApex(domainName: string): boolean {
@@ -26,17 +31,20 @@ function evaluateHasSsl(domain: Domain): { hasSsl: boolean; certPath?: string; k
   let resolvedKey: string;
 
   if (CERT_DIR) {
-    resolvedCert = path.join(CERT_DIR, domain.name, 'cert.pem');
-    resolvedKey  = path.join(CERT_DIR, domain.name, 'key.pem');
+    // Use CERT_DIR to construct remote paths (these will be on the remote server)
+    resolvedCert = toPosixPath(path.join(CERT_DIR, domain.name, 'cert.pem'));
+    resolvedKey  = toPosixPath(path.join(CERT_DIR, domain.name, 'key.pem'));
   } else {
+    // Validate local paths exist (for non-CERT_DIR deployments)
     if (!certPath || !fs.existsSync(certPath)) {
       throw new Error(`SSL certificate file missing for domain "${domain.name}": ${certPath ?? ''}`);
     }
     if (!keyPath || !fs.existsSync(keyPath)) {
       throw new Error(`SSL key file missing for domain "${domain.name}": ${keyPath ?? ''}`);
     }
-    resolvedCert = certPath;
-    resolvedKey  = keyPath;
+    // For nginx config, use the paths as-is (assuming they're already remote paths or will be handled separately)
+    resolvedCert = toPosixPath(certPath);
+    resolvedKey  = toPosixPath(keyPath);
   }
 
   return { hasSsl: true, certPath: resolvedCert, keyPath: resolvedKey };
@@ -133,9 +141,8 @@ function buildServerBlocks(
     ].join('\n');
   }
 
-  const domainDir = path.join(DOMAINS_DIR, domain.name);
-  const relCert = path.join(domainDir, certPath!);
-  const relKey  = path.join(domainDir, keyPath!);
+  const relCert = certPath!;
+  const relKey  = keyPath!;
 
   if (apex && !wwwIsRegisteredDomain) {
     // Three blocks: http redirect, www→apex SSL redirect, apex SSL content
