@@ -1,5 +1,6 @@
 import fs from 'fs';
 import { Client, ConnectConfig } from 'ssh2';
+import { validateSshCredentials } from './security-validation.js';
 
 export interface SshCredentials {
   remoteHost: string;
@@ -30,6 +31,10 @@ export class SshConnection {
 
   constructor(private readonly creds: SshCredentials) {
     const { remoteHost } = creds;
+    
+    // Validate SSH credentials for security
+    validateSshCredentials(remoteHost);
+    
     this.username = remoteHost.includes('@') ? remoteHost.split('@')[0] : 'root';
     this.host = remoteHost.includes('@') ? remoteHost.split('@')[1] : remoteHost;
 
@@ -166,6 +171,18 @@ export class SshConnection {
         throw plainErr;
       }
     }
+  }
+
+  /**
+   * Execute a command with sudo, without attempting a plain execution first.
+   * Use this when you know the command requires root privileges.
+   * Tries `sudo -S` (with password) first if available, otherwise `sudo -n` (non-interactive).
+   */
+  async execWithSudo(command: string): Promise<string> {
+    if (this.creds.sudoPassword) {
+      return await this.exec(`sudo -S ${command}`, this.creds.sudoPassword + '\n');
+    }
+    return await this.exec(`sudo -n ${command}`);
   }
 
   async sftpFastPut(localPath: string, remotePath: string): Promise<void> {

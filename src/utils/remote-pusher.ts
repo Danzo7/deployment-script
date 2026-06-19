@@ -16,6 +16,11 @@ import {
   FileSnapshot,
   RollbackTarget,
 } from './domain-push-utils.js';
+import {
+  validateSafeDomainName,
+  validateCertPath,
+  generateSecureTempFilename,
+} from './security-validation.js';
 
 /**
  * Remote Nginx pusher - pushes config/certs to a remote host over SSH and
@@ -33,6 +38,10 @@ export class RemotePusher extends NginxPusher {
     sudoPassword?: string
   ) {
     super(domainName);
+    
+    // Validate domain name for security
+    validateSafeDomainName(domainName);
+    
     const creds: SshCredentials = { remoteHost, sshKeyPath, sshPassword, sudoPassword };
     this.ssh = new SshConnection(creds);
   }
@@ -40,13 +49,17 @@ export class RemotePusher extends NginxPusher {
   /** Remote path for the SSL certificate, if certs are in play. */
   private get remoteCertPath(): string | undefined {
     if (!this.shouldCopyCerts() || !CERT_DIR) return undefined;
-    return toPosixPath(path.join(CERT_DIR, this.domain.name, 'cert.pem'));
+    // Validate cert path to prevent path traversal
+    const safePath = validateCertPath(CERT_DIR, this.domain.name);
+    return toPosixPath(path.join(safePath, 'cert.pem'));
   }
 
   /** Remote path for the SSL private key, if certs are in play. */
   private get remoteKeyPath(): string | undefined {
     if (!this.shouldCopyCerts() || !CERT_DIR) return undefined;
-    return toPosixPath(path.join(CERT_DIR, this.domain.name, 'key.pem'));
+    // Validate cert path to prevent path traversal
+    const safePath = validateCertPath(CERT_DIR, this.domain.name);
+    return toPosixPath(path.join(safePath, 'key.pem'));
   }
 
   /**
@@ -99,12 +112,12 @@ export class RemotePusher extends NginxPusher {
    */
   private async transferConfigFile(): Promise<void> {
     const targetPath = constructSitesAvailablePath(this.domain.name);
-    const tempConfig = `/tmp/nginx-push-config-${Date.now()}.conf`;
+    const tempConfig = `/tmp/${generateSecureTempFilename('nginx-push-config', 'conf')}`;
 
     try {
       await this.ssh.sftpFastPut(this.compiledConfigPath, tempConfig);
-      await this.mkdirWithSudo(path.dirname(targetPath));
-      await this.ssh.execWithSudoFallback(`mv ${shellQuote(tempConfig)} ${shellQuote(targetPath)}`);
+      await this.ssh.execWithSudo(`mkdir -p ${shellQuote(path.dirname(targetPath))}`);
+      await this.ssh.execWithSudo(`mv ${shellQuote(tempConfig)} ${shellQuote(targetPath)}`);
     } finally {
       // Cleanup temp file if it still exists
       try {
@@ -125,16 +138,17 @@ export class RemotePusher extends NginxPusher {
     const keyPath = this.domain.ssl.keyPath!;
 
     // Upload to temp location first (user-writable), then move with sudo
-    const tempCert = `/tmp/nginx-push-cert-${Date.now()}.pem`;
-    const tempKey = `/tmp/nginx-push-key-${Date.now()}.pem`;
+    // Use cryptographically secure random filenames to prevent race conditions
+    const tempCert = `/tmp/${generateSecureTempFilename('nginx-push-cert', 'pem')}`;
+    const tempKey = `/tmp/${generateSecureTempFilename('nginx-push-key', 'pem')}`;
 
     try {
       await this.ssh.sftpFastPut(certPath, tempCert);
       await this.ssh.sftpFastPut(keyPath, tempKey);
 
-      await this.mkdirWithSudo(path.dirname(this.remoteCertPath));
-      await this.ssh.execWithSudoFallback(`mv ${shellQuote(tempCert)} ${shellQuote(this.remoteCertPath)}`);
-      await this.ssh.execWithSudoFallback(`mv ${shellQuote(tempKey)} ${shellQuote(this.remoteKeyPath)}`);
+      await this.ssh.execWithSudo(`mkdir -p ${shellQuote(path.dirname(this.remoteCertPath))}`);
+      await this.ssh.execWithSudo(`mv ${shellQuote(tempCert)} ${shellQuote(this.remoteCertPath)}`);
+      await this.ssh.execWithSudo(`mv ${shellQuote(tempKey)} ${shellQuote(this.remoteKeyPath)}`);
     } finally {
       // Cleanup temp files if they still exist
       try {
@@ -152,17 +166,8 @@ export class RemotePusher extends NginxPusher {
     const sourcePath = constructSitesAvailablePath(this.domain.name);
     const targetPath = constructSitesEnabledPath(this.domain.name);
 
-    await this.mkdirWithSudo(path.dirname(targetPath));
-    await this.ssh.execWithSudoFallback(`ln -sf ${shellQuote(sourcePath)} ${shellQuote(targetPath)}`);
-  }
-
-  /**
-   * Create a remote directory, retrying with sudo if the plain attempt
-   * fails. Surfaces the original error if the sudo retry also fails,
-   * rather than swallowing it.
-   */
-  private async mkdirWithSudo(dirPath: string): Promise<void> {
-    await this.ssh.execWithSudoFallback(`mkdir -p ${shellQuote(dirPath)}`);
+    await this.ssh.execWithSudo(`mkdir -p ${shellQuote(path.dirname(targetPath))}`);
+    await this.ssh.execWithSudo(`ln -sf ${shellQuote(sourcePath)} ${shellQuote(targetPath)}`);
   }
 
   /**
@@ -170,7 +175,7 @@ export class RemotePusher extends NginxPusher {
    */
   private async validateNginx(): Promise<void> {
     try {
-      await this.ssh.execWithSudoFallback('nginx -t');
+      await this.ssh.execWithSudo('nginx -t');
     } catch (err: any) {
       throw this.formatError('validate nginx config', this.ssh.hostLabel, err, err.message);
     }
@@ -181,7 +186,7 @@ export class RemotePusher extends NginxPusher {
    */
   private async reloadNginx(): Promise<void> {
     try {
-      await this.ssh.execWithSudoFallback('nginx -s reload');
+      await this.ssh.execWithSudo('nginx -s reload');
     } catch (err: any) {
       throw this.formatError('reload nginx', this.ssh.hostLabel, err, err.message);
     }
@@ -204,23 +209,23 @@ export class RemotePusher extends NginxPusher {
    */
   private async restoreTarget(target: RollbackTarget): Promise<void> {
     const q = shellQuote(target.path);
-    await this.ssh.execWithSudoFallback(`rm -f ${q}`);
+    await this.ssh.execWithSudo(`rm -f ${q}`);
 
     if (!target.snapshot.existed) return;
 
     if (target.snapshot.isSymlink && target.snapshot.target) {
-      await this.ssh.execWithSudoFallback(`ln -sf ${shellQuote(target.snapshot.target)} ${q}`);
+      await this.ssh.execWithSudo(`ln -sf ${shellQuote(target.snapshot.target)} ${q}`);
       return;
     }
 
     if (target.snapshot.content) {
-      const localTemp = path.join(os.tmpdir(), `nginx-rollback-${process.pid}-${Date.now()}.tmp`);
-      const remoteTemp = `/tmp/nginx-rollback-${Date.now()}.tmp`;
+      const localTemp = path.join(os.tmpdir(), generateSecureTempFilename('nginx-rollback', 'tmp'));
+      const remoteTemp = `/tmp/${generateSecureTempFilename('nginx-rollback', 'tmp')}`;
       
       try {
         fs.writeFileSync(localTemp, target.snapshot.content);
         await this.ssh.sftpFastPut(localTemp, remoteTemp);
-        await this.ssh.execWithSudoFallback(`mv ${shellQuote(remoteTemp)} ${q}`);
+        await this.ssh.execWithSudo(`mv ${shellQuote(remoteTemp)} ${q}`);
       } finally {
         if (fs.existsSync(localTemp)) fs.unlinkSync(localTemp);
         try {
@@ -256,7 +261,7 @@ export class RemotePusher extends NginxPusher {
 
     let validationError: string | undefined;
     try {
-      await this.ssh.execWithSudoFallback('nginx -t');
+      await this.ssh.execWithSudo('nginx -t');
     } catch (err: any) {
       validationError = err.message;
     }

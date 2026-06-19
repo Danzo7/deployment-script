@@ -5,6 +5,7 @@ import { PROXY_TARGET_HOST, CERT_DIR } from '../constants.js';
 import { PROXY_SET_HEADERS, mergeHeaders } from './header-merge.js';
 import { normalizeDomainName } from './route-validation.js';
 import { DomainRepo, RouteRepo, AppRepo } from '../db/repos.js';
+import { validateCertPath } from './security-validation.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -32,8 +33,10 @@ function evaluateHasSsl(domain: Domain): { hasSsl: boolean; certPath?: string; k
 
   if (CERT_DIR) {
     // Use CERT_DIR to construct remote paths (these will be on the remote server)
-    resolvedCert = toPosixPath(path.join(CERT_DIR, domain.name, 'cert.pem'));
-    resolvedKey  = toPosixPath(path.join(CERT_DIR, domain.name, 'key.pem'));
+    // Validate cert path to prevent path traversal
+    const safePath = validateCertPath(CERT_DIR, domain.name);
+    resolvedCert = toPosixPath(path.join(safePath, 'cert.pem'));
+    resolvedKey  = toPosixPath(path.join(safePath, 'key.pem'));
   } else {
     // Validate local paths exist (for non-CERT_DIR deployments)
     if (!certPath || !fs.existsSync(certPath)) {

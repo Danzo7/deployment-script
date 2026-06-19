@@ -14,6 +14,7 @@ import {
   PushSnapshot,
   RollbackTarget,
 } from './domain-push-utils.js';
+import { validateCertPath } from './security-validation.js';
 
 /**
  * Local Nginx pusher - uses filesystem operations and local command execution
@@ -21,12 +22,16 @@ import {
 export class LocalPusher extends NginxPusher {
   private get localCertPath(): string | undefined {
     if (!this.shouldCopyCerts() || !CERT_DIR) return undefined;
-    return path.join(CERT_DIR, this.domain.name, 'cert.pem');
+    // Validate cert path to prevent path traversal
+    const safePath = validateCertPath(CERT_DIR, this.domain.name);
+    return path.join(safePath, 'cert.pem');
   }
 
   private get localKeyPath(): string | undefined {
     if (!this.shouldCopyCerts() || !CERT_DIR) return undefined;
-    return path.join(CERT_DIR, this.domain.name, 'key.pem');
+    // Validate cert path to prevent path traversal
+    const safePath = validateCertPath(CERT_DIR, this.domain.name);
+    return path.join(safePath, 'key.pem');
   }
 
   /**

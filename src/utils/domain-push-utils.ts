@@ -3,6 +3,7 @@
  */
 
 import fs from 'fs';
+import { validateSafeDomainName } from './security-validation.js';
 
 /**
  * File snapshot interface for rollback support
@@ -70,6 +71,8 @@ export function captureFileSnapshot(filePath: string): FileSnapshot {
  * @returns The normalized filename (e.g., "api_example_com")
  */
 export function normalizeDomainFilename(domainName: string): string {
+  // Validate domain name for security before normalization
+  validateSafeDomainName(domainName);
   return domainName.replace(/\./g, '_');
 }
 
