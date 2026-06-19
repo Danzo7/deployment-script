@@ -1,9 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import { Domain } from '../db/model.js';
-import { DomainRepo } from '../db/repos.js';
-import { CERT_DIR, DOMAINS_DIR } from '../constants.js';
+import { DomainRepo, RouteRepo, AppRepo } from '../db/repos.js';
+import { DOMAINS_DIR } from '../constants.js';
 import { PushSnapshot } from './domain-push-utils.js';
+import { compileDomainConfig } from './nginx-compiler.js';
 
 /**
  * Base class for Nginx push operations
@@ -11,28 +12,55 @@ import { PushSnapshot } from './domain-push-utils.js';
 export abstract class NginxPusher {
   protected domain: Domain;
   protected compiledConfigPath: string;
+  protected compiledConfig: string;
 
   constructor(domainName: string) {
     // Preflight: Domain lookup
     this.domain = DomainRepo.findByName(domainName);
     
-    // Preflight: Config file check
+    // Setup compiled config path
     this.compiledConfigPath = path.join(DOMAINS_DIR, domainName, 'nginx.conf');
-    if (!fs.existsSync(this.compiledConfigPath)) {
-      throw new Error(
-        `Compiled config not found for domain "${domainName}" at ${this.compiledConfigPath}. Run 'dm domain compile ${domainName}' first.`
-      );
-    }
     
-    // Preflight: Cert existence check
-    this.preflightCertCheck();
+    // Initialize empty, will be compiled during push
+    this.compiledConfig = '';
+  }
+
+  /**
+   * Compile the nginx config fresh
+   */
+  protected compileConfig(): void {
+    const routes = RouteRepo.getAll().filter((r) => r.domainId === this.domain.id);
+    const apps = AppRepo.getAll();
+    const allDomains = DomainRepo.getAll();
+    
+    this.compiledConfig = compileDomainConfig(this.domain, routes, apps, allDomains);
+    
+    // Save to disk for inspection
+    fs.mkdirSync(path.dirname(this.compiledConfigPath), { recursive: true });
+    fs.writeFileSync(this.compiledConfigPath, this.compiledConfig);
+  }
+
+  /**
+   * Rewrite SSL certificate paths in the nginx config
+   */
+  protected rewriteCertPaths(certPath: string, keyPath: string): void {
+    // Replace ssl_certificate directive
+    this.compiledConfig = this.compiledConfig.replace(
+      /ssl_certificate\s+[^;]+;/g,
+      `ssl_certificate ${certPath};`
+    );
+    
+    // Replace ssl_certificate_key directive
+    this.compiledConfig = this.compiledConfig.replace(
+      /ssl_certificate_key\s+[^;]+;/g,
+      `ssl_certificate_key ${keyPath};`
+    );
   }
 
   /**
    * Check if SSL certs exist locally before transfer
    */
-  private preflightCertCheck(): void {
-    if (!CERT_DIR) return;
+  protected preflightCertCheck(): void {
     if (this.domain.ssl.mode !== 'custom') return;
     
     const certPath = this.domain.ssl.certPath;
@@ -50,9 +78,7 @@ export abstract class NginxPusher {
    * Check if certs should be copied
    */
   protected shouldCopyCerts(): boolean {
-    if (!CERT_DIR) return false;
-    if (this.domain.ssl.mode !== 'custom') return false;
-    return true;
+    return this.domain.ssl.mode === 'custom';
   }
 
   /**

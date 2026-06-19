@@ -726,7 +726,7 @@ try {
               )
               .command(
                 'push <name>',
-                'Push compiled domain config to Nginx (local or remote). Env vars: NGINX_REMOTE_HOST, NGINX_REMOTE_KEY, CERT_DIR',
+                'Push compiled domain config to Nginx (local or remote). Env vars: NGINX_REMOTE_HOST, NGINX_REMOTE_KEY, PUSH_CERT_DIR',
                 (yargs) =>
                   yargs.positional('name', { type: 'string', demandOption: true, describe: 'The domain name' }),
                 async (args) => {

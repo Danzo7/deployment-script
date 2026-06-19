@@ -91,7 +91,7 @@ After linking, `dm` is available globally.
 | `NGINX_REMOTE_HOST` | — | Remote host for domain push (user@host format) |
 | `NGINX_REMOTE_KEY` | — | SSH private key path for remote pushes |
 | `NGINX_REMOTE_PASSWORD` | — | SSH password for remote pushes (takes priority over key) |
-| `CERT_DIR` | — | Target directory for SSL certificates on push |
+| `PUSH_CERT_DIR` | `/etc/nginx/ssl` (remote) | Target directory for SSL certificates on push |
 | `SECRET_KEY` | — | Required for `dm delete` |
 
 ---
@@ -496,14 +496,15 @@ The target is determined by the `NGINX_REMOTE_HOST` environment variable. If set
 
 **Push Workflow:**
 
-1. Verifies the domain exists and has a compiled config
-2. Transfers the config file to `/etc/nginx/sites-available/<domainName>.conf`
-3. Copies SSL certificates to `CERT_DIR` (if set and domain uses custom SSL)
-4. Creates a symlink in `/etc/nginx/sites-enabled/`
-5. Validates the complete Nginx config with `nginx -t`
-6. Reloads Nginx to apply changes
-7. Updates domain metadata (lastPushedAt, configPath)
-8. Rolls back on any failure to keep Nginx in a known-good state
+1. Compiles the domain config fresh with actual cert paths from DB
+2. If PUSH_CERT_DIR is set (or defaults to /etc/nginx/ssl for remote), rewrites cert paths in config
+3. Transfers the config file to `/etc/nginx/sites-available/<domainName>.conf`
+4. Copies SSL certificates to target directory (if SSL is enabled)
+5. Creates a symlink in `/etc/nginx/sites-enabled/`
+6. Validates the complete Nginx config with `nginx -t`
+7. Reloads Nginx to apply changes
+8. Updates domain metadata (lastPushedAt, configPath)
+9. Rolls back on any failure to keep Nginx in a known-good state
 
 **Environment Variables:**
 
@@ -512,28 +513,32 @@ The target is determined by the `NGINX_REMOTE_HOST` environment variable. If set
 | `NGINX_REMOTE_HOST` | — | Remote host for push (user@host format). If not set, pushes locally |
 | `NGINX_REMOTE_PASSWORD` | — | SSH password for remote pushes. If set, password auth is used |
 | `NGINX_REMOTE_KEY` | — | SSH private key path for remote pushes. Used if no password is set |
-| `CERT_DIR` | — | Target directory for SSL certificates. If not set, cert copy is skipped |
+| `PUSH_CERT_DIR` | `/etc/nginx/ssl` (remote only) | Target directory for SSL certificates. Local: optional, Remote: defaults to /etc/nginx/ssl |
 
 ```bash
-# Push locally
+# Push locally (uses cert paths from DB as-is)
+dm domain push example.com
+
+# Push locally with cert copying
+export PUSH_CERT_DIR=/etc/nginx/ssl
 dm domain push example.com
 
 # Push to remote with password authentication
 export NGINX_REMOTE_HOST=user@nginx-server.com
 export NGINX_REMOTE_PASSWORD=your-password
-export CERT_DIR=/etc/nginx/ssl
+# PUSH_CERT_DIR defaults to /etc/nginx/ssl for remote
 dm domain push example.com
 
-# Push to remote with key-based authentication
+# Push to remote with custom cert directory
 export NGINX_REMOTE_HOST=user@nginx-server.com
 export NGINX_REMOTE_KEY=/path/to/key.pem
-export CERT_DIR=/etc/nginx/ssl
+export PUSH_CERT_DIR=/opt/ssl/certs
 dm domain push example.com
 ```
 
 **Rollback:** If any step fails after files are written (validation fails, reload fails, etc.), the push automatically rolls back by removing the newly written config and symlink, restoring the previous state.
 
-**Push Status:** After pushing, view the push status with `dm domain show <name>` to see when the config was last pushed and whether it's stale (recompiled but not re-pushed).
+**Note:** Push always compiles the config fresh before deploying, so you don't need to run `dm domain compile` separately. The standalone compile command is still useful for inspecting the generated config before deployment.
 
 ---
 
@@ -770,9 +775,9 @@ The push command handles the complete deployment lifecycle:
 
 Configure remote targets via environment variables (`NGINX_REMOTE_HOST`, `NGINX_REMOTE_PASSWORD` or `NGINX_REMOTE_KEY`). Password authentication takes priority if both are set.
 
-**Config staleness detection:**
+**Config compilation:**
 
-The system tracks compilation and push timestamps. When a domain is recompiled after being pushed, it's marked as "stale" in `dm domain show` and `dm domain list`, indicating the live Nginx config is out of date. Run `dm domain push <name>` to update.
+Push always compiles the config fresh before deployment using actual cert paths from the database. The standalone `dm domain compile` command is useful for inspecting the generated config without deploying it.
 
 **Generated config features:**
 

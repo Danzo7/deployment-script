@@ -1,11 +1,9 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import type { Domain, Route, App } from '../db/model.js';
-import { PROXY_TARGET_HOST, CERT_DIR } from '../constants.js';
+import { PROXY_TARGET_HOST } from '../constants.js';
 import { PROXY_SET_HEADERS, mergeHeaders } from './header-merge.js';
 import { normalizeDomainName } from './route-validation.js';
 import { DomainRepo, RouteRepo, AppRepo } from '../db/repos.js';
-import { validateCertPath } from './security-validation.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -28,29 +26,15 @@ function evaluateHasSsl(domain: Domain): { hasSsl: boolean; certPath?: string; k
 
   if (mode !== 'custom') return { hasSsl: false };
 
-  let resolvedCert: string;
-  let resolvedKey: string;
-
-  if (CERT_DIR) {
-    // Use CERT_DIR to construct remote paths (these will be on the remote server)
-    // Validate cert path to prevent path traversal
-    const safePath = validateCertPath(CERT_DIR, domain.name);
-    resolvedCert = toPosixPath(path.join(safePath, 'cert.pem'));
-    resolvedKey  = toPosixPath(path.join(safePath, 'key.pem'));
-  } else {
-    // Validate local paths exist (for non-CERT_DIR deployments)
-    if (!certPath || !fs.existsSync(certPath)) {
-      throw new Error(`SSL certificate file missing for domain "${domain.name}": ${certPath ?? ''}`);
-    }
-    if (!keyPath || !fs.existsSync(keyPath)) {
-      throw new Error(`SSL key file missing for domain "${domain.name}": ${keyPath ?? ''}`);
-    }
-    // For nginx config, use the paths as-is (assuming they're already remote paths or will be handled separately)
-    resolvedCert = toPosixPath(certPath);
-    resolvedKey  = toPosixPath(keyPath);
+  // Always use actual paths from DB for compilation (test config generation)
+  if (!certPath || !fs.existsSync(certPath)) {
+    throw new Error(`SSL certificate file missing for domain "${domain.name}": ${certPath ?? ''}`);
+  }
+  if (!keyPath || !fs.existsSync(keyPath)) {
+    throw new Error(`SSL key file missing for domain "${domain.name}": ${keyPath ?? ''}`);
   }
 
-  return { hasSsl: true, certPath: resolvedCert, keyPath: resolvedKey };
+  return { hasSsl: true, certPath: toPosixPath(certPath), keyPath: toPosixPath(keyPath) };
 }
 
 /** Returns true if the wildcard SAN covers www.<parent>. */

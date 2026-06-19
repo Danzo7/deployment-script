@@ -3,7 +3,7 @@ import path from 'path';
 import { execSync } from 'child_process';
 import { NginxPusher } from './nginx-pusher.js';
 import { DomainRepo } from '../db/repos.js';
-import { CERT_DIR } from '../constants.js';
+import { PUSH_CERT_DIR } from '../constants.js';
 import { Logger } from './logger.js';
 import { toISO } from './date-helper.js';
 import {
@@ -20,18 +20,25 @@ import { validateCertPath } from './security-validation.js';
  * Local Nginx pusher - uses filesystem operations and local command execution
  */
 export class LocalPusher extends NginxPusher {
+  private targetCertDir?: string;
+  
+  constructor(domainName: string) {
+    super(domainName);
+    
+    // Set target cert directory if PUSH_CERT_DIR is configured
+    if (PUSH_CERT_DIR && this.shouldCopyCerts()) {
+      this.targetCertDir = validateCertPath(PUSH_CERT_DIR, this.domain.name);
+    }
+  }
+  
   private get localCertPath(): string | undefined {
-    if (!this.shouldCopyCerts() || !CERT_DIR) return undefined;
-    // Validate cert path to prevent path traversal
-    const safePath = validateCertPath(CERT_DIR, this.domain.name);
-    return path.join(safePath, 'cert.pem');
+    if (!this.targetCertDir) return undefined;
+    return path.join(this.targetCertDir, 'cert.pem');
   }
 
   private get localKeyPath(): string | undefined {
-    if (!this.shouldCopyCerts() || !CERT_DIR) return undefined;
-    // Validate cert path to prevent path traversal
-    const safePath = validateCertPath(CERT_DIR, this.domain.name);
-    return path.join(safePath, 'key.pem');
+    if (!this.targetCertDir) return undefined;
+    return path.join(this.targetCertDir, 'key.pem');
   }
 
   /**
@@ -62,7 +69,7 @@ export class LocalPusher extends NginxPusher {
   private copyConfigFile(): void {
     const targetPath = constructSitesAvailablePath(this.domain.name);
     fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-    fs.copyFileSync(this.compiledConfigPath, targetPath);
+    fs.writeFileSync(targetPath, this.compiledConfig);
   }
 
   /**
@@ -194,11 +201,23 @@ export class LocalPusher extends NginxPusher {
    * Execute the push operation
    */
   async push(): Promise<void> {
+    // Compile fresh config
+    this.compileConfig();
+    
+    // If PUSH_CERT_DIR is set and we have SSL, rewrite cert paths and copy certs
+    if (this.targetCertDir && this.shouldCopyCerts()) {
+      this.preflightCertCheck();
+      this.rewriteCertPaths(this.localCertPath!, this.localKeyPath!);
+    }
+    // Otherwise use config as-is (paths from DB, assumed to be valid on same machine)
+    
     const snapshot = await this.captureSnapshot();
 
     try {
       this.copyConfigFile();
-      this.copyCertsIfApplicable();
+      if (this.targetCertDir) {
+        this.copyCertsIfApplicable();
+      }
       this.createSymlink();
       this.validateNginx();
       this.reloadNginx();

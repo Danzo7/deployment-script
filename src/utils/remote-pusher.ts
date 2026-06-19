@@ -3,7 +3,7 @@ import os from 'os';
 import path from 'path';
 import { NginxPusher } from './nginx-pusher.js';
 import { DomainRepo } from '../db/repos.js';
-import { CERT_DIR } from '../constants.js';
+import { PUSH_CERT_DIR } from '../constants.js';
 import { Logger } from './logger.js';
 import { toISO } from './date-helper.js';
 import { SshConnection, SshCredentials } from './ssh-connection.js';
@@ -29,6 +29,7 @@ import {
  */
 export class RemotePusher extends NginxPusher {
   private readonly ssh: SshConnection;
+  private readonly remoteCertDir: string;
 
   constructor(
     domainName: string,
@@ -44,22 +45,22 @@ export class RemotePusher extends NginxPusher {
     
     const creds: SshCredentials = { remoteHost, sshKeyPath, sshPassword, sudoPassword };
     this.ssh = new SshConnection(creds);
+    
+    // For remote deployments, use PUSH_CERT_DIR or default to /etc/nginx/ssl
+    const baseCertDir = PUSH_CERT_DIR ?? '/etc/nginx/ssl';
+    this.remoteCertDir = validateCertPath(baseCertDir, domainName);
   }
 
   /** Remote path for the SSL certificate, if certs are in play. */
   private get remoteCertPath(): string | undefined {
-    if (!this.shouldCopyCerts() || !CERT_DIR) return undefined;
-    // Validate cert path to prevent path traversal
-    const safePath = validateCertPath(CERT_DIR, this.domain.name);
-    return toPosixPath(path.join(safePath, 'cert.pem'));
+    if (!this.shouldCopyCerts()) return undefined;
+    return toPosixPath(path.join(this.remoteCertDir, 'cert.pem'));
   }
 
   /** Remote path for the SSL private key, if certs are in play. */
   private get remoteKeyPath(): string | undefined {
-    if (!this.shouldCopyCerts() || !CERT_DIR) return undefined;
-    // Validate cert path to prevent path traversal
-    const safePath = validateCertPath(CERT_DIR, this.domain.name);
-    return toPosixPath(path.join(safePath, 'key.pem'));
+    if (!this.shouldCopyCerts()) return undefined;
+    return toPosixPath(path.join(this.remoteCertDir, 'key.pem'));
   }
 
   /**
@@ -115,11 +116,18 @@ export class RemotePusher extends NginxPusher {
     const tempConfig = `/tmp/${generateSecureTempFilename('nginx-push-config', 'conf')}`;
 
     try {
-      await this.ssh.sftpFastPut(this.compiledConfigPath, tempConfig);
+      // Write compiled config to temp local file
+      const localTemp = path.join(os.tmpdir(), generateSecureTempFilename('nginx-push-config', 'conf'));
+      fs.writeFileSync(localTemp, this.compiledConfig);
+      
+      await this.ssh.sftpFastPut(localTemp, tempConfig);
       await this.ssh.execWithSudo(`mkdir -p ${shellQuote(path.dirname(targetPath))}`);
       await this.ssh.execWithSudo(`mv ${shellQuote(tempConfig)} ${shellQuote(targetPath)}`);
+      
+      // Cleanup local temp file
+      if (fs.existsSync(localTemp)) fs.unlinkSync(localTemp);
     } finally {
-      // Cleanup temp file if it still exists
+      // Cleanup remote temp file if it still exists
       try {
         await this.ssh.exec(`rm -f ${shellQuote(tempConfig)}`);
       } catch {
@@ -286,6 +294,15 @@ export class RemotePusher extends NginxPusher {
   async push(): Promise<void> {
     try {
       await this.ssh.connect();
+
+      // Compile fresh config
+      this.compileConfig();
+      
+      // For remote deployments, always rewrite cert paths if SSL is enabled
+      if (this.shouldCopyCerts()) {
+        this.preflightCertCheck();
+        this.rewriteCertPaths(this.remoteCertPath!, this.remoteKeyPath!);
+      }
 
       const snapshot = await this.captureSnapshot();
 
