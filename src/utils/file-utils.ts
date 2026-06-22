@@ -147,9 +147,7 @@ export const createBuildDirForDotnet = (appDir: string, projectDir?: string): st
 
   fs.mkdirSync(buildDir, { recursive: true });
 
-  // Copy publish/ contents into buildDir/publish/
-  const publishDest = path.join(buildDir, 'publish');
-  fsExtra.copySync(publishFolder, publishDest);
+  fsExtra.copySync(publishFolder, buildDir);
 
   // Delete release/publish/ to keep the release directory clean
   fsExtra.removeSync(publishFolder);
