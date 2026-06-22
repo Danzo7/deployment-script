@@ -4,16 +4,14 @@ import * as path from 'path';
 import {
   checkOpenssl,
   extractPfx,
-  validateCert,
-  validateKey,
-  validateKeyMatchesCert,
+  validateCertAndKey,
   certCoversHostname,
   parseCertMetadata,
   writeCertFiles,
+  buildSSLConfig,
 } from '../utils/ssl-helper.js';
 import { DomainRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
-import { toISO } from '../utils/date-helper.js';
 
 export async function domainSetCert(
   name: string,
@@ -70,14 +68,8 @@ async function _pemPath(
   const certPem = fs.readFileSync(certFilePath, 'utf8');
   const keyPem = fs.readFileSync(keyFilePath, 'utf8');
 
-  // 5. Validate certificate (throws if invalid or expired)
-  validateCert(certPem);
-
-  // 6. Validate private key (throws if invalid)
-  validateKey(keyPem);
-
-  // 7. Validate key matches cert (throws if mismatch)
-  validateKeyMatchesCert(certPem, keyPem);
+  // 5-7. Validate certificate, key, and match
+  validateCertAndKey(certPem, keyPem);
 
   // 8. Check certificate covers the domain hostname
   const covers = certCoversHostname(certPem, normalized);
@@ -110,25 +102,18 @@ async function _pemPath(
   });
 
   // 11. Parse certificate metadata
-  const { expiresAt, issuedTo, issuer, sanDomains } = parseCertMetadata(certPem);
+  const metadata = parseCertMetadata(certPem);
 
   // 12. Update domain record in DB
-  DomainRepo.update(normalized, {
-    ssl: {
-      mode: 'custom',
-      certPath,
-      keyPath,
-      uploadedAt: toISO(),
-      expiresAt,
-      issuedTo,
-      issuer,
-      sanDomains,
-    },
-  });
+  DomainRepo.update(normalized, buildSSLConfig({
+    certPath,
+    keyPath,
+    metadata,
+  }));
 
   // 13. Log success
   Logger.success(
-    `Certificate attached to "${normalized}". Expires: ${expiresAt}.`
+    `Certificate attached to "${normalized}". Expires: ${metadata.expiresAt}.`
   );
 }
 
@@ -172,14 +157,8 @@ async function _pfxPath(
     fs.rmSync(tmpKeyPath,  { force: true });
   }
 
-  // 9. Validate certificate (throws if invalid or expired)
-  validateCert(certPem);
-
-  // 10. Validate private key (throws if invalid)
-  validateKey(keyPem);
-
-  // 11. Validate key matches cert (throws if mismatch)
-  validateKeyMatchesCert(certPem, keyPem);
+  // 9-11. Validate certificate, key, and match
+  validateCertAndKey(certPem, keyPem);
 
   // 12. Check certificate covers the domain hostname
   const covers = certCoversHostname(certPem, normalized);
@@ -212,24 +191,17 @@ async function _pfxPath(
   });
 
   // 15. Parse certificate metadata
-  const { expiresAt, issuedTo, issuer, sanDomains } = parseCertMetadata(certPem);
+  const metadata = parseCertMetadata(certPem);
 
   // 16. Update domain record in DB
-  DomainRepo.update(normalized, {
-    ssl: {
-      mode: 'custom',
-      certPath,
-      keyPath,
-      uploadedAt: toISO(),
-      expiresAt,
-      issuedTo,
-      issuer,
-      sanDomains,
-    },
-  });
+  DomainRepo.update(normalized, buildSSLConfig({
+    certPath,
+    keyPath,
+    metadata,
+  }));
 
   // 17. Log success
   Logger.success(
-    `Certificate attached to "${normalized}". Expires: ${expiresAt}.`
+    `Certificate attached to "${normalized}". Expires: ${metadata.expiresAt}.`
   );
 }

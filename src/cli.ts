@@ -27,6 +27,7 @@ import { domainAdd, domainRemove, domainList, domainShow } from './commands/doma
 import { domainSetCert } from './commands/domain-set-cert.js';
 import { domainCertStatus } from './commands/domain-cert-status.js';
 import { domainRemoveCert } from './commands/domain-remove-cert.js';
+import { domainReloadCerts } from './commands/domain-reload-certs.js';
 import { routeAdd, routeRemove, routeList } from './commands/route.js';
 import { domainSetHeader } from './commands/domain-set-header.js';
 import { domainRemoveHeader } from './commands/domain-remove-header.js';
@@ -657,6 +658,23 @@ try {
                 async (args) => {
                   try {
                     await domainRemoveCert(args.name as string);
+                  } catch (err) {
+                    Logger.error(err);
+                    process.exit(1);
+                  }
+                }
+              )
+              .command(
+                'reload-certs [name]',
+                'Reload certificates from disk for all domains or a specific domain',
+                (yargs) =>
+                  yargs.positional('name', { 
+                    type: 'string', 
+                    describe: 'The domain name (omit to reload all domains)' 
+                  }),
+                async (args) => {
+                  try {
+                    await domainReloadCerts(args.name as string | undefined);
                   } catch (err) {
                     Logger.error(err);
                     process.exit(1);

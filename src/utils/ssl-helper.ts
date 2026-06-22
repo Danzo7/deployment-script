@@ -333,3 +333,86 @@ export function deleteCertFiles(domainName: string): void {
     }
   }
 }
+
+/**
+ * Validates a certificate and key pair.
+ * 
+ * Performs all necessary validation:
+ * - Certificate is valid PEM and not expired
+ * - Key is valid PEM
+ * - Key matches the certificate
+ * 
+ * @throws Error if any validation fails
+ */
+export function validateCertAndKey(certPem: string, keyPem: string): void {
+  validateCert(certPem);
+  validateKey(keyPem);
+  validateKeyMatchesCert(certPem, keyPem);
+}
+
+/**
+ * Loads and validates a certificate and key from the Cert_Store for a domain.
+ * 
+ * @returns Object with certPem, keyPem, certPath, keyPath, and parsed metadata
+ * @throws Error if files don't exist or validation fails
+ */
+export function loadCertFromStore(domainName: string): {
+  certPem: string;
+  keyPem: string;
+  certPath: string;
+  keyPath: string;
+  metadata: ReturnType<typeof parseCertMetadata>;
+} {
+  const certStoreDir = getCertStorePath(domainName);
+  const certPath = path.join(certStoreDir, 'cert.pem');
+  const keyPath = path.join(certStoreDir, 'key.pem');
+
+  if (!fs.existsSync(certPath)) {
+    throw new Error(`Certificate file not found: ${certPath}`);
+  }
+  if (!fs.existsSync(keyPath)) {
+    throw new Error(`Key file not found: ${keyPath}`);
+  }
+
+  const certPem = fs.readFileSync(certPath, 'utf8');
+  const keyPem = fs.readFileSync(keyPath, 'utf8');
+
+  validateCertAndKey(certPem, keyPem);
+
+  const metadata = parseCertMetadata(certPem);
+
+  return { certPem, keyPem, certPath, keyPath, metadata };
+}
+
+/**
+ * Prepares SSL configuration data for database update.
+ * 
+ * Returns the SSL configuration object that can be passed to DomainRepo.update().
+ * Separated from the actual DB update to avoid circular dependencies.
+ */
+export function buildSSLConfig(opts: {
+  certPath: string;
+  keyPath: string;
+  uploadedAt?: string;
+  metadata: {
+    expiresAt: string;
+    issuedTo: string;
+    issuer: string;
+    sanDomains: string[];
+  };
+}) {
+  const { certPath, keyPath, uploadedAt, metadata } = opts;
+  
+  return {
+    ssl: {
+      mode: 'custom' as const,
+      certPath,
+      keyPath,
+      uploadedAt: uploadedAt ?? toISO(),
+      expiresAt: metadata.expiresAt,
+      issuedTo: metadata.issuedTo,
+      issuer: metadata.issuer,
+      sanDomains: metadata.sanDomains,
+    },
+  };
+}

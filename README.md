@@ -46,6 +46,7 @@ A CLI tool for managing the full lifecycle of **Next.js**, **NestJS**, and **.NE
   - [domain set-cert](#dm-domain-set-cert-name)
   - [domain cert-status](#dm-domain-cert-status-name)
   - [domain remove-cert](#dm-domain-remove-cert-name)
+  - [domain reload-certs](#dm-domain-reload-certs-name)
 - [Routes](#routes)
   - [route add](#dm-route-add-appname-domainname)
   - [route remove](#dm-route-remove-domainname)
@@ -599,6 +600,35 @@ Remove the SSL certificate from a domain. The domain reverts to HTTP-only mode.
 ```bash
 dm domain remove-cert example.com
 ```
+
+---
+
+### `dm domain reload-certs [name]`
+
+Reload certificates from disk and synchronize with the database. This command scans the certificate storage folder for each domain and updates the database accordingly.
+
+**Behavior:**
+- If cert and key files exist on disk but not in DB → adds certificate to DB
+- If cert and key files exist on disk and in DB → updates certificate metadata in DB
+- If certificate exists in DB but files missing on disk → warns and removes SSL from domain
+
+**Use cases:**
+- Easy way to load certificates after manual file placement in the certificate folder
+- Refresh certificate metadata after manual certificate replacement
+- Detect and fix mismatches between filesystem and database state
+
+```bash
+# Reload certificates for a specific domain
+dm domain reload-certs example.com
+
+# Reload certificates for all domains
+dm domain reload-certs
+```
+
+**Certificate Storage Location:**  
+Certificates are stored in: `<DOMAINS_DIR>/<domain-name>/ssl/`
+- `cert.pem` - SSL certificate
+- `key.pem` - Private key
 
 ---
 
