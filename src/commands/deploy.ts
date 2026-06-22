@@ -100,7 +100,7 @@ export const deploy = async ({
   if (currentRevision) {
     AppRepo.updateDeployedCommit(name, currentRevision);
   }
-  pruneOldBuilds(name).catch(() => {}); // fire-and-forget, non-blocking
+  await pruneOldBuilds(name);
   if(lint){
     Logger.info('Pushing lint fix...');
     await pushVcsChanges(app, relDir, `[CLI Tool] Linting fix`);
