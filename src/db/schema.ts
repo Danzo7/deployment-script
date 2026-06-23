@@ -35,7 +35,7 @@ export const appsTableSqlite = sqliteTable('apps', {
 export const storagesTableSqlite = sqliteTable('storages', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull().unique(),
-  linkName: text('link_name').notNull(),
+  linkName: text('link_name'),
   path: text('path').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 }, (table) => [
@@ -109,7 +109,7 @@ export const appsTablePostgres = pgTable('apps', {
 export const storagesTablePostgres = pgTable('storages', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: varchar('name', { length: 255 }).notNull().unique(),
-  linkName: varchar('link_name', { length: 255 }).notNull(),
+  linkName: varchar('link_name', { length: 255 }),
   path: varchar('path', { length: 500 }).notNull(),
   createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
 }, (table) => [

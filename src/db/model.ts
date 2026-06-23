@@ -30,7 +30,7 @@ export interface AppWithStorages extends App {
 export interface Storage {
   id: string | number; // UUID (PostgreSQL) or auto-increment integer (SQLite)
   name: string; // Unique human-readable identifier (used as the storage directory name)
-  linkName: string; // Symlink name created inside each build directory
+  linkName?: string | null; // Symlink name created inside each build directory (defaults to name if not provided)
   path: string; // Absolute path: STORAGE_DIR/name
   createdAt: Date; // Database-generated creation timestamp
 }

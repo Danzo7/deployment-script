@@ -446,12 +446,12 @@ try {
                     })
                     .positional('link-name', {
                       type: 'string',
-                      demandOption: true,
-                      describe: 'The symlink name created inside each build directory (e.g. Storage)',
+                      demandOption: false,
+                      describe: 'The symlink name created inside each build directory (defaults to name if not provided)',
                     }),
                 async (args) => {
                   try {
-                    await storageNew(args.name as string, args['link-name'] as string);
+                    await storageNew(args.name as string, args['link-name'] as string | undefined);
                   } catch (err) {
                     Logger.error(err);
                     process.exit(1);

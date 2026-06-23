@@ -61,7 +61,6 @@ export async function migrateFromJSON() {
           // Validate required fields
           const missingFields: string[] = [];
           if (!storage.name) missingFields.push('name');
-          if (!storage.linkName) missingFields.push('linkName');
           if (!storage.path) missingFields.push('path');
           
           if (missingFields.length > 0) {
@@ -72,7 +71,7 @@ export async function migrateFromJSON() {
           
           await StorageRepo.add({
             name: storage.name,
-            linkName: storage.linkName,
+            linkName: storage.linkName ?? null,
             path: storage.path,
           });
           stats.storages++;

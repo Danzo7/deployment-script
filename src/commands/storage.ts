@@ -9,12 +9,13 @@ import { AppRepo, StorageRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 import { requireSymlinkPermission } from '../utils/os-helper.js';
 
-export const storageNew = async (name: string, linkName: string): Promise<void> => {
+export const storageNew = async (name: string, linkName?: string): Promise<void> => {
   const storagePath = path.join(STORAGE_DIR, name);
   fs.mkdirSync(storagePath, { recursive: true });
-  await StorageRepo.add({ name, linkName, path: storagePath });
+  await StorageRepo.add({ name, linkName: linkName ?? null, path: storagePath });
+  const effectiveLinkName = linkName ?? name;
   Logger.success(
-    `Storage ${Logger.highlight(name)} created at ${Logger.highlight(storagePath)} (symlink name: ${Logger.highlight(linkName)}).`
+    `Storage ${Logger.highlight(name)} created at ${Logger.highlight(storagePath)} (symlink name: ${Logger.highlight(effectiveLinkName)}).`
   );
 };
 
@@ -44,7 +45,8 @@ export const storageAttach = async (
     }
 
     if (activeBuildExists) {
-      const symlinkPath = path.join(app.activeBuild, storage.linkName);
+      const effectiveLinkName = storage.linkName ?? storage.name;
+      const symlinkPath = path.join(app.activeBuild, effectiveLinkName);
       let stat: fs.Stats | null = null;
       try {
         stat = fs.lstatSync(symlinkPath);
@@ -57,13 +59,13 @@ export const storageAttach = async (
           const currentTarget = fs.readlinkSync(symlinkPath);
           if (currentTarget !== storage.path) {
             throw new Error(
-              `Cannot attach: a symlink "${storage.linkName}" already exists in the active build pointing to a different target ("${currentTarget}").`
+              `Cannot attach: a symlink "${effectiveLinkName}" already exists in the active build pointing to a different target ("${currentTarget}").`
             );
           }
           // Correct symlink — no conflict, fall through
         } else {
           throw new Error(
-            `Cannot attach: a real directory "${storage.linkName}" already exists in the active build. Remove or rename it first.`
+            `Cannot attach: a real directory "${effectiveLinkName}" already exists in the active build. Remove or rename it first.`
           );
         }
       }
@@ -84,7 +86,8 @@ export const storageAttach = async (
     }
 
     if (activeBuildExists) {
-      const symlinkPath = path.join(app.activeBuild, storage.linkName);
+      const effectiveLinkName = storage.linkName ?? storage.name;
+      const symlinkPath = path.join(app.activeBuild, effectiveLinkName);
       let symlinkExists = false;
       try {
         const existingStat = fs.lstatSync(symlinkPath);
@@ -103,7 +106,7 @@ export const storageAttach = async (
   }
 
   Logger.success(
-    `Storage ${Logger.highlight(storageName)} attached to ${Logger.highlight(appName)} as ${Logger.highlight(storage.linkName)}.`
+    `Storage ${Logger.highlight(storageName)} attached to ${Logger.highlight(appName)} as ${Logger.highlight(storage.linkName ?? storage.name)}.`
   );
 };
 
@@ -125,7 +128,8 @@ export const storageDetach = async (
 
   // Remove symlink using linkName
   if (app.activeBuild) {
-    const symlinkPath = path.join(app.activeBuild, storage.linkName);
+    const effectiveLinkName = storage.linkName ?? storage.name;
+    const symlinkPath = path.join(app.activeBuild, effectiveLinkName);
     try {
       fs.lstatSync(symlinkPath);
       fs.unlinkSync(symlinkPath);
@@ -242,7 +246,7 @@ export const storageLs = async (): Promise<void> => {
     table.push([
       chalk.cyan(index + 1),
       chalk.whiteBright(storage.name),
-      chalk.blue(storage.linkName),
+      chalk.blue(storage.linkName ?? storage.name),
       chalk.magenta(storage.path),
       chalk.yellow(createdAt),
       attachedAppsDisplay,

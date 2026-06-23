@@ -59,7 +59,7 @@ function mapToStorage(row: any): Storage {
   return {
     id: row.id,
     name: row.name,
-    linkName: row.linkName || row.link_name,
+    linkName: row.linkName ?? row.link_name ?? null,
     path: row.path,
     createdAt: toDate(row.createdAt || row.created_at)!,
   };
@@ -416,7 +416,7 @@ export const StorageRepo = {
     return mapToStorage(rows[0]);
   },
 
-  add: async (data: { name: string; linkName: string; path: string }): Promise<Storage> => {
+  add: async (data: { name: string; linkName: string|null; path: string }): Promise<Storage> => {
     const db: any = getDB();
     
     // Check if storage exists
@@ -425,15 +425,17 @@ export const StorageRepo = {
       throw new Error(`Storage "${data.name}" already exists`);
     }
 
-    // Check if linkName is already used
-    const existingLink = await db.select().from(storagesTable).where(eq(storagesTable.linkName, data.linkName));
-    if (existingLink.length > 0) {
-      throw new Error(`A storage with link name "${data.linkName}" already exists`);
+    // Check if linkName is already used (only if provided)
+    if (data.linkName) {
+      const existingLink = await db.select().from(storagesTable).where(eq(storagesTable.linkName, data.linkName));
+      if (existingLink.length > 0) {
+        throw new Error(`A storage with link name "${data.linkName}" already exists`);
+      }
     }
 
     const insertData = toDbFields({
       name: data.name,
-      linkName: data.linkName,
+      linkName: data.linkName ?? null,
       path: data.path,
     });
 

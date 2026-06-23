@@ -187,7 +187,7 @@ export const createBuildDirByType = (
 
 /**
  * Creates storage symlinks inside a build directory for each storage.
- * Uses storage.linkName as the symlink name and storage.name (via storage.path) as the target.
+ * Uses storage.linkName (or storage.name if linkName is not set) as the symlink name and storage.name (via storage.path) as the target.
  * Non-fatal: logs and skips on conflicts rather than throwing.
  *
  * @param buildDir The build directory to create symlinks in
@@ -195,7 +195,8 @@ export const createBuildDirByType = (
  */
 export const applyStorageSymlinks = (buildDir: string, storages: Storage[] = []): void => {
   for (const storage of storages) {
-    const linkPath = path.join(buildDir, storage.linkName);
+    const effectiveLinkName = storage.linkName ?? storage.name;
+    const linkPath = path.join(buildDir, effectiveLinkName);
     const targetPath = storage.path;
 
     let stat: fs.Stats | null = null;
@@ -232,7 +233,7 @@ export const applyStorageSymlinks = (buildDir: string, storages: Storage[] = [])
     // Path does not exist — ensure storage directory exists and create symlink
     fs.mkdirSync(targetPath, { recursive: true });
     fs.symlinkSync(targetPath, linkPath);
-    Logger.success(`Linked storage "${storage.name}" (${storage.linkName}) → "${targetPath}"`);
+    Logger.success(`Linked storage "${storage.name}" (${effectiveLinkName}) → "${targetPath}"`);
   }
 };
 
