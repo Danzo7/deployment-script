@@ -13,20 +13,20 @@ export const dbType = DATABASE_TYPE;
 export const appsTableSqlite = sqliteTable('apps', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull().unique(),
-  appDir: text('app_dir').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`).$onUpdate(() => new Date()),
+  appDir: text('appDir').notNull(),
+  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updatedAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`).$onUpdate(() => new Date()),
   port: integer('port').notNull(),
   instances: integer('instances').default(1),
   repo: text('repo').notNull(),
   branch: text('branch').notNull(),
-  vcsType: text('vcs_type', { enum: ['git', 'svn'] }).default('git'),
-  lastDeploy: integer('last_deploy', { mode: 'timestamp' }),
+  vcsType: text('vcsType', { enum: ['git', 'svn'] }).default('git'),
+  lastDeploy: integer('lastDeploy', { mode: 'timestamp' }),
   builds: text('builds'), // JSON array
-  activeBuild: text('active_build'),
-  projectType: text('project_type', { enum: ['nextjs', 'nestjs', 'dotnet'] }).notNull(),
-  projectDir: text('project_dir'),
-  lastDeployedCommit: text('last_deployed_commit'), // JSON object
+  activeBuild: text('activeBuild'),
+  projectType: text('projectType', { enum: ['nextjs', 'nestjs', 'dotnet'] }).notNull(),
+  projectDir: text('projectDir'),
+  lastDeployedCommit: text('lastDeployedCommit'), // JSON object
 }, (table) => [
   sqliteIndex('apps_name_idx').on(table.name),
   sqliteIndex('apps_port_idx').on(table.port),
@@ -35,9 +35,9 @@ export const appsTableSqlite = sqliteTable('apps', {
 export const storagesTableSqlite = sqliteTable('storages', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull().unique(),
-  linkName: text('link_name'),
+  linkName: text('linkName'),
   path: text('path').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 }, (table) => [
   sqliteIndex('storages_name_idx').on(table.name),
 ]);
@@ -45,24 +45,24 @@ export const storagesTableSqlite = sqliteTable('storages', {
 export const domainsTableSqlite = sqliteTable('domains', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull().unique(),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`).$onUpdate(() => new Date()),
+  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updatedAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`).$onUpdate(() => new Date()),
   ssl: text('ssl').notNull(), // JSON object
   headers: text('headers'), // JSON object
-  lastPushedAt: integer('last_pushed_at', { mode: 'timestamp' }),
-  configPath: text('config_path'),
-  lastCompiledAt: integer('last_compiled_at', { mode: 'timestamp' }),
+  lastPushedAt: integer('lastPushedAt', { mode: 'timestamp' }),
+  configPath: text('configPath'),
+  lastCompiledAt: integer('lastCompiledAt', { mode: 'timestamp' }),
 }, (table) => [
   sqliteIndex('domains_name_idx').on(table.name),
 ]);
 
 export const routesTableSqlite = sqliteTable('routes', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  domainId: integer('domain_id').notNull().references(() => domainsTableSqlite.id, { onDelete: 'cascade' }),
+  domainId: integer('domainId').notNull().references(() => domainsTableSqlite.id, { onDelete: 'cascade' }),
   path: text('path').notNull(),
-  appId: integer('app_id').notNull().references(() => appsTableSqlite.id, { onDelete: 'cascade' }),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`).$onUpdate(() => new Date()),
+  appId: integer('appId').notNull().references(() => appsTableSqlite.id, { onDelete: 'cascade' }),
+  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updatedAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`).$onUpdate(() => new Date()),
   headers: text('headers'), // JSON object
 }, (table) => [
   sqliteIndex('routes_domain_id_idx').on(table.domainId),
@@ -72,9 +72,9 @@ export const routesTableSqlite = sqliteTable('routes', {
 
 export const appStorageTableSqlite = sqliteTable('app_storage', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  appId: integer('app_id').notNull().references(() => appsTableSqlite.id, { onDelete: 'cascade' }),
-  storageId: integer('storage_id').notNull().references(() => storagesTableSqlite.id, { onDelete: 'cascade' }),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  appId: integer('appId').notNull().references(() => appsTableSqlite.id, { onDelete: 'cascade' }),
+  storageId: integer('storageId').notNull().references(() => storagesTableSqlite.id, { onDelete: 'cascade' }),
+  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 }, (table) => [
   sqliteIndex('app_storage_app_id_idx').on(table.appId),
   sqliteIndex('app_storage_storage_id_idx').on(table.storageId),

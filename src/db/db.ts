@@ -54,20 +54,20 @@ export const initializeDB = async () => {
       CREATE TABLE IF NOT EXISTS apps (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
-        app_dir TEXT NOT NULL,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
+        appDir TEXT NOT NULL,
+        createdAt INTEGER NOT NULL,
+        updatedAt INTEGER NOT NULL,
         port INTEGER NOT NULL,
         instances INTEGER DEFAULT 1,
         repo TEXT NOT NULL,
         branch TEXT NOT NULL,
-        vcs_type TEXT DEFAULT 'git',
-        last_deploy INTEGER,
+        vcsType TEXT DEFAULT 'git',
+        lastDeploy INTEGER,
         builds TEXT,
-        active_build TEXT,
-        project_type TEXT NOT NULL,
-        project_dir TEXT,
-        last_deployed_commit TEXT
+        activeBuild TEXT,
+        projectType TEXT NOT NULL,
+        projectDir TEXT,
+        lastDeployedCommit TEXT
       );
       CREATE INDEX IF NOT EXISTS apps_name_idx ON apps(name);
       CREATE INDEX IF NOT EXISTS apps_port_idx ON apps(port);
@@ -75,46 +75,46 @@ export const initializeDB = async () => {
       CREATE TABLE IF NOT EXISTS storages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
-        link_name TEXT,
+        linkName TEXT,
         path TEXT NOT NULL,
-        created_at INTEGER NOT NULL
+        createdAt INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS storages_name_idx ON storages(name);
 
       CREATE TABLE IF NOT EXISTS domains (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
+        createdAt INTEGER NOT NULL,
+        updatedAt INTEGER NOT NULL,
         ssl TEXT NOT NULL,
         headers TEXT,
-        last_pushed_at INTEGER,
-        config_path TEXT,
-        last_compiled_at INTEGER
+        lastPushedAt INTEGER,
+        configPath TEXT,
+        lastCompiledAt INTEGER
       );
       CREATE INDEX IF NOT EXISTS domains_name_idx ON domains(name);
 
       CREATE TABLE IF NOT EXISTS routes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        domain_id INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+        domainId INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
         path TEXT NOT NULL,
-        app_id INTEGER NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
+        appId INTEGER NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
+        createdAt INTEGER NOT NULL,
+        updatedAt INTEGER NOT NULL,
         headers TEXT
       );
-      CREATE INDEX IF NOT EXISTS routes_domain_id_idx ON routes(domain_id);
-      CREATE INDEX IF NOT EXISTS routes_domain_path_idx ON routes(domain_id, path);
-      CREATE INDEX IF NOT EXISTS routes_app_id_idx ON routes(app_id);
+      CREATE INDEX IF NOT EXISTS routes_domain_id_idx ON routes(domainId);
+      CREATE INDEX IF NOT EXISTS routes_domain_path_idx ON routes(domainId, path);
+      CREATE INDEX IF NOT EXISTS routes_app_id_idx ON routes(appId);
 
       CREATE TABLE IF NOT EXISTS app_storage (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        app_id INTEGER NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
-        storage_id INTEGER NOT NULL REFERENCES storages(id) ON DELETE CASCADE,
-        created_at INTEGER NOT NULL
+        appId INTEGER NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
+        storageId INTEGER NOT NULL REFERENCES storages(id) ON DELETE CASCADE,
+        createdAt INTEGER NOT NULL
       );
-      CREATE INDEX IF NOT EXISTS app_storage_app_id_idx ON app_storage(app_id);
-      CREATE INDEX IF NOT EXISTS app_storage_storage_id_idx ON app_storage(storage_id);
+      CREATE INDEX IF NOT EXISTS app_storage_app_id_idx ON app_storage(appId);
+      CREATE INDEX IF NOT EXISTS app_storage_storage_id_idx ON app_storage(storageId);
     `);
   } else if (DATABASE_TYPE === 'postgres' && postgresInstance) {
     // For PostgreSQL, create tables using CREATE IF NOT EXISTS

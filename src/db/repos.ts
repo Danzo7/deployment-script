@@ -37,20 +37,20 @@ function mapToApp(row: any): App {
   return {
     id: row.id,
     name: row.name,
-    appDir: row.appDir || row.app_dir,
-    createdAt: toDate(row.createdAt || row.created_at)!,
-    updatedAt: toDate(row.updatedAt || row.updated_at)!,
+    appDir: row.appDir,
+    createdAt: toDate(row.createdAt)!,
+    updatedAt: toDate(row.updatedAt)!,
     port: row.port,
     instances: row.instances,
     repo: row.repo,
     branch: row.branch,
-    vcsType: (row.vcsType || row.vcs_type) as 'git' | 'svn',
-    lastDeploy: toDate(row.lastDeploy || row.last_deploy),
+    vcsType: row.vcsType as 'git' | 'svn',
+    lastDeploy: toDate(row.lastDeploy),
     builds: deserializeJSON<string[]>(row.builds) || [],
-    activeBuild: row.activeBuild || row.active_build,
-    projectType: (row.projectType || row.project_type) as 'nextjs' | 'nestjs' | 'dotnet',
-    projectDir: row.projectDir || row.project_dir,
-    lastDeployedCommit: deserializeJSON<App['lastDeployedCommit']>(row.lastDeployedCommit || row.last_deployed_commit),
+    activeBuild: row.activeBuild,
+    projectType: row.projectType as 'nextjs' | 'nestjs' | 'dotnet',
+    projectDir: row.projectDir,
+    lastDeployedCommit: deserializeJSON<App['lastDeployedCommit']>(row.lastDeployedCommit),
   };
 }
 
@@ -59,9 +59,9 @@ function mapToStorage(row: any): Storage {
   return {
     id: row.id,
     name: row.name,
-    linkName: row.linkName ?? row.link_name ?? null,
+    linkName: row.linkName ?? null,
     path: row.path,
-    createdAt: toDate(row.createdAt || row.created_at)!,
+    createdAt: toDate(row.createdAt)!,
   };
 }
 
@@ -70,13 +70,13 @@ function mapToDomain(row: any): Domain {
   return {
     id: row.id,
     name: row.name,
-    createdAt: toDate(row.createdAt || row.created_at)!,
-    updatedAt: toDate(row.updatedAt || row.updated_at)!,
+    createdAt: toDate(row.createdAt)!,
+    updatedAt: toDate(row.updatedAt)!,
     ssl: deserializeJSON<DomainSsl>(row.ssl) || { mode: 'none' },
     headers: deserializeJSON<Record<string, string>>(row.headers),
-    lastPushedAt: toDate(row.lastPushedAt || row.last_pushed_at),
-    configPath: row.configPath || row.config_path,
-    lastCompiledAt: toDate(row.lastCompiledAt || row.last_compiled_at),
+    lastPushedAt: toDate(row.lastPushedAt),
+    configPath: row.configPath,
+    lastCompiledAt: toDate(row.lastCompiledAt),
   };
 }
 
@@ -84,29 +84,17 @@ function mapToDomain(row: any): Domain {
 function mapToRoute(row: any): Route {
   return {
     id: row.id,
-    domainId: row.domainId || row.domain_id,
+    domainId: row.domainId,
     path: row.path,
-    appId: row.appId || row.app_id,
-    createdAt: toDate(row.createdAt || row.created_at)!,
-    updatedAt: toDate(row.updatedAt || row.updated_at)!,
+    appId: row.appId,
+    createdAt: toDate(row.createdAt)!,
+    updatedAt: toDate(row.updatedAt)!,
     headers: deserializeJSON<Record<string, string>>(row.headers),
   };
 }
 
-// Helper to convert model fields to DB fields for insert/update
-function toDbFields(obj: Record<string, any>): Record<string, any> {
-  if (dbType === 'postgres') {
-    return obj; // PostgreSQL uses camelCase
-  }
-  
-  // Convert camelCase to snake_case for SQLite
-  const converted: Record<string, any> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-    converted[snakeKey] = value;
-  }
-  return converted;
-}
+// NOTE: toDbFields is no longer needed since we use camelCase everywhere
+// Drizzle will handle the mapping automatically
 
 export const AppRepo = {
   getAll: async (): Promise<App[]> => {
@@ -196,20 +184,20 @@ export const AppRepo = {
       throw new Error(`The port ${data.port} is already in use by ${portApp.name}`);
     }
 
-    const insertData = toDbFields({
+    const insertData = {
       name: data.name,
       appDir: data.appDir,
       port: data.port,
-      instances: data.instances,
+      instances: data.instances ?? 1,
       repo: data.repo,
       branch: data.branch,
-      vcsType: data.vcsType,
+      vcsType: data.vcsType ?? 'git',
       builds: serializeJSON(data.builds || []),
       activeBuild: data.activeBuild,
       projectType: data.projectType,
       projectDir: data.projectDir,
       lastDeployedCommit: serializeJSON(data.lastDeployedCommit),
-    });
+    };
 
     await db.insert(appsTable).values(insertData);
     
@@ -245,8 +233,7 @@ export const AppRepo = {
       updateFields.lastDeployedCommit = serializeJSON(updateFields.lastDeployedCommit);
     }
 
-    const dbFields = toDbFields(updateFields);
-    await db.update(appsTable).set(dbFields).where(eq(appsTable.name, app.name));
+    await db.update(appsTable).set(updateFields).where(eq(appsTable.name, app.name));
     
     return await this.findByName(name);
   },
@@ -302,8 +289,7 @@ export const AppRepo = {
     const apps: App[] = [];
     for (const appStorage of appStorages) {
       try {
-        const appId = appStorage.appId || appStorage.app_id;
-        const app = await AppRepo.findById(appId);
+        const app = await AppRepo.findById(appStorage.appId);
         apps.push(app);
       } catch {
         // Skip if app no longer exists
@@ -322,7 +308,7 @@ export const AppRepo = {
     
     if (appStorages.length === 0) return [];
     
-    const storageIds = appStorages.map((as: any) => as.storageId || as.storage_id);
+    const storageIds = appStorages.map((as: any) => as.storageId);
     const storages: Storage[] = [];
     
     for (const storageId of storageIds) {
@@ -351,12 +337,7 @@ export const AppRepo = {
       return; // Already linked
     }
 
-    const insertData = toDbFields({
-      appId,
-      storageId,
-    });
-
-    await db.insert(appStorageTable).values(insertData);
+    await db.insert(appStorageTable).values({ appId, storageId });
   },
 
   /**
@@ -433,13 +414,11 @@ export const StorageRepo = {
       }
     }
 
-    const insertData = toDbFields({
+    await db.insert(storagesTable).values({
       name: data.name,
       linkName: data.linkName ?? null,
       path: data.path,
     });
-
-    await db.insert(storagesTable).values(insertData);
     
     // Fetch the newly inserted storage to get the DB-generated id and timestamps
     return await StorageRepo.findByName(data.name);
@@ -555,7 +534,7 @@ export const DomainRepo = {
       throw new Error(`Domain "${data.name}" already exists`);
     }
 
-    const insertData = toDbFields({
+    await db.insert(domainsTable).values({
       name: data.name,
       ssl: serializeJSON({ mode: 'none' }),
       headers: null,
@@ -563,8 +542,6 @@ export const DomainRepo = {
       configPath: null,
       lastCompiledAt: null,
     });
-
-    await db.insert(domainsTable).values(insertData);
     
     // Fetch the newly inserted domain to get the DB-generated id and timestamps
     return await DomainRepo.findByName(data.name);
@@ -596,8 +573,7 @@ export const DomainRepo = {
       updateFields.headers = serializeJSON(updateFields.headers);
     }
 
-    const dbFields = toDbFields(updateFields);
-    await db.update(domainsTable).set(dbFields).where(eq(domainsTable.name, domain.name));
+    await db.update(domainsTable).set(updateFields).where(eq(domainsTable.name, domain.name));
     return await this.findByName(name);
   },
 };
@@ -712,14 +688,12 @@ export const RouteRepo = {
   add: async (data: { domainId: string | number; path: string; appId: string | number }): Promise<Route> => {
     const db: any = getDB();
 
-    const insertData = toDbFields({
+    const result = await db.insert(routesTable).values({
       domainId: data.domainId,
       path: data.path,
       appId: data.appId,
       headers: null,
-    });
-
-    const result = await db.insert(routesTable).values(insertData).returning();
+    }).returning();
     
     // For SQLite, fetch the newly inserted route since returning() may not work
     if (result && result.length > 0) {
@@ -761,8 +735,7 @@ export const RouteRepo = {
       updateFields.headers = serializeJSON(updateFields.headers);
     }
 
-    const dbFields = toDbFields(updateFields);
-    await db.update(routesTable).set(dbFields).where(eq(routesTable.id, id));
+    await db.update(routesTable).set(updateFields).where(eq(routesTable.id, id));
     
     // Return updated route
     const rows = await db.select().from(routesTable).where(eq(routesTable.id, id));
