@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import yargs from 'yargs';
+import chalk from 'chalk';
 import { initializeDB } from './db/db.js';
 import { deploy } from './commands/deploy.js';
 import { init } from './commands/init.js';
-import { APP_DIR, NEXT_DIR, NEST_DIR, DOTNET_DIR } from './constants.js';
+import { APP_DIR, NEXT_DIR, NEST_DIR, DOTNET_DIR, SECRET_KEY } from './constants.js';
 import { acquireLock, releaseLock } from './utils/lock-utils.js';
 import { Logger } from './utils/logger.js';
 import { listApps } from './commands/list.js';
@@ -36,6 +37,7 @@ import { domainShowConfig } from './commands/domain-show-config.js';
 import { domainPush } from './commands/domain-push.js';
 import { routeSetHeader } from './commands/route-set-header.js';
 import { routeRemoveHeader } from './commands/route-remove-header.js';
+import { migrateFromJSON, isMigrationNeeded } from './commands/migrate-db.js';
 
 interface InitArgs {
   name: string;
@@ -81,7 +83,14 @@ if (!existsSync(DOTNET_DIR)) {
 }
 const startTime = Date.now(); // Start the timer
 
-initializeDB();
+// Check if migration is needed and prompt user
+if (isMigrationNeeded()) {
+  Logger.info(chalk.yellow('\n⚠️  Legacy db.json file detected!'));
+  Logger.info(chalk.cyan('The database has been migrated to SQL (SQLite/PostgreSQL).'));
+  Logger.info(chalk.cyan('Run "dm migrate-db" to migrate your data from db.json to the new database.\n'));
+}
+
+await initializeDB();
 try {
   await yargs(process.argv.slice(2)).scriptName('dm')
     .middleware((argv) => {
@@ -274,7 +283,7 @@ try {
               describe: "The secret key",
             }),
           async (args) => {
-            if(args.secret!==process.env.SECRET_KEY){
+            if(args.secret!==SECRET_KEY){
               Logger.error("Invalid secret key");
               process.exit(1);
             }
@@ -879,6 +888,19 @@ try {
                 }
               )
               .demandCommand(1);
+          }
+        )
+        .command(
+          'migrate-db',
+          'Migrate data from legacy db.json to SQL database',
+          (yargs) => yargs,
+          async () => {
+            try {
+              await migrateFromJSON();
+            } catch (err) {
+              Logger.error(err);
+              process.exit(1);
+            }
           }
         )
     .demandCommand(1, 'You must specify a command to run.')

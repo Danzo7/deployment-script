@@ -19,17 +19,20 @@ export async function routeAdd(
   const normalizedDomain = normalizeDomainName(domainName);
   const normalizedPath = normalizePath(location);
 
-  AppRepo.findByName(appName);
-  const domain = DomainRepo.findByName(normalizedDomain);
+  const app = await AppRepo.findByName(appName);
+  const domain = await DomainRepo.findByName(normalizedDomain);
+
+  const allRoutes = await RouteRepo.getAllWithApp();
+  const allDomains = await DomainRepo.getAll();
 
   if (!force) {
-    assertAppNotRoutedElsewhere(RouteRepo.getAll(), appName, DomainRepo.getAll());
+    assertAppNotRoutedElsewhere(allRoutes, app, allDomains);
   }
 
-  assertPathUnique(RouteRepo.getAll(), domain.id, normalizedPath, normalizedDomain);
-  assertAppUniqueOnDomain(RouteRepo.getAll(), domain.id, appName, normalizedDomain);
+  assertPathUnique(allRoutes, domain.id, normalizedPath, normalizedDomain);
+  assertAppUniqueOnDomain(allRoutes, domain.id, app, normalizedDomain);
 
-  RouteRepo.add({ domainId: domain.id, path: normalizedPath, appName });
+  await RouteRepo.add({ domainId: domain.id, path: normalizedPath, appId: app.id });
 
   Logger.success(
     `App ${Logger.highlight(appName)} routed to ${Logger.highlight(normalizedDomain)} at ${Logger.highlight('/' + normalizedPath)}.`
@@ -40,8 +43,8 @@ export async function routeRemove(domainName: string, location: string): Promise
   const normalizedDomain = normalizeDomainName(domainName);
   const normalizedPath = normalizePath(location);
 
-  const domain = DomainRepo.findByName(normalizedDomain);
-  const route = RouteRepo.findByDomainAndPath(domain.id, normalizedPath);
+  const domain = await DomainRepo.findByName(normalizedDomain);
+  const route = await RouteRepo.findByDomainAndPath(domain.id, normalizedPath);
 
   if (!route) {
     throw new Error(
@@ -49,7 +52,7 @@ export async function routeRemove(domainName: string, location: string): Promise
     );
   }
 
-  RouteRepo.remove(route.id);
+  await RouteRepo.remove(route.id);
 
   Logger.success(
     `Route ${Logger.highlight('/' + normalizedPath)} on ${Logger.highlight(normalizedDomain)} removed.`
@@ -58,9 +61,9 @@ export async function routeRemove(domainName: string, location: string): Promise
 
 export async function routeList(domainName: string): Promise<void> {
   const normalized = normalizeDomainName(domainName);
-  const domain = DomainRepo.findByName(normalized);
+  const domain = await DomainRepo.findByName(normalized);
 
-  const routes = RouteRepo.getAll().filter((r) => r.domainId === domain.id);
+  const routes = await RouteRepo.getAllByDomainIdWithApp(domain.id);
 
   if (routes.length === 0) {
     Logger.info(`No routes configured for domain "${domain.name}"`);
@@ -79,7 +82,7 @@ export async function routeList(domainName: string): Promise<void> {
     table.push([
       chalk.cyan(index + 1),
       chalk.whiteBright('/' + route.path),
-      chalk.blue(route.appName),
+      chalk.blue(route.app.name),
     ]);
   });
 

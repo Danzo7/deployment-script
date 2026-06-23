@@ -1,9 +1,9 @@
 import fs from 'node:fs';
-import type { Domain, Route, App } from '../db/model.js';
+import type { Domain, RouteWithApp } from '../db/model.js';
 import { PROXY_TARGET_HOST } from '../constants.js';
 import { PROXY_SET_HEADERS, mergeHeaders } from './header-merge.js';
 import { normalizeDomainName } from './route-validation.js';
-import { DomainRepo, RouteRepo, AppRepo } from '../db/repos.js';
+import { DomainRepo } from '../db/repos.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -64,30 +64,25 @@ function sslDirectives(certPath: string, keyPath: string): string {
   ].join('\n');
 }
 
-function buildLocationBlocks(domain: Domain, routes: Route[], apps: App[], hasSsl: boolean): string {
+function buildLocationBlocks(domain: Domain, routes: RouteWithApp[], hasSsl: boolean): string {
   const sorted = [...routes].sort((a, b) => b.path.length - a.path.length);
 
   return sorted.map((route) => {
-    const app = apps.find((a) => a.name === route.appName);
-    if (!app) {
-      throw new Error(`App "${route.appName}" not found for route "${route.path}" on domain "${domain.name}"`);
-    }
-
     const locationPath = route.path === '' ? '/' : '/' + route.path;
     const lines = [
       `${INDENT}location ${locationPath} {`,
-      `${INDENT}${INDENT}proxy_pass http://${PROXY_TARGET_HOST}:${app.port};`,
+      `${INDENT}${INDENT}proxy_pass http://${PROXY_TARGET_HOST}:${route.app.port};`,
       ...PROXY_SET_HEADERS.map(([n, v]) => `${INDENT}${INDENT}proxy_set_header ${n} ${v};`),
     ];
 
-    if (app.projectType === 'nextjs') {
+    if (route.app.projectType === 'nextjs') {
       lines.push(
         `${INDENT}${INDENT}proxy_http_version 1.1;`,
         `${INDENT}${INDENT}proxy_set_header Upgrade $http_upgrade;`,
         `${INDENT}${INDENT}proxy_set_header Connection "upgrade";`,
         `${INDENT}${INDENT}proxy_buffering off;`
       );
-    } else if (app.projectType === 'nestjs') {
+    } else if (route.app.projectType === 'nestjs') {
       lines.push(`${INDENT}${INDENT}proxy_http_version 1.1;`);
     }
 
@@ -200,13 +195,12 @@ function buildServerBlocks(
  */
 export function compileDomainConfig(
   domain: Domain,
-  routes: Route[],
-  apps: App[],
+  routes: RouteWithApp[],
   allDomains: Domain[]
 ): string {
   const wwwIsRegisteredDomain = allDomains.some((d) => d.name === 'www.' + domain.name);
   const { hasSsl, certPath, keyPath } = evaluateHasSsl(domain);
-  const locationBlocks = buildLocationBlocks(domain, routes, apps, hasSsl);
+  const locationBlocks = buildLocationBlocks(domain, routes, hasSsl);
   const config = buildServerBlocks(domain, locationBlocks, hasSsl, wwwIsRegisteredDomain, certPath, keyPath);
   return config.endsWith('\n') ? config : config + '\n';
 }
@@ -225,20 +219,18 @@ export interface NginxConfigResult {
  * Used by both `domainCompile` and `domainShowConfig`.
  * @throws if the domain is not found or compilation fails.
  */
-export function resolveNginxConfig(name: string): NginxConfigResult {
+export async function resolveNginxConfig(name: string): Promise<NginxConfigResult> {
   const domainName = normalizeDomainName(name);
-  const domain = DomainRepo.findByName(domainName);
-  const routes = RouteRepo.getAll().filter((r) => r.domainId === domain.id);
-  const apps = AppRepo.getAll();
-  const allDomains = DomainRepo.getAll();
+  const domain = await DomainRepo.findByNameWithRoutes(domainName);
+  const allDomains = await DomainRepo.getAll();
 
-  const config = compileDomainConfig(domain, routes, apps, allDomains);
+  const config = compileDomainConfig(domain, domain.routes, allDomains);
   const wwwHost = 'www.' + domainName;
 
   let wwwSanWarning: string | undefined;
   if (isApex(domainName) && domain.ssl.sanDomains) {
     const covered = domain.ssl.sanDomains.some(
-      (san) => san.toLowerCase() === wwwHost.toLowerCase() || wildcardCoversWww(san, domainName)
+      (san: any) => san.toLowerCase() === wwwHost.toLowerCase() || wildcardCoversWww(san, domainName)
     );
     if (!covered) {
       wwwSanWarning =
@@ -247,7 +239,7 @@ export function resolveNginxConfig(name: string): NginxConfigResult {
     }
   }
 
-  const wwwConflictInfo = allDomains.some((d) => d.name === wwwHost)
+  const wwwConflictInfo = allDomains.some((d: any) => d.name === wwwHost)
     ? `Skipping auto www redirect for ${domainName} — ${wwwHost} is already a registered domain with its own configuration`
     : undefined;
 

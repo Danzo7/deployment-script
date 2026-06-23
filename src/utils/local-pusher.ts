@@ -22,13 +22,21 @@ import { validateCertPath } from './security-validation.js';
 export class LocalPusher extends NginxPusher {
   private targetCertDir?: string;
   
-  constructor(domainName: string) {
-    super(domainName);
+  private constructor(domain: any, domainName: string) {
+    super(domain, domainName);
     
     // Set target cert directory if PUSH_CERT_DIR is configured
     if (PUSH_CERT_DIR && this.shouldCopyCerts()) {
       this.targetCertDir = validateCertPath(PUSH_CERT_DIR, this.domain.name);
     }
+  }
+
+  /**
+   * Factory method to create LocalPusher instance
+   */
+  static async create(domainName: string): Promise<LocalPusher> {
+    const domain = await DomainRepo.findByName(domainName);
+    return new LocalPusher(domain, domainName);
   }
   
   private get localCertPath(): string | undefined {
@@ -127,9 +135,9 @@ export class LocalPusher extends NginxPusher {
   /**
    * Update domain metadata
    */
-  private updateMetadata(): void {
-    DomainRepo.update(this.domain.name, {
-      lastPushedAt: toISO(),
+  private async updateMetadata(): Promise<void> {
+    await DomainRepo.update(this.domain.name, {
+      lastPushedAt: new Date(),
       configPath: constructSitesAvailablePath(this.domain.name),
     });
   }
@@ -202,7 +210,7 @@ export class LocalPusher extends NginxPusher {
    */
   async push(): Promise<void> {
     // Compile fresh config
-    this.compileConfig();
+    await this.compileConfig();
     
     // If PUSH_CERT_DIR is set and we have SSL, rewrite cert paths and copy certs
     if (this.targetCertDir && this.shouldCopyCerts()) {
@@ -221,7 +229,7 @@ export class LocalPusher extends NginxPusher {
       this.createSymlink();
       this.validateNginx();
       this.reloadNginx();
-      this.updateMetadata();
+      await this.updateMetadata();
     } catch (err) {
       await this.rollback(snapshot);
       throw err;

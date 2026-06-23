@@ -1,6 +1,5 @@
 import chalk from 'chalk';
-import { AppRepo, StorageRepo } from '../db/repos.js';
-import { Logger } from '../utils/logger.js';
+import { AppRepo } from '../db/repos.js';
 import { getLastRevision } from '../utils/vcs-helper.js';
 import { ensureDirectories } from '../utils/file-utils.js';
 import { formatDate } from '../utils/date-helper.js';
@@ -10,8 +9,7 @@ import { getAppRouteLines } from './domain.js';
 import path from 'path';
 
 export const info = async ({ name }: { name: string }) => {
-  const app = AppRepo.getAll().find((a) => a.name === name);
-  if (!app) throw new Error(`App "${Logger.highlight(name)}" not found.`);
+  const app = await AppRepo.findByNameWithStorages(name);
 
   const { relDir } = ensureDirectories(app.appDir);
 
@@ -64,7 +62,7 @@ export const info = async ({ name }: { name: string }) => {
 
   // Active build
   const activeBuildPath = app.activeBuild
-    ? path.basename(AppRepo.resolveActiveBuild(name) ?? app.activeBuild)
+    ? path.basename((await AppRepo.resolveActiveBuild(name)) ?? app.activeBuild)
     : 'N/A';
 
   const row = (label: string, value: string) =>
@@ -94,22 +92,17 @@ export const info = async ({ name }: { name: string }) => {
   row('Commit Date', chalk.white(commitDate));
 
   // Storages
-  const linkedStorages = app.linkedStorages ?? [];
-  if (linkedStorages.length > 0) {
+  if (app.storages.length > 0) {
     console.log(chalk.gray('  ' + '─'.repeat(40)));
-    for (const storageName of linkedStorages) {
-      try {
-        const storage = StorageRepo.findByName(storageName);
-        const size = formatSize(getDirectorySize(storage.path));
-        row('Storage', `${chalk.white(storageName)} ${chalk.gray('(')}${chalk.green(size)}${chalk.gray(')')}`);
-      } catch {
-        row('Storage', chalk.gray(`${storageName} (not found)`));
-      }
+    
+    for (const storage of app.storages) {
+      const size = formatSize(getDirectorySize(storage.path));
+      row('Storage', `${chalk.white(storage.name)} ${chalk.gray('(')}${chalk.green(size)}${chalk.gray(')')}`);
     }
   }
 
   // Routes & Domains
-  const routeLines = getAppRouteLines(name);
+  const routeLines = await getAppRouteLines(name);
   if (routeLines.length > 0) {
     console.log(chalk.gray('  ' + '─'.repeat(40)));
     for (const line of routeLines) {

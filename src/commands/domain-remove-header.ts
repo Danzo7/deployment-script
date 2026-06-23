@@ -7,7 +7,7 @@ export async function domainRemoveHeader(name: string, key: string): Promise<voi
   const normalized = normalizeDomainName(name);
 
   // 2. Look up domain — throws if not found
-  const domain = DomainRepo.findByName(normalized);
+  const domain = await DomainRepo.findByName(normalized);
 
   // 3. Throw if the key is not present
   if (!domain.headers || !(key in domain.headers)) {
@@ -19,9 +19,9 @@ export async function domainRemoveHeader(name: string, key: string): Promise<voi
   delete headers[key];
 
   // 5. Persist update
-  DomainRepo.update(normalized, {
+  await DomainRepo.update(normalized, {
     headers,
-    updatedAt: new Date().toISOString(),
+    updatedAt: new Date(),
   });
 
   // 6. Log success

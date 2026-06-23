@@ -1,78 +1,64 @@
+import { AppWithStorages } from '../db/model.js';
 import Table from 'cli-table3';
 import chalk from 'chalk';
-import { AppRepo, StorageRepo } from '../db/repos.js';
-import { App } from '../db/model.js';
+import { AppRepo } from '../db/repos.js';
 import { getAppStatus } from '../utils/pm2-helper.js';
-import { formatDate } from '../utils/date-helper.js';
-import { getDirectorySize, formatSize } from './storage.js';
 
 export const listApps = async () => {
-  // Read the directory to get all apps
-  const apps: (App & { status?: string })[] = AppRepo.getAll();
+  // Read apps with storages eagerly loaded via database join
+  const apps: (AppWithStorages & { status?: string })[] = await AppRepo.getAllWithStorages();
 
   // Fetch the status of each app
-  await Promise.all(
-    apps.map(async (app) => {
-      app.status = await getAppStatus(app.name);
-    })
-  );
+  for (const app of apps) {
+    app.status = await getAppStatus(app.name);
+  }
 
   // Create a table
   const table = new Table({
     head: [
-      chalk.cyan('#'),
-      chalk.whiteBright('Name'),
-      chalk.blue('Port'),
-      chalk.magenta('Type'),
-      chalk.yellow('Last Deployed'),
-      chalk.whiteBright('Status'),
-      chalk.whiteBright('Directory'),
-      chalk.green('Storages'),
+      chalk.cyan('Name'),
+      chalk.cyan('Port'),
+      chalk.cyan('Status'),
+      chalk.cyan('Instances'),
+      chalk.cyan('Type'),
+      chalk.cyan('Linked Storages'),
     ],
-    style: {
-      compact: false, // Make sure the table looks more spaced out
-    },
+    colWidths: [20, 10, 15, 12, 10, 40],
   });
 
-  // Push the data into the table with conditional styling
-  apps.forEach((app, index) => {
+  // Add rows to the table
+  for (const app of apps) {
     const statusColor =
       app.status === 'online'
-        ? chalk.green(app.status)
-        : app.status === 'stopped'
-          ? chalk.red(app.status)
-          : app.status === 'launching'
-            ? chalk.yellow(app.status)
-            : chalk.gray.italic(app.status);
+        ? chalk.green
+        : app.status === 'offline'
+          ? chalk.red
+          : app.status === 'stopped'
+            ? chalk.yellow
+            : chalk.gray;
 
-    const lastDeployed = formatDate(app.lastDeploy, 'N/A');
+    // Format project type with emoji
+    const typeDisplay = 
+      app.projectType === 'nextjs' ? '⚡ Next.js' :
+      app.projectType === 'nestjs' ? '🦁 NestJS' :
+      app.projectType === 'dotnet' ? '🔷 .NET' :
+      app.projectType || 'N/A';
 
-    const storageDisplay =
-      (app.linkedStorages ?? []).length === 0
-        ? chalk.gray('—')
-        : (app.linkedStorages ?? [])
-            .map((storageName) => {
-              try {
-                const storage = StorageRepo.findByName(storageName);
-                const size = formatSize(getDirectorySize(storage.path));
-                return `${chalk.white(storageName)} ${chalk.gray('(')}${chalk.green(size)}${chalk.gray(')')}`;
-              } catch {
-                return chalk.gray(`${storageName} (not found)`);
-              }
-            })
-            .join('\n');
+    // Format linked storages from database join
+    const storageDisplay = 
+      app.storages && app.storages.length > 0
+        ? app.storages.map(storage => storage.name).join(', ')
+        : chalk.gray('None');
 
     table.push([
-      chalk.cyan(index + 1),
-      chalk.whiteBright(app.name),
-      chalk.blue.bold(app.port),
-      chalk.magenta(app.projectType),
-      chalk.yellow(lastDeployed),
-      statusColor,
-      app.appDir,
+      chalk.white(app.name),
+      chalk.white(app.port.toString()),
+      statusColor(app.status || 'unknown'),
+      chalk.white(app.instances?.toString() || '1'),
+      chalk.white(typeDisplay),
       storageDisplay,
     ]);
-  });
+  }
 
   // Print the table
   console.log(table.toString());

@@ -31,14 +31,15 @@ export class RemotePusher extends NginxPusher {
   private readonly ssh: SshConnection;
   private readonly remoteCertDir: string;
 
-  constructor(
+  private constructor(
+    domain: any,
     domainName: string,
     remoteHost: string,
     sshKeyPath?: string,
     sshPassword?: string,
     sudoPassword?: string
   ) {
-    super(domainName);
+    super(domain, domainName);
     
     // Validate domain name for security
     validateSafeDomainName(domainName);
@@ -49,6 +50,20 @@ export class RemotePusher extends NginxPusher {
     // For remote deployments, use PUSH_CERT_DIR or default to /etc/nginx/ssl
     const baseCertDir = PUSH_CERT_DIR ?? '/etc/nginx/ssl';
     this.remoteCertDir = validateCertPath(baseCertDir, domainName);
+  }
+
+  /**
+   * Factory method to create RemotePusher instance
+   */
+  static async create(
+    domainName: string,
+    remoteHost: string,
+    sshKeyPath?: string,
+    sshPassword?: string,
+    sudoPassword?: string
+  ): Promise<RemotePusher> {
+    const domain = await DomainRepo.findByName(domainName);
+    return new RemotePusher(domain, domainName, remoteHost, sshKeyPath, sshPassword, sudoPassword);
   }
 
   /** Remote path for the SSL certificate, if certs are in play. */
@@ -205,7 +220,7 @@ export class RemotePusher extends NginxPusher {
    */
   private updateMetadata(): void {
     DomainRepo.update(this.domain.name, {
-      lastPushedAt: toISO(),
+      lastPushedAt: new Date(),
       configPath: constructSitesAvailablePath(this.domain.name),
     });
   }
@@ -296,7 +311,7 @@ export class RemotePusher extends NginxPusher {
       await this.ssh.connect();
 
       // Compile fresh config
-      this.compileConfig();
+      await this.compileConfig();
       
       // For remote deployments, always rewrite cert paths if SSL is enabled
       if (this.shouldCopyCerts()) {

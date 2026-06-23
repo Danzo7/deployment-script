@@ -1,5 +1,5 @@
 import path from 'path';
-import { AppRepo, StorageRepo } from '../db/repos.js';
+import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 import {  createBuildDirByType, ensureDirectories } from '../utils/file-utils.js';
 import { prepare } from '../utils/npm-helper.js';
@@ -22,18 +22,12 @@ export const deploy = async ({
 
   requireSymlinkPermission();
 
-  const app = AppRepo.getAll().find((app) => app.name === name);
-  const isFirstDeploy = app?.lastDeploy == undefined;
-  if (!app) {
-    throw new Error(
-      `App "${Logger.highlight(name)}" not found in the repository.\n` +
-      `To initialize the app, run: ${Logger.highlight(`dm init --name ${name} --repo <repo-url> --branch <branch-name> --instances <number-of-instances> --port <port-number>`)}`
-    );
+  const app = await AppRepo.findByNameWithStorages(name);
+  const isFirstDeploy = app.lastDeploy == undefined;
+  if(!app.projectType) {
+    await AppRepo.update(app.name,{projectType:"nextjs"});
+    app.projectType= "nextjs";
   }
-    if(!app.projectType) {
-      AppRepo.update(app.name,{projectType:"nextjs"});
-      app.projectType= "nextjs";
-    }
       
   Logger.info(`Deploying ${Logger.highlight(name)}...`);
 
@@ -83,10 +77,8 @@ export const deploy = async ({
     });
   }
   Logger.info('Creating build version...');
-  const linkedStorages = (app.linkedStorages ?? [])
-    .map((name) => { try { return StorageRepo.findByName(name); } catch { return null; } })
-    .filter((s): s is NonNullable<typeof s> => s !== null);
-  const buildDir = createBuildDirByType(app.appDir, app.projectType, app.projectDir, linkedStorages);
+  
+  const buildDir = createBuildDirByType(app.appDir, app.projectType, app.projectDir, app.storages);
   await runApp(buildDir, {
     name: app.name,
     port: app.port,
@@ -96,9 +88,9 @@ export const deploy = async ({
     error: path.join(logDir, 'pm2.error.log'),
     projectType: app.projectType
   });
-  AppRepo.addBuild(name, buildDir);
+  await AppRepo.addBuild(name, buildDir);
   if (currentRevision) {
-    AppRepo.updateDeployedCommit(name, currentRevision);
+    await AppRepo.updateDeployedCommit(name, currentRevision);
   }
   await pruneOldBuilds(name);
   if(lint){

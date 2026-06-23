@@ -20,7 +20,7 @@ function expiryColored(expiresAt?: string): string {
 
 export async function domainCertStatus(name: string): Promise<void> {
   const normalized = name.toLowerCase().trim();
-  const domain = DomainRepo.findByName(normalized);
+  const domain = await DomainRepo.findByName(normalized);
   if (!domain) {
     throw new Error(`Domain "${normalized}" not found`);
   }

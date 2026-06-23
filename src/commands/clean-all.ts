@@ -5,7 +5,7 @@ import { Logger } from '../utils/logger.js';
 import { pruneAllBuilds } from '../utils/build-pruner.js';
 
 export const cleanAll = async () => {
-  const apps = AppRepo.getAll();
+  const apps = await AppRepo.getAll();
 
   if (apps.length === 0) {
     Logger.info('No apps registered.');

@@ -11,12 +11,12 @@ export async function domainPush(domainName: string): Promise<void> {
   // Determine target host
   const remoteHost = NGINX_REMOTE_HOST;
   
-  // Instantiate appropriate pusher
+  // Instantiate appropriate pusher using factory methods
   let pusher;
   if (remoteHost) {
-    pusher = new RemotePusher(normalized, remoteHost, NGINX_REMOTE_KEY, NGINX_REMOTE_PASSWORD, NGINX_SUDO_PASSWORD);
+    pusher = await RemotePusher.create(normalized, remoteHost, NGINX_REMOTE_KEY, NGINX_REMOTE_PASSWORD, NGINX_SUDO_PASSWORD);
   } else {
-    pusher = new LocalPusher(normalized);
+    pusher = await LocalPusher.create(normalized);
   }
   
   // Execute push

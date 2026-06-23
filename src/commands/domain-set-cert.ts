@@ -25,7 +25,7 @@ export async function domainSetCert(
 ): Promise<void> {
   // 1. Normalize domain name and look up in DB
   const normalized = name.toLowerCase().trim();
-  const domain = DomainRepo.findByName(normalized);
+  const domain = await DomainRepo.findByName(normalized);
   if (!domain) {
     throw new Error(`Domain "${normalized}" not found`);
   }
@@ -105,7 +105,7 @@ async function _pemPath(
   const metadata = parseCertMetadata(certPem);
 
   // 12. Update domain record in DB
-  DomainRepo.update(normalized, buildSSLConfig({
+  await DomainRepo.update(normalized, buildSSLConfig({
     certPath,
     keyPath,
     metadata,
@@ -194,7 +194,7 @@ async function _pfxPath(
   const metadata = parseCertMetadata(certPem);
 
   // 16. Update domain record in DB
-  DomainRepo.update(normalized, buildSSLConfig({
+  await DomainRepo.update(normalized, buildSSLConfig({
     certPath,
     keyPath,
     metadata,

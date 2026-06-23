@@ -29,14 +29,14 @@ export async function domainReloadCerts(name?: string): Promise<void> {
   if (name) {
     // Reload specific domain
     const normalized = name.toLowerCase().trim();
-    const domain = DomainRepo.findByName(normalized);
+    const domain = await DomainRepo.findByName(normalized);
     if (!domain) {
       throw new Error(`Domain "${normalized}" not found`);
     }
     await reloadDomainCert(normalized);
   } else {
     // Reload all domains
-    const domains = DomainRepo.getAll();
+    const domains = await DomainRepo.getAll();
     if (domains.length === 0) {
       Logger.info('No domains found.');
       return;
@@ -74,7 +74,7 @@ async function reloadDomainCert(
   domainName: string,
   quiet = false
 ): Promise<'added' | 'updated' | 'removed' | 'skipped'> {
-  const domain = DomainRepo.findByName(domainName);
+  const domain = await DomainRepo.findByName(domainName);
   if (!domain) {
     throw new Error(`Domain "${domainName}" not found`);
   }
@@ -94,6 +94,12 @@ async function reloadDomainCert(
       const { certPath, keyPath, metadata } = loadCertFromStore(domainName);
 
       // Update or add certificate to database
+      await DomainRepo.update(domainName, buildSSLConfig({
+        certPath,
+        keyPath,
+        uploadedAt: dbHasCert ? domain.ssl.uploadedAt : undefined,
+        metadata,
+      }));
       DomainRepo.update(domainName, buildSSLConfig({
         certPath,
         keyPath,
@@ -128,7 +134,7 @@ async function reloadDomainCert(
       `Certificate files missing for "${domainName}": ${missing.join(', ')}. Removing SSL configuration from database.`
     );
 
-    DomainRepo.update(domainName, { ssl: { mode: 'none' } });
+    await DomainRepo.update(domainName, { ssl: { mode: 'none' } });
 
     return 'removed';
   }

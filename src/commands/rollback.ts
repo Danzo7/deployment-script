@@ -1,20 +1,19 @@
 import path from 'path';
 import chalk from 'chalk';
-import { AppRepo, StorageRepo } from '../db/repos.js';
+import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 import { applyStorageSymlinks, ensureDirectories } from '../utils/file-utils.js';
 import { getAppStatus, runApp } from '../utils/pm2-helper.js';
 
 export const rollback = async ({ name, to }: { name: string; to?: number }) => {
-  const app = AppRepo.getAll().find((a) => a.name === name);
-  if (!app) throw new Error(`App "${Logger.highlight(name)}" not found.`);
+  const app = await AppRepo.findByNameWithStorages(name);
 
   const builds = app.builds ?? [];
   if (builds.length < 2) {
     throw new Error(`Not enough builds to rollback. Only ${builds.length} build(s) available.`);
   }
 
-  const activePath = AppRepo.resolveActiveBuild(name);
+  const activePath = await AppRepo.resolveActiveBuild(name);
   const currentIndex = activePath ? builds.indexOf(activePath) : builds.length - 1;
 
   // If no --to flag, list available builds and default to previous
@@ -54,10 +53,8 @@ export const rollback = async ({ name, to }: { name: string; to?: number }) => {
     projectType: app.projectType,
   });
 
-  AppRepo.update(name, { activeBuild: targetBuild });
-  const linkedStorages = (app.linkedStorages ?? [])
-    .map((n) => { try { return StorageRepo.findByName(n); } catch { return null; } })
-    .filter((s): s is NonNullable<typeof s> => s !== null);
-  applyStorageSymlinks(targetBuild, linkedStorages);
+  await AppRepo.update(name, { activeBuild: targetBuild });
+  
+  applyStorageSymlinks(targetBuild, app.storages);
   Logger.success(`${Logger.highlight(name)} rolled back to build ${to} successfully.`);
 };

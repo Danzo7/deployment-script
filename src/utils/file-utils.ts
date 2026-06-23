@@ -160,14 +160,14 @@ export const createBuildDirForDotnet = (appDir: string, projectDir?: string): st
  * @param appDir The application directory
  * @param projectType The type of project ('nextjs' | 'nestjs' | 'dotnet')
  * @param projectDir Optional subdirectory within the release dir (for monorepos)
- * @param linkedStorages Optional array of Storage objects to symlink into the build dir
+ * @param storages Optional array of Storage objects to symlink into the build dir
  * @returns The path to the created build directory
  */
 export const createBuildDirByType = (
   appDir: string,
   projectType: 'nextjs' | 'nestjs' | 'dotnet',
   projectDir?: string,
-  linkedStorages?: Storage[]): string => {
+  storages?: Storage[]): string => {
   let buildDir: string;
   switch (projectType) {
     case 'nestjs':
@@ -181,20 +181,20 @@ export const createBuildDirByType = (
       buildDir = createBuildDir(appDir, projectDir);
       break;
   }
-  applyStorageSymlinks(buildDir, linkedStorages ?? []);
+  applyStorageSymlinks(buildDir, storages ?? []);
   return buildDir;
 };
 
 /**
- * Creates storage symlinks inside a build directory for each linked storage.
+ * Creates storage symlinks inside a build directory for each storage.
  * Uses storage.linkName as the symlink name and storage.name (via storage.path) as the target.
  * Non-fatal: logs and skips on conflicts rather than throwing.
  *
  * @param buildDir The build directory to create symlinks in
- * @param linkedStorages Array of Storage objects to link
+ * @param storages Array of Storage objects to link
  */
-export const applyStorageSymlinks = (buildDir: string, linkedStorages: Storage[] = []): void => {
-  for (const storage of linkedStorages) {
+export const applyStorageSymlinks = (buildDir: string, storages: Storage[] = []): void => {
+  for (const storage of storages) {
     const linkPath = path.join(buildDir, storage.linkName);
     const targetPath = storage.path;
 
@@ -234,4 +234,45 @@ export const applyStorageSymlinks = (buildDir: string, linkedStorages: Storage[]
     fs.symlinkSync(targetPath, linkPath);
     Logger.success(`Linked storage "${storage.name}" (${storage.linkName}) → "${targetPath}"`);
   }
+};
+
+/**
+ * Recursively sums the size of all files in a directory.
+ * Returns 0 if the directory does not exist.
+ */
+export const getDirectorySize = (dirPath: string): number => {
+  try {
+    fs.statSync(dirPath);
+  } catch (err: any) {
+    if (err.code === 'ENOENT') return 0;
+    throw err;
+  }
+
+  let total = 0;
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      total += getDirectorySize(fullPath);
+    } else if (entry.isFile()) {
+      try {
+        total += fs.statSync(fullPath).size;
+      } catch {
+        // skip files that can't be stat'd
+      }
+    }
+  }
+  return total;
+};
+
+/**
+ * Converts a byte count into a human-readable string.
+ * < 1024 → X B, < 1024² → X.XX KB, < 1024³ → X.XX MB, else → X.XX GB
+ */
+export const formatSize = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+  if (bytes < 1024 * 1024 * 1024)
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 };

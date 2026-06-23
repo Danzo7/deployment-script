@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { Domain } from '../db/model.js';
-import { DomainRepo, RouteRepo, AppRepo } from '../db/repos.js';
+import { DomainRepo } from '../db/repos.js';
 import { DOMAINS_DIR } from '../constants.js';
 import { PushSnapshot } from './domain-push-utils.js';
 import { compileDomainConfig } from './nginx-compiler.js';
@@ -14,9 +14,8 @@ export abstract class NginxPusher {
   protected compiledConfigPath: string;
   protected compiledConfig: string;
 
-  constructor(domainName: string) {
-    // Preflight: Domain lookup
-    this.domain = DomainRepo.findByName(domainName);
+  protected constructor(domain: Domain, domainName: string) {
+    this.domain = domain;
     
     // Setup compiled config path
     this.compiledConfigPath = path.join(DOMAINS_DIR, domainName, 'nginx.conf');
@@ -28,12 +27,14 @@ export abstract class NginxPusher {
   /**
    * Compile the nginx config fresh
    */
-  protected compileConfig(): void {
-    const routes = RouteRepo.getAll().filter((r) => r.domainId === this.domain.id);
-    const apps = AppRepo.getAll();
-    const allDomains = DomainRepo.getAll();
+  protected async compileConfig(): Promise<void> {
+    // Reload domain with routes to get fresh data
+    const domainWithRoutes = await DomainRepo.findByNameWithRoutes(this.domain.name);
+    this.domain = domainWithRoutes;
     
-    this.compiledConfig = compileDomainConfig(this.domain, routes, apps, allDomains);
+    const allDomains = await DomainRepo.getAll();
+    
+    this.compiledConfig = compileDomainConfig(this.domain, domainWithRoutes.routes, allDomains);
     
     // Save to disk for inspection
     fs.mkdirSync(path.dirname(this.compiledConfigPath), { recursive: true });

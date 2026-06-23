@@ -35,9 +35,14 @@ export const init = async ({
   if (type === 'dotnet') checkDotnetInstalled();
 
   // Check if app already exists
-  let app = AppRepo.getAll().find((app) => app.name === name);
-  if (app) {
+  try {
+    await AppRepo.findByName(name);
     throw new Error(`An app with the name "${name}" already exists.`);
+  } catch (err: any) {
+    // If app not found, that's what we want - continue
+    if (!err.message?.includes('not found')) {
+      throw err;
+    }
   }
 
   const appDir = path.join(appsDir, name);
@@ -46,10 +51,11 @@ export const init = async ({
   // Find an available port if none is specified
   if (!port) {
     Logger.info('Port not specified. Searching for an available port...');
-    port = await findAvailablePort(AppRepo.getAll().map((app) => app.port));
+    const apps = await AppRepo.getAll();
+    port = await findAvailablePort(apps.map((a) => a.port));
   }
 
-  app = AppRepo.add({
+  await AppRepo.add({
     port,
     repo,
     branch,

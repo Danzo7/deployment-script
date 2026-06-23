@@ -12,7 +12,7 @@ import { requireSymlinkPermission } from '../utils/os-helper.js';
 export const storageNew = async (name: string, linkName: string): Promise<void> => {
   const storagePath = path.join(STORAGE_DIR, name);
   fs.mkdirSync(storagePath, { recursive: true });
-  StorageRepo.add({ name, linkName, path: storagePath });
+  await StorageRepo.add({ name, linkName, path: storagePath });
   Logger.success(
     `Storage ${Logger.highlight(name)} created at ${Logger.highlight(storagePath)} (symlink name: ${Logger.highlight(linkName)}).`
   );
@@ -24,10 +24,12 @@ export const storageAttach = async (
 ): Promise<void> => {
   requireSymlinkPermission();
 
-  const app = AppRepo.findByName(appName);
-  const storage = StorageRepo.findByName(storageName);
+  const app = await AppRepo.findByName(appName);
+  const storage = await StorageRepo.findByName(storageName);
 
-  if (app.linkedStorages?.includes(storageName)) {
+  // Check if already attached via junction table
+  const existingStorages = await AppRepo.getStoragesByAppId(app.id);
+  if (existingStorages.some(s => s.id === storage.id)) {
     throw new Error(`Storage "${storageName}" is already attached to "${appName}"`);
   }
 
@@ -68,10 +70,8 @@ export const storageAttach = async (
     }
   }
 
-  // All conflict checks passed — update DB
-  AppRepo.update(appName, {
-    linkedStorages: [...(app.linkedStorages ?? []), storageName],
-  });
+  // All conflict checks passed — create junction table entry
+  await AppRepo.linkStorage(app.id, storage.id);
 
   // Create symlink in active build if it doesn't already exist correctly
   if (app.activeBuild) {
@@ -111,16 +111,17 @@ export const storageDetach = async (
   appName: string,
   storageName: string
 ): Promise<void> => {
-  const app = AppRepo.findByName(appName);
-  const storage = StorageRepo.findByName(storageName);
+  const app = await AppRepo.findByName(appName);
+  const storage = await StorageRepo.findByName(storageName);
 
-  if (!app.linkedStorages?.includes(storageName)) {
+  // Check if attached via junction table
+  const existingStorages = await AppRepo.getStoragesByAppId(app.id);
+  if (!existingStorages.some(s => s.id === storage.id)) {
     throw new Error(`Storage "${storageName}" is not attached to "${appName}"`);
   }
 
-  AppRepo.update(appName, {
-    linkedStorages: (app.linkedStorages ?? []).filter((s) => s !== storageName),
-  });
+  // Remove from junction table
+  await AppRepo.unlinkStorage(app.id, storage.id);
 
   // Remove symlink using linkName
   if (app.activeBuild) {
@@ -139,19 +140,19 @@ export const storageDetach = async (
 };
 
 export const storageRm = async (name: string): Promise<void> => {
-  StorageRepo.findByName(name);
+  const storage = await StorageRepo.findByName(name);
 
-  const attachedApps = AppRepo.getAll()
-    .filter((app) => app.linkedStorages?.includes(name))
-    .map((app) => app.name);
+  // Check if any apps are attached via junction table
+  const attachedApps = await AppRepo.findByStorageId(storage.id);
 
   if (attachedApps.length > 0) {
+    const appNames = attachedApps.map(app => app.name);
     throw new Error(
-      `Storage "${name}" is still attached to the following apps: ${attachedApps.join(', ')}. Detach it from all apps before removing.`
+      `Storage "${name}" is still attached to the following apps: ${appNames.join(', ')}. Detach it from all apps before removing.`
     );
   }
 
-  StorageRepo.remove(name);
+  await StorageRepo.remove(name);
 
   const storagePath = path.join(STORAGE_DIR, name);
   if (fs.existsSync(storagePath)) {
@@ -207,14 +208,13 @@ export const formatSize = (bytes: number): string => {
 };
 
 export const storageLs = async (): Promise<void> => {
-  const storages = StorageRepo.getAll();
+  const storages = await StorageRepo.getAllWithApps();
 
   if (storages.length === 0) {
     Logger.info('No storages have been created');
     return;
   }
 
-  const apps = AppRepo.getAll();
   let totalBytes = 0;
 
   const table = new Table({
@@ -233,10 +233,7 @@ export const storageLs = async (): Promise<void> => {
     const sizeBytes = getDirectorySize(storage.path);
     totalBytes += sizeBytes;
 
-    const attachedApps = apps
-      .filter((app) => app.linkedStorages?.includes(storage.name))
-      .map((app) => app.name);
-
+    const attachedApps = storage.apps.map(app => app.name);
     const attachedAppsDisplay =
       attachedApps.length > 0 ? chalk.whiteBright(attachedApps.join(', ')) : chalk.gray('—');
 

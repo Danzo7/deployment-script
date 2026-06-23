@@ -2,11 +2,14 @@
 
 A CLI tool for managing the full lifecycle of **Next.js**, **NestJS**, and **.NET Core** applications — from initialization and deployment to process management, reverse proxy configuration, and SSL. Built on PM2 and supports Git and SVN.
 
+**Version 2.0+**: Now powered by Drizzle ORM with SQLite/PostgreSQL support for better performance and reliability.
+
 ---
 
 ## Table of Contents
 
 - [Installation](#installation)
+- [Database Migration](#database-migration)
 - [Configuration](#configuration)
 - [Core Concepts](#core-concepts)
 - [Application Lifecycle](#application-lifecycle)
@@ -73,6 +76,29 @@ npm link
 ```
 
 After linking, `dm` is available globally.
+
+---
+
+## Database Migration
+
+**⚠️ Important for v1.x users**: Version 2.0 migrates from JSON-based storage to SQL databases (SQLite/PostgreSQL).
+
+### First-Time Setup (New Users)
+
+No action needed! The database will be created automatically on first use.
+
+### Upgrading from v1.x
+
+If you have existing apps, run the migration command:
+
+```bash
+dm migrate-db
+```
+
+This will:
+- Automatically backup your `db.json` to `db.json.backup-<timestamp>`
+- Migrate all apps, storages, domains, and routes to the new database
+- Show migration statistics
 
 ---
 

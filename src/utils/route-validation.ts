@@ -1,4 +1,4 @@
-import type { Domain, Route } from '../db/model.js';
+import type { App, Domain, Route } from '../db/model.js';
 
 /**
  * Normalizes a domain name string:
@@ -76,7 +76,7 @@ export function validateHostname(s: string): boolean {
  */
 export function assertPathUnique(
   routes: Route[],
-  domainId: string,
+  domainId: string|number,
   normalizedPath: string,
   domainName: string
 ): void {
@@ -87,17 +87,17 @@ export function assertPathUnique(
 }
 
 /**
- * Throws if a route with the same domainId and appName already exists.
+ * Throws if a route with the same domainId and app already exists.
  */
 export function assertAppUniqueOnDomain(
   routes: Route[],
-  domainId: string,
-  appName: string,
+  domainId: string|number,
+  app: App,
   domainName: string
 ): void {
-  const existing = routes.find((r) => r.domainId === domainId && r.appName === appName);
+  const existing = routes.find((r) => r.domainId === domainId && r.appId === app.id);
   if (existing) {
-    throw new Error(`App "${appName}" is already routed under domain "${domainName}"`);
+    throw new Error(`App "${app.name}" is already routed under domain "${domainName}"`);
   }
 }
 
@@ -107,16 +107,16 @@ export function assertAppUniqueOnDomain(
  */
 export function assertAppNotRoutedElsewhere(
   routes: Route[],
-  appName: string,
+  app: App,
   domains: Domain[]
 ): void {
-  const existing = routes.find((r) => r.appName === appName);
+  const existing = routes.find((r) => r.appId === app.id);
   if (existing) {
     const domain = domains.find((d) => d.id === existing.domainId);
     const domainName = domain ? domain.name : existing.domainId;
     const displayPath = existing.path === '' ? '/' : '/' + existing.path;
     throw new Error(
-      `App "${appName}" is already routed at ${domainName}${displayPath}. Use --force to add another route.`
+      `App "${app.name}" is already routed at ${domainName}${displayPath}. Use --force to add another route.`
     );
   }
 }

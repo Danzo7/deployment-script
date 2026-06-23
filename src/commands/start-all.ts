@@ -1,18 +1,19 @@
 // start-all.ts
 
 import path from "path";
-import { AppRepo } from "../db/repos.js";
+import { AppRepo } from '../db/repos.js';
 import { ensureDirectories } from "../utils/file-utils.js";
 import { getAppStatus, runApp } from "../utils/pm2-helper.js";
 import { Logger } from "../utils/logger.js";
 
 
 export async function startAllApplications() {
-    for (const app of AppRepo.getAll()) {
+    const apps = await AppRepo.getAll();
+    for (const app of apps) {
         const appStatus = await getAppStatus(app.name);
         if (appStatus !== 'online') {
               const {  logDir } = ensureDirectories(app.appDir);
-            const buildDir = AppRepo.resolveActiveBuild(app.name) ?? app.builds?.[app.builds.length - 1];
+            const buildDir = await AppRepo.resolveActiveBuild(app.name) ?? app.builds?.[app.builds.length - 1];
             if(!buildDir){
                 Logger.warn(`No build found for ${app.name}`);
                 continue;

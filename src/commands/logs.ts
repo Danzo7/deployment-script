@@ -2,9 +2,8 @@ import pm2 from 'pm2';
 import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 
-export const logs = ({ name }: { name: string }) => {
-  const app = AppRepo.getAll().find((a) => a.name === name);
-  if (!app) throw new Error(`App "${Logger.highlight(name)}" not found.`);
+export const logs = async ({ name }: { name: string }) => {
+  await AppRepo.findByName(name);
 
   pm2.connect((connectErr) => {
     if (connectErr) {

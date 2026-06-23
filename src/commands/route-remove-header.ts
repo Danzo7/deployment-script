@@ -1,6 +1,5 @@
 import { normalizeDomainName, normalizePath } from '../utils/route-validation.js';
 import { DomainRepo, RouteRepo } from '../db/repos.js';
-import { getDB } from '../db/db.js';
 import { Logger } from '../utils/logger.js';
 
 export async function routeRemoveHeader(
@@ -13,10 +12,10 @@ export async function routeRemoveHeader(
   const normalizedPath = normalizePath(location);
 
   // 2. Look up domain — throws if not found
-  const domain = DomainRepo.findByName(normalizedDomain);
+  const domain = await DomainRepo.findByName(normalizedDomain);
 
   // 3. Look up route — throw if not found
-  const route = RouteRepo.findByDomainAndPath(domain.id, normalizedPath);
+  const route = await RouteRepo.findByDomainAndPath(domain.id, normalizedPath);
   if (!route) {
     throw new Error(
       `No route found for "/${normalizedPath}" on domain "${normalizedDomain}"`
@@ -34,9 +33,8 @@ export async function routeRemoveHeader(
   const headers: Record<string, string> = { ...route.headers };
   delete headers[key];
 
-  // 6. Persist using Object.assign + getDB().write() pattern
-  Object.assign(route, { headers, updatedAt: new Date().toISOString() });
-  getDB().write();
+  // 6. Update route in database
+  await RouteRepo.update(route.id, { headers });
 
   // 7. Log success
   Logger.success(

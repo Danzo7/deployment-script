@@ -68,7 +68,7 @@ const removeBuilds = async (appName: string, buildPaths: string[]): Promise<void
         `Removing old build: ${path.basename(buildPath)}`,
         () => removeBuildDir(buildPath)
       );
-      AppRepo.removeBuild(appName, buildPath);
+      await AppRepo.removeBuild(appName, buildPath);
     } catch {
       Logger.warn(
         `Could not remove "${path.basename(buildPath)}" — skipping. Run ${Logger.command('dm clean')} to retry.`
@@ -82,7 +82,7 @@ const removeBuilds = async (appName: string, buildPaths: string[]): Promise<void
  * removing the oldest non-active ones with retries to handle Windows file locks.
  */
 export const pruneOldBuilds = async (appName: string): Promise<void> => {
-  const app = AppRepo.getAll().find((a) => a.name === appName);
+  const app = await AppRepo.findByName(appName);
   if (!app?.builds || app.builds.length <= MAX_BUILDS) return;
 
   const buildsToRemove = app.builds
@@ -97,7 +97,7 @@ export const pruneOldBuilds = async (appName: string): Promise<void> => {
  * Called by `dm clean`. Removes all non-active builds regardless of count.
  */
 export const pruneAllBuilds = async (appName: string): Promise<void> => {
-  const app = AppRepo.getAll().find((a) => a.name === appName);
+  const app = await AppRepo.findByName(appName);
   if (!app?.builds || app.builds.length === 0) {
     Logger.info("No old builds to clean.");
     return;

@@ -5,7 +5,7 @@ import { Logger } from '../utils/logger.js';
 import { DOMAINS_DIR } from '../constants.js';
 
 export async function domainCompile(name: string): Promise<void> {
-  const { config, domainName, wwwSanWarning, wwwConflictInfo } = resolveNginxConfig(name);
+  const { config, domainName, wwwSanWarning, wwwConflictInfo } = await resolveNginxConfig(name);
 
   if (wwwSanWarning) Logger.warn(wwwSanWarning);
   if (wwwConflictInfo) Logger.info(wwwConflictInfo);
