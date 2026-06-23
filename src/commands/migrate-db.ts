@@ -58,14 +58,28 @@ export async function migrateFromJSON() {
     if (legacyData.storages && Array.isArray(legacyData.storages)) {
       for (const storage of legacyData.storages) {
         try {
+          // Validate required fields
+          const missingFields: string[] = [];
+          if (!storage.name) missingFields.push('name');
+          if (!storage.linkName) missingFields.push('linkName');
+          if (!storage.path) missingFields.push('path');
+          
+          if (missingFields.length > 0) {
+            Logger.error(`❌ CANNOT migrate storage - missing required fields: ${missingFields.join(', ')}`);
+            Logger.error(`   Storage data: ${JSON.stringify(storage)}`);
+            throw new Error(`Cannot migrate storage without required fields: ${missingFields.join(', ')}`);
+          }
+          
           await StorageRepo.add({
             name: storage.name,
             linkName: storage.linkName,
             path: storage.path,
           });
           stats.storages++;
+          Logger.info(chalk.green(`  ✓ Migrated storage: ${storage.name}`));
         } catch (error) {
-          Logger.warn(`Failed to migrate storage ${storage.name}:`, error);
+          Logger.error(`❌ Failed to migrate storage ${storage.name}:`, error);
+          throw error; // Stop migration if any storage fails
         }
       }
     }
@@ -74,12 +88,26 @@ export async function migrateFromJSON() {
     if (legacyData.apps && Array.isArray(legacyData.apps)) {
       for (const app of legacyData.apps) {
         try {
-          await AppRepo.add({
-            id: app.id,
+          // Validate required fields - MUST have all of these
+          const missingFields: string[] = [];
+          if (!app.name) missingFields.push('name');
+          if (!app.appDir) missingFields.push('appDir');
+          if (!app.repo) missingFields.push('repo');
+          if (!app.branch) missingFields.push('branch');
+          if (!app.projectType) missingFields.push('projectType');
+          if (app.port === undefined || app.port === null) missingFields.push('port');
+          
+          if (missingFields.length > 0) {
+            Logger.error(`❌ CANNOT migrate app "${app.name || 'unknown'}" - missing required fields: ${missingFields.join(', ')}`);
+            Logger.error(`   App data: ${JSON.stringify(app)}`);
+            throw new Error(`Cannot migrate app without required fields: ${missingFields.join(', ')}`);
+          }
+          
+          const createdApp = await AppRepo.add({
             name: app.name,
             appDir: app.appDir,
             port: app.port,
-            instances: app.instances || 1,
+            instances: app.instances ?? 1,
             repo: app.repo,
             branch: app.branch,
             vcsType: app.vcsType || 'git',
@@ -88,26 +116,33 @@ export async function migrateFromJSON() {
             projectType: app.projectType,
             projectDir: app.projectDir,
             lastDeployedCommit: app.lastDeployedCommit,
-            lastDeploy: app.lastDeploy,
-            createdAt: app.createdAt,
-            updatedAt: app.updatedAt,
           } as any);
+          
+          // Update with lastDeploy if it exists
+          if (app.lastDeploy) {
+            await AppRepo.update(app.name, {
+              lastDeploy: new Date(app.lastDeploy),
+            });
+          }
+          
           stats.apps++;
+          Logger.info(chalk.green(`  ✓ Migrated app: ${app.name}`));
 
           // Migrate linkedStorages to app_storage junction table
           if (app.linkedStorages && Array.isArray(app.linkedStorages)) {
             for (const storageName of app.linkedStorages) {
               try {
                 const storage = await StorageRepo.findByName(storageName);
-                await AppRepo.linkStorage(app.id, storage.id);
+                await AppRepo.linkStorage(createdApp.id, storage.id);
                 stats.appStorageLinks++;
               } catch (error) {
-                Logger.warn(`Failed to link storage ${storageName} to app ${app.name}:`, error);
+                Logger.warn(`  ⚠ Failed to link storage ${storageName} to app ${app.name}:`, error);
               }
             }
           }
         } catch (error) {
-          Logger.warn(`Failed to migrate app ${app.name}:`, error);
+          Logger.error(`❌ Failed to migrate app ${app.name || 'unknown'}:`, error);
+          throw error; // Stop migration if any app fails
         }
       }
     }
@@ -116,20 +151,25 @@ export async function migrateFromJSON() {
     if (legacyData.domains && Array.isArray(legacyData.domains)) {
       for (const domain of legacyData.domains) {
         try {
+          if (!domain.name) {
+            Logger.error(`❌ CANNOT migrate domain - missing required field: name`);
+            throw new Error('Cannot migrate domain without name');
+          }
+          
           await DomainRepo.add({ name: domain.name });
           // Update with additional fields
           await DomainRepo.update(domain.name, {
             ssl: domain.ssl || { mode: 'none' },
             headers: domain.headers,
-            lastPushedAt: domain.lastPushedAt,
+            lastPushedAt: domain.lastPushedAt ? new Date(domain.lastPushedAt) : undefined,
             configPath: domain.configPath,
-            lastCompiledAt: domain.lastCompiledAt,
-            createdAt: domain.createdAt,
-            updatedAt: domain.updatedAt,
+            lastCompiledAt: domain.lastCompiledAt ? new Date(domain.lastCompiledAt) : undefined,
           });
           stats.domains++;
+          Logger.info(chalk.green(`  ✓ Migrated domain: ${domain.name}`));
         } catch (error) {
-          Logger.warn(`Failed to migrate domain ${domain.name}:`, error);
+          Logger.error(`❌ Failed to migrate domain ${domain.name}:`, error);
+          throw error; // Stop migration if any domain fails
         }
       }
     }
@@ -138,6 +178,11 @@ export async function migrateFromJSON() {
     if (legacyData.routes && Array.isArray(legacyData.routes)) {
       for (const route of legacyData.routes) {
         try {
+          if (!route.appName || !route.domainId || route.path === undefined) {
+            Logger.warn(`⚠ Skipping route ${route.id} - missing required fields (appName: ${route.appName}, domainId: ${route.domainId}, path: ${route.path})`);
+            continue; // Routes can be skipped if invalid
+          }
+          
           // Find the app by name to get its ID
           const app = await AppRepo.findByName(route.appName);
           
@@ -147,8 +192,10 @@ export async function migrateFromJSON() {
             appId: app.id,
           });
           stats.routes++;
+          Logger.info(chalk.green(`  ✓ Migrated route: ${route.appName} on domain ${route.domainId}`));
         } catch (error) {
-          Logger.warn(`Failed to migrate route ${route.id} (app: ${route.appName}):`, error);
+          Logger.warn(`⚠ Failed to migrate route ${route.id} (app: ${route.appName}, domain: ${route.domainId}):`, error);
+          // Don't throw - routes can be recreated manually if needed
         }
       }
     }
