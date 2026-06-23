@@ -51,6 +51,12 @@ export async function migrateFromJSON() {
     routes: 0,
   };
 
+  // ID mapping: old ID -> new ID
+  const appIdMap = new Map<string, string | number>();
+  const storageIdMap = new Map<string, string | number>();
+  const domainIdMap = new Map<string, string | number>();
+  const domainNameMap = new Map<string, string>(); // old ID -> domain name
+
   try {
     // Migrate Storages first (apps may reference them)
     if (legacyData.storages && Array.isArray(legacyData.storages)) {
@@ -67,11 +73,17 @@ export async function migrateFromJSON() {
             throw new Error(`Cannot migrate storage without required fields: ${missingFields.join(', ')}`);
           }
           
-          await StorageRepo.add({
+          const createdStorage = await StorageRepo.add({
             name: storage.name,
             linkName: storage.linkName ?? null,
             path: storage.path,
           });
+          
+          // Map old ID to new ID
+          if (storage.id) {
+            storageIdMap.set(storage.id.toString(), createdStorage.id);
+          }
+          
           stats.storages++;
           Logger.info(chalk.green(`  ✓ Migrated storage: ${storage.name}`));
         } catch (error) {
@@ -115,6 +127,11 @@ export async function migrateFromJSON() {
             lastDeployedCommit: app.lastDeployedCommit,
           } as any);
           
+          // Map old ID to new ID
+          if (app.id) {
+            appIdMap.set(app.id.toString(), createdApp.id);
+          }
+          
           // Update with lastDeploy if it exists
           if (app.lastDeploy) {
             await AppRepo.update(app.name, {
@@ -132,6 +149,7 @@ export async function migrateFromJSON() {
                 const storage = await StorageRepo.findByName(storageName);
                 await AppRepo.linkStorage(createdApp.id, storage.id);
                 stats.appStorageLinks++;
+                Logger.info(chalk.gray(`    → Linked storage: ${storageName}`));
               } catch (error) {
                 Logger.warn(`  ⚠ Failed to link storage ${storageName} to app ${app.name}:`, error);
               }
@@ -153,7 +171,14 @@ export async function migrateFromJSON() {
             throw new Error('Cannot migrate domain without name');
           }
           
-          await DomainRepo.add({ name: domain.name });
+          const createdDomain = await DomainRepo.add({ name: domain.name });
+          
+          // Map old ID to new ID and store domain name
+          if (domain.id) {
+            domainIdMap.set(domain.id.toString(), createdDomain.id);
+            domainNameMap.set(domain.id.toString(), domain.name);
+          }
+          
           // Update with additional fields
           await DomainRepo.update(domain.name, {
             ssl: domain.ssl || { mode: 'none' },
@@ -171,27 +196,57 @@ export async function migrateFromJSON() {
       }
     }
 
-    // Migrate Routes (convert appName to appId)
+    // Migrate Routes (convert appName to appId and map domain IDs)
     if (legacyData.routes && Array.isArray(legacyData.routes)) {
       for (const route of legacyData.routes) {
         try {
-          if (!route.appName || !route.domainId || route.path === undefined) {
-            Logger.warn(`⚠ Skipping route ${route.id} - missing required fields (appName: ${route.appName}, domainId: ${route.domainId}, path: ${route.path})`);
-            continue; // Routes can be skipped if invalid
+          // Check if route has required fields
+          const routeDomainIdentifier = route.domainName || route.domainId;
+          if (!route.appName || !routeDomainIdentifier || route.path === undefined) {
+            Logger.warn(`⚠ Skipping route ${route.id} - missing required fields (appName: ${route.appName}, domainId/domainName: ${routeDomainIdentifier}, path: ${route.path})`);
+            continue;
           }
           
-          // Find the app by name to get its ID
+          let newDomainId: string | number | undefined;
+          let domainName = 'unknown';
+          
+          // If route has domainName, use it directly
+          if (route.domainName) {
+            domainName = route.domainName;
+            const domain = await DomainRepo.findByName(route.domainName);
+            newDomainId = domain.id;
+          } 
+          // Otherwise, map the old domainId to new domainId
+          else if (route.domainId) {
+            newDomainId = domainIdMap.get(route.domainId.toString());
+            domainName = domainNameMap.get(route.domainId.toString()) || 'unknown';
+            
+            if (!newDomainId) {
+              Logger.warn(`⚠ Skipping route ${route.id} - domain ID ${route.domainId} not found in migration map`);
+              continue;
+            }
+          }
+          
+          // Find the app by name to get its new ID
           const app = await AppRepo.findByName(route.appName);
           
-          await RouteRepo.add({
-            domainId: route.domainId,
+          const createdRoute = await RouteRepo.add({
+            domainId: newDomainId!,
             path: route.path,
             appId: app.id,
           });
+          
+          // Update route headers if they exist
+          if (route.headers) {
+            await RouteRepo.update(createdRoute.id, {
+              headers: route.headers,
+            });
+          }
+          
           stats.routes++;
-          Logger.info(chalk.green(`  ✓ Migrated route: ${route.appName} on domain ${route.domainId}`));
+          Logger.info(chalk.green(`  ✓ Migrated route: ${domainName}${route.path ? '/' + route.path : '/'} → ${route.appName}${route.headers ? ' (with headers)' : ''}`));
         } catch (error) {
-          Logger.warn(`⚠ Failed to migrate route ${route.id} (app: ${route.appName}, domain: ${route.domainId}):`, error);
+          Logger.warn(`⚠ Failed to migrate route ${route.id} (app: ${route.appName}):`, error);
           // Don't throw - routes can be recreated manually if needed
         }
       }
@@ -204,6 +259,12 @@ export async function migrateFromJSON() {
     Logger.info(`  App-Storages:  ${stats.appStorageLinks}`);
     Logger.info(`  Domains:       ${stats.domains}`);
     Logger.info(`  Routes:        ${stats.routes}`);
+    
+    Logger.info(chalk.cyan(`\nRelationships Preserved:`));
+    Logger.info(`  ✓ Storage → App links:  ${stats.appStorageLinks} connections maintained`);
+    Logger.info(`  ✓ Route → Domain:       ${stats.routes} routes linked to their domains`);
+    Logger.info(`  ✓ Route → App:          ${stats.routes} routes linked to their apps`);
+    Logger.info(`  ✓ ID Mappings:          ${appIdMap.size} apps, ${domainIdMap.size} domains, ${storageIdMap.size} storages`);
     
     Logger.info(chalk.yellow(`\n⚠️  The legacy db.json file has been backed up to:`));
     Logger.info(chalk.gray(`   ${backupPath}`));
