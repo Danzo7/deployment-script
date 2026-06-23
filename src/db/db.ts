@@ -189,15 +189,14 @@ export const initializeDB = async () => {
 
 /**
  * Get the database instance.
- * Ensure the database is initialized before using.
+ * Automatically initializes the connection if not already connected.
  */
 export const getDB = (): DrizzleDB => {
   if (!db) {
-    console.warn('\n⚠️  WARNING: Database is not initialized!');
-    console.warn('Run "dm migrate-db" to initialize and migrate your database.\n');
-    throw new Error('Database not initialized. Run "dm migrate-db" first.');
+    // Auto-initialize the connection when first accessed
+    getConnection();
   }
-  return db;
+  return db!;
 };
 
 /**
