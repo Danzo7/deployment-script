@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import yargs from 'yargs';
 import chalk from 'chalk';
-import { initializeDB } from './db/db.js';
 import { deploy } from './commands/deploy.js';
 import { init } from './commands/init.js';
 import { APP_DIR, NEXT_DIR, NEST_DIR, DOTNET_DIR, SECRET_KEY } from './constants.js';
@@ -89,8 +88,6 @@ if (isMigrationNeeded()) {
   Logger.info(chalk.cyan('The database has been migrated to SQL (SQLite/PostgreSQL).'));
   Logger.info(chalk.cyan('Run "dm migrate-db" to migrate your data from db.json to the new database.\n'));
 }
-
-await initializeDB();
 try {
   await yargs(process.argv.slice(2)).scriptName('dm')
     .middleware((argv) => {

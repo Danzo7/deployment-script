@@ -17,13 +17,15 @@ interface LegacyDatabaseSchema {
  * Migrate from legacy lowdb JSON file to Drizzle (SQLite or PostgreSQL)
  */
 export async function migrateFromJSON() {
+    Logger.info('Initializing database...');
+    await initNewDB();
+    Logger.info(chalk.green('✓ Database initialized successfully'));
+
   const jsonPath = path.resolve(APP_DIR, 'db.json');
   
-  if (!existsSync(jsonPath)) {
-    Logger.info('No legacy db.json file found. Skipping migration.');
+ if (!existsSync(jsonPath)) {
     return;
   }
-
   Logger.info(chalk.blue('🔄 Starting database migration from JSON to SQL...'));
 
   // Create backup
@@ -40,10 +42,6 @@ export async function migrateFromJSON() {
     Logger.error('Failed to read or parse db.json:', error);
     throw error;
   }
-
-  // Initialize new database
-  await initNewDB();
-  Logger.info(chalk.green('✓ Initialized new database'));
 
   const stats = {
     apps: 0,

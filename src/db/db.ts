@@ -52,70 +52,79 @@ export const initializeDB = async () => {
     // Create tables if they don't exist
     sqliteInstance.exec(`
       CREATE TABLE IF NOT EXISTS apps (
-        id TEXT PRIMARY KEY,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
         app_dir TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
         port INTEGER NOT NULL,
         instances INTEGER DEFAULT 1,
         repo TEXT NOT NULL,
         branch TEXT NOT NULL,
         vcs_type TEXT DEFAULT 'git',
-        last_deploy TEXT,
+        last_deploy INTEGER,
         builds TEXT,
         active_build TEXT,
         project_type TEXT NOT NULL,
         project_dir TEXT,
-        linked_storages TEXT,
         last_deployed_commit TEXT
       );
       CREATE INDEX IF NOT EXISTS apps_name_idx ON apps(name);
       CREATE INDEX IF NOT EXISTS apps_port_idx ON apps(port);
 
       CREATE TABLE IF NOT EXISTS storages (
-        id TEXT PRIMARY KEY,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
-        link_name TEXT NOT NULL,
+        link_name TEXT,
         path TEXT NOT NULL,
-        created_at TEXT NOT NULL
+        created_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS storages_name_idx ON storages(name);
 
       CREATE TABLE IF NOT EXISTS domains (
-        id TEXT PRIMARY KEY,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
         ssl TEXT NOT NULL,
         headers TEXT,
-        last_pushed_at TEXT,
+        last_pushed_at INTEGER,
         config_path TEXT,
-        last_compiled_at TEXT
+        last_compiled_at INTEGER
       );
       CREATE INDEX IF NOT EXISTS domains_name_idx ON domains(name);
 
       CREATE TABLE IF NOT EXISTS routes (
-        id TEXT PRIMARY KEY,
-        domain_id TEXT NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        domain_id INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
         path TEXT NOT NULL,
-        app_name TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
+        app_id INTEGER NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
         headers TEXT
       );
       CREATE INDEX IF NOT EXISTS routes_domain_id_idx ON routes(domain_id);
       CREATE INDEX IF NOT EXISTS routes_domain_path_idx ON routes(domain_id, path);
+      CREATE INDEX IF NOT EXISTS routes_app_id_idx ON routes(app_id);
+
+      CREATE TABLE IF NOT EXISTS app_storage (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        app_id INTEGER NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
+        storage_id INTEGER NOT NULL REFERENCES storages(id) ON DELETE CASCADE,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS app_storage_app_id_idx ON app_storage(app_id);
+      CREATE INDEX IF NOT EXISTS app_storage_storage_id_idx ON app_storage(storage_id);
     `);
   } else if (DATABASE_TYPE === 'postgres' && postgresInstance) {
     // For PostgreSQL, create tables using CREATE IF NOT EXISTS
     await postgresInstance.query(`
       CREATE TABLE IF NOT EXISTS apps (
-        id UUID PRIMARY KEY,
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR(255) NOT NULL UNIQUE,
         app_dir VARCHAR(500) NOT NULL,
-        created_at TIMESTAMP NOT NULL,
-        updated_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
         port INTEGER NOT NULL,
         instances INTEGER DEFAULT 1,
         repo TEXT NOT NULL,
@@ -126,26 +135,25 @@ export const initializeDB = async () => {
         active_build VARCHAR(500),
         project_type VARCHAR(20) NOT NULL,
         project_dir VARCHAR(255),
-        linked_storages JSONB,
         last_deployed_commit JSONB
       );
       CREATE INDEX IF NOT EXISTS apps_name_idx ON apps(name);
       CREATE INDEX IF NOT EXISTS apps_port_idx ON apps(port);
 
       CREATE TABLE IF NOT EXISTS storages (
-        id UUID PRIMARY KEY,
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR(255) NOT NULL UNIQUE,
-        link_name VARCHAR(255) NOT NULL,
+        link_name VARCHAR(255),
         path VARCHAR(500) NOT NULL,
-        created_at TIMESTAMP NOT NULL
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
       );
       CREATE INDEX IF NOT EXISTS storages_name_idx ON storages(name);
 
       CREATE TABLE IF NOT EXISTS domains (
-        id UUID PRIMARY KEY,
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR(255) NOT NULL UNIQUE,
-        created_at TIMESTAMP NOT NULL,
-        updated_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
         ssl JSONB NOT NULL,
         headers JSONB,
         last_pushed_at TIMESTAMP,
@@ -155,16 +163,26 @@ export const initializeDB = async () => {
       CREATE INDEX IF NOT EXISTS domains_name_idx ON domains(name);
 
       CREATE TABLE IF NOT EXISTS routes (
-        id UUID PRIMARY KEY,
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         domain_id UUID NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
         path VARCHAR(500) NOT NULL,
-        app_name VARCHAR(255) NOT NULL,
-        created_at TIMESTAMP NOT NULL,
-        updated_at TIMESTAMP NOT NULL,
+        app_id UUID NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
         headers JSONB
       );
       CREATE INDEX IF NOT EXISTS routes_domain_id_idx ON routes(domain_id);
       CREATE INDEX IF NOT EXISTS routes_domain_path_idx ON routes(domain_id, path);
+      CREATE INDEX IF NOT EXISTS routes_app_id_idx ON routes(app_id);
+
+      CREATE TABLE IF NOT EXISTS app_storage (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        app_id UUID NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
+        storage_id UUID NOT NULL REFERENCES storages(id) ON DELETE CASCADE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS app_storage_app_id_idx ON app_storage(app_id);
+      CREATE INDEX IF NOT EXISTS app_storage_storage_id_idx ON app_storage(storage_id);
     `);
   }
 };
@@ -175,7 +193,9 @@ export const initializeDB = async () => {
  */
 export const getDB = (): DrizzleDB => {
   if (!db) {
-    throw new Error('Database is not initialized. Call initializeDB() first.');
+    console.warn('\n⚠️  WARNING: Database is not initialized!');
+    console.warn('Run "dm migrate-db" to initialize and migrate your database.\n');
+    throw new Error('Database not initialized. Run "dm migrate-db" first.');
   }
   return db;
 };
