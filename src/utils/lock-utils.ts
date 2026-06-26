@@ -46,6 +46,7 @@ export const forceReleaseLock = (appName:string) => {
   // Check if the lock file exists
   if (!fs.existsSync(lockFile)) {
     Logger.info(`No lock found for application "${appName}".`);
+    return; // ✅ Exit early if no lock exists
   }
 
   try {
@@ -53,7 +54,10 @@ export const forceReleaseLock = (appName:string) => {
     const pid = parseInt(fs.readFileSync(lockFile, 'utf8'), 10);
 
     if (isNaN(pid)) {
-      throw new Error(`Invalid PID in lock file for application "${appName}".`);
+      // ✅ Delete corrupt lock file even if PID is invalid
+      Logger.warn(`Invalid PID in lock file for application "${appName}". Removing lock file.`);
+      fs.unlinkSync(lockFile);
+      return;
     }
 
     // Check if the process is still running and kill it
@@ -64,12 +68,24 @@ export const forceReleaseLock = (appName:string) => {
       if (err.code === 'ESRCH') {
         Logger.warn(`Process with PID ${pid} is not running.`);
       } else {
-        throw err;
+        // ✅ Still remove lock file even if kill fails with unexpected error
+        Logger.warn(`Failed to kill process ${pid}: ${err.message}. Removing lock file anyway.`);
       }
     }
+    
+    // ✅ Always remove the lock file
     fs.unlinkSync(lockFile);
     Logger.success(`Lock for application "${appName}" has been released.`);
   } catch (err:any) {
+    // ✅ Attempt to remove lock file even on error
+    try {
+      if (fs.existsSync(lockFile)) {
+        fs.unlinkSync(lockFile);
+        Logger.warn(`Lock file removed despite error: ${err.message}`);
+      }
+    } catch {
+      // Ignore cleanup errors
+    }
     throw new Error(`Failed to release lock for application "${appName}": ${err.message}`);
   }
 };

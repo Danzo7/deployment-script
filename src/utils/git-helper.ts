@@ -141,3 +141,29 @@ export const discardUncommittedChanges = async (dir: string) => {
     throw error;
   }
 };
+
+export const changeRemoteUrl = async (dir: string, newUrl: string): Promise<void> => {
+  checkGit();
+  const git = simpleGit(dir);
+
+  try {
+    // Get current remote name (usually 'origin')
+    const remotes = await withRetry('Getting git remotes', async () => git.getRemotes(true));
+    
+    if (remotes.length === 0) {
+      throw new Error('No git remote found in repository');
+    }
+
+    const remoteName = remotes[0].name;
+    
+    Logger.info(`Changing git remote '${remoteName}' to ${newUrl}`);
+    await withRetry('Changing git remote URL', async () =>
+      git.remote(['set-url', remoteName, newUrl])
+    );
+
+    Logger.success(`Git remote URL changed successfully to ${newUrl}`);
+  } catch (error) {
+    Logger.error('Failed to change git remote URL.');
+    throw error;
+  }
+};

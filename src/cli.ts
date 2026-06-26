@@ -37,6 +37,7 @@ import { domainPush } from './commands/domain-push.js';
 import { routeSetHeader } from './commands/route-set-header.js';
 import { routeRemoveHeader } from './commands/route-remove-header.js';
 import { migrateFromJSON, isMigrationNeeded } from './commands/migrate-db.js';
+import { changeRepo } from './commands/change-repo.js';
 
 interface InitArgs {
   name: string;
@@ -894,6 +895,31 @@ try {
           async () => {
             try {
               await migrateFromJSON();
+            } catch (err) {
+              Logger.error(err);
+              process.exit(1);
+            }
+          }
+        )
+        .command(
+          'change-repo <name>',
+          'Change the repository URL for an application',
+          (yargs) =>
+            yargs
+              .positional('name', {
+                type: 'string',
+                demandOption: true,
+                describe: 'The name of the application',
+              })
+              .option('repo', {
+                type: 'string',
+                demandOption: true,
+                alias: 'r',
+                describe: 'The new repository URL',
+              }),
+          async (args) => {
+            try {
+              await changeRepo({ name: args.name, newRepo: args.repo as string });
             } catch (err) {
               Logger.error(err);
               process.exit(1);

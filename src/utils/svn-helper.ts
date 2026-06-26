@@ -155,3 +155,19 @@ export const discardSvnChanges = async (dir: string): Promise<void> => {
     throw error;
   }
 };
+
+export const relocateSvnRepo = async (dir: string, newUrl: string, branch: string): Promise<void> => {
+  checkSvn(true);
+  const fullUrl = buildSvnUrl(newUrl, branch);
+
+  try {
+    Logger.info(`Relocating SVN repository to ${fullUrl}`);
+    await withRetry('Relocating SVN repository', async () =>
+      svn(`relocate "${fullUrl}"`, dir)
+    );
+    Logger.success(`SVN repository relocated successfully to ${fullUrl}`);
+  } catch (error) {
+    Logger.error('Failed to relocate SVN repository.');
+    throw error;
+  }
+};

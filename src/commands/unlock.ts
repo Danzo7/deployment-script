@@ -10,7 +10,7 @@ export const unlock = async ({
   name: string;
 }) => {
   Logger.info(`Unlocking app: ${Logger.highlight(name)}...`);
-  await AppRepo.findByName(name);
+  // ✅ Remove database check - unlock should work even if app doesn't exist in DB
+  // This allows unlocking stale locks from deleted apps
   forceReleaseLock(name);
-
 };

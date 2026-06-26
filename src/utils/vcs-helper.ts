@@ -1,6 +1,6 @@
 import { App } from '../db/model.js';
-import { handleGitRepo, getLastCommit, discardUncommittedChanges, pushChanges } from './git-helper.js';
-import { handleSvnRepo, getLastSvnRevision, discardSvnChanges } from './svn-helper.js';
+import { handleGitRepo, getLastCommit, discardUncommittedChanges, pushChanges, changeRemoteUrl } from './git-helper.js';
+import { handleSvnRepo, getLastSvnRevision, discardSvnChanges, relocateSvnRepo } from './svn-helper.js';
 
 export const handleRepo = (
   app: Pick<App, 'vcsType' | 'repo' | 'branch'>,
@@ -39,4 +39,15 @@ export const discardLocalChanges = async (
     return discardSvnChanges(dir);
   }
   return discardUncommittedChanges(dir);
+};
+
+export const changeRepoUrl = async (
+  app: Pick<App, 'vcsType' | 'branch'>,
+  dir: string,
+  newRepo: string
+): Promise<void> => {
+  if (app.vcsType === 'svn') {
+    return relocateSvnRepo(dir, newRepo, app.branch);
+  }
+  return changeRemoteUrl(dir, newRepo);
 };
