@@ -38,6 +38,7 @@ import { routeSetHeader } from './commands/route-set-header.js';
 import { routeRemoveHeader } from './commands/route-remove-header.js';
 import { migrateFromJSON, isMigrationNeeded } from './commands/migrate-db.js';
 import { changeRepo } from './commands/change-repo.js';
+import { installService } from './commands/install-service.js';
 
 interface InitArgs {
   name: string;
@@ -920,6 +921,24 @@ try {
           async (args) => {
             try {
               await changeRepo({ name: args.name, newRepo: args.repo as string });
+            } catch (err) {
+              Logger.error(err);
+              process.exit(1);
+            }
+          }
+        )
+        .command(
+          'install-service',
+          'Install auto-startup service to run "dm start-all" on boot',
+          (yargs) =>
+            yargs.option('uninstall', {
+              type: 'boolean',
+              default: false,
+              describe: 'Uninstall the auto-startup service',
+            }),
+          async (args) => {
+            try {
+              await installService({ uninstall: args.uninstall });
             } catch (err) {
               Logger.error(err);
               process.exit(1);
