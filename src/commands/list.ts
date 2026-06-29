@@ -3,14 +3,16 @@ import Table from 'cli-table3';
 import chalk from 'chalk';
 import { AppRepo } from '../db/repos.js';
 import { getAppStatus } from '../utils/pm2-helper.js';
+import { getAppRouteLines } from './domain.js';
 
 export const listApps = async () => {
   // Read apps with storages eagerly loaded via database join
-  const apps: (AppWithStorages & { status?: string })[] = await AppRepo.getAllWithStorages();
+  const apps: (AppWithStorages & { status?: string; routes?: string[] })[] = await AppRepo.getAllWithStorages();
 
-  // Fetch the status of each app
+  // Fetch the status and routes of each app
   for (const app of apps) {
     app.status = await getAppStatus(app.name);
+    app.routes = await getAppRouteLines(app.name);
   }
 
   // Create a table
@@ -22,8 +24,9 @@ export const listApps = async () => {
       chalk.cyan('Instances'),
       chalk.cyan('Type'),
       chalk.cyan('Linked Storages'),
+      chalk.cyan('Routes'),
     ],
-    colWidths: [20, 10, 15, 12, 10, 40],
+    colWidths: [20, 10, 15, 12, 10, 30, 50],
   });
 
   // Add rows to the table
@@ -50,6 +53,12 @@ export const listApps = async () => {
         ? app.storages.map(storage => storage.name).join(', ')
         : chalk.gray('None');
 
+    // Format routes similar to info command
+    const routesDisplay = 
+      app.routes && app.routes.length > 0
+        ? app.routes.join('\n')
+        : chalk.gray('None');
+
     table.push([
       chalk.white(app.name),
       chalk.white(app.port.toString()),
@@ -57,6 +66,7 @@ export const listApps = async () => {
       chalk.white(app.instances?.toString() || '1'),
       chalk.white(typeDisplay),
       storageDisplay,
+      routesDisplay,
     ]);
   }
 

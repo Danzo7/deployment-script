@@ -18,6 +18,15 @@ const formatMem = (bytes?: number) => {
   return `${Math.round(bytes / 1024 / 1024)} MB`;
 };
 
+const formatUptime = (pmUptime?: number) => {
+  if (!pmUptime) return 'N/A';
+  const uptimeSec = Math.floor((Date.now() - pmUptime) / 1000);
+  const h = Math.floor(uptimeSec / 3600);
+  const m = Math.floor((uptimeSec % 3600) / 60);
+  const s = uptimeSec % 60;
+  return `${h}h ${m}m ${s}s`;
+};
+
 const renderTable = (list: pm2.ProcessDescription[]) => {
   process.stdout.write('\x1b[2J\x1b[H'); // clear screen
   console.log('\x1b[1mPM2 Monitor\x1b[0m  (Ctrl+C to exit)\n');
@@ -27,19 +36,21 @@ const renderTable = (list: pm2.ProcessDescription[]) => {
     'Status'.padEnd(12) +
     'CPU'.padEnd(8) +
     'Memory'.padEnd(12) +
+    'Uptime'.padEnd(15) +
     'Restarts'
   );
-  console.log('-'.repeat(70));
+  console.log('-'.repeat(85));
 
   for (const proc of list) {
     const env = proc.pm2_env as any;
     const id = String(proc.pm_id ?? '').padEnd(5);
     const name = (proc.name ?? '').padEnd(25);
     const status = statusColor(env?.status ?? 'unknown').padEnd(12 + 9); // +9 for ANSI escape chars
-    const cpu = `${env?.monit?.cpu ?? 0}%`.padEnd(8);
-    const mem = formatMem(env?.monit?.memory).padEnd(12);
+    const cpu = `${proc.monit?.cpu ?? 0}%`.padEnd(8);
+    const mem = formatMem(proc.monit?.memory).padEnd(12);
+    const uptime = formatUptime(env?.pm_uptime).padEnd(15);
     const restarts = String(env?.restart_time ?? 0);
-    console.log(`${id}${name}${status}${cpu}${mem}${restarts}`);
+    console.log(`${id}${name}${status}${cpu}${mem}${uptime}${restarts}`);
   }
 };
 
