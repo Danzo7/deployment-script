@@ -46,8 +46,15 @@ const runCommand = (command: string, options: { cwd: string; logFile: string }) 
 
     return { code: 0, stdout: stdout?.toString(), stderr: null };
   } catch (err: any) {
-    const errorMessage = err.stderr?.toString() || err.message;
-    fs.appendFileSync(options.logFile, `Command: ${command}\nError:\n${errorMessage}\n\n`, 'utf8');
+    const stdout = err.stdout?.toString() || '';
+    const stderr = err.stderr?.toString() || '';
+    const errorMessage = stderr || stdout || err.message;
+    
+    fs.appendFileSync(
+      options.logFile,
+      `Command: ${command}\nError:\n${errorMessage}\n\n`,
+      'utf8'
+    );
 
     return {
       code: err.status || 1,
