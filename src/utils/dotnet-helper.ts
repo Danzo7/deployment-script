@@ -162,12 +162,66 @@ export const checkAppSettings = async (relDir: string, envDir: string): Promise<
 };
 
 /**
+ * Ensures the .csproj file has the correct AssemblyName matching the registered app name.
+ * If the AssemblyName is missing or mismatched, it will be added or updated.
+ * @param relDir The directory containing the .csproj file.
+ * @param appName The registered application name.
+ */
+export const ensureAssemblyName = async (relDir: string, appName: string): Promise<void> => {
+  // 1. Find .csproj
+  const csprojPath = findCsprojFile(relDir);
+  if (!csprojPath) {
+    throw new Error(
+      'No .csproj file found in the repository. Make sure your .NET project has a .csproj file at the repository root.'
+    );
+  }
+
+  // 2. Read content
+  let csprojContent = fs.readFileSync(csprojPath, 'utf-8');
+
+  // 3. Check for explicit <AssemblyName>
+  const assemblyNameMatch = csprojContent.match(/<AssemblyName>([^<]+)<\/AssemblyName>/);
+
+  if (assemblyNameMatch) {
+    const foundName = assemblyNameMatch[1].trim();
+    if (foundName !== appName) {
+      // Update existing AssemblyName
+      csprojContent = csprojContent.replace(
+        /<AssemblyName>[^<]+<\/AssemblyName>/,
+        `<AssemblyName>${appName}</AssemblyName>`
+      );
+      fs.writeFileSync(csprojPath, csprojContent, 'utf-8');
+      Logger.warn(`Updated .csproj: Changed <AssemblyName> from "${foundName}" to "${appName}"`);
+    }
+  } else {
+    // Check if project file name matches app name
+    const projectFile = path.basename(csprojPath, '.csproj');
+    if (projectFile !== appName) {
+      // Add AssemblyName to the first PropertyGroup
+      const propertyGroupMatch = csprojContent.match(/(<PropertyGroup[^>]*>)/);
+      if (propertyGroupMatch) {
+        const insertionPoint = propertyGroupMatch.index! + propertyGroupMatch[0].length;
+        csprojContent =
+          csprojContent.slice(0, insertionPoint) +
+          `\n    <AssemblyName>${appName}</AssemblyName>` +
+          csprojContent.slice(insertionPoint);
+        fs.writeFileSync(csprojPath, csprojContent, 'utf-8');
+        Logger.warn(`Updated .csproj: Added <AssemblyName>${appName}</AssemblyName> to match registered app name`);
+      } else {
+        throw new Error(
+          'Could not find <PropertyGroup> in .csproj file. Please add <AssemblyName> manually.'
+        );
+      }
+    }
+  }
+};
+
+/**
  * Prepares a .NET project by running dotnet restore and dotnet publish.
  * @param dir The directory containing the project.
- * @param appName The registered application name (used for assembly name override).
  * @param opts Options including the log directory.
  */
-export const prepareDotnet = async (dir: string, appName: string, opts: { logDir: string }): Promise<void> => {
+export const prepareDotnet = async (dir: string, opts: { logDir: string }): Promise<void> => {
   const logFile = path.join(opts.logDir, 'prepare-' + Date.now() + '.log');
 
   Logger.info('Running dotnet restore...');
@@ -177,7 +231,7 @@ export const prepareDotnet = async (dir: string, appName: string, opts: { logDir
   }
 
   Logger.info('Running dotnet publish...');
-  const publishResult = runCommand(`dotnet publish -c Release -o ./publish -p:AssemblyName=${appName}`, { cwd: dir, logFile });
+  const publishResult = runCommand('dotnet publish -c Release -o ./publish', { cwd: dir, logFile });
   if (publishResult.code !== 0) {
     throw new Error(`dotnet publish failed: ${publishResult.stderr}`);
   }
