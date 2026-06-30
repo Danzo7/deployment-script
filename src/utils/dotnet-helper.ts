@@ -111,58 +111,7 @@ export const checkDotnetSdk = async (relDir: string): Promise<void> => {
   }
 };
 
-/**
- * Checks that the assembly name in the .csproj matches the registered app name.
- * @param relDir The directory containing the .csproj file.
- * @param appName The registered application name.
- */
-export const checkAssemblyName = async (relDir: string, appName: string): Promise<void> => {
-  // 1. Find .csproj
-  const csprojPath = findCsprojFile(relDir);
-  if (!csprojPath) {
-    throw new Error(
-      'No .csproj file found in the repository. Make sure your .NET project has a .csproj file at the repository root.'
-    );
-  }
 
-  // 2. Read content
-  const csprojContent = fs.readFileSync(csprojPath, 'utf-8');
-
-  // 3. Check for explicit <AssemblyName>
-  const assemblyNameMatch = csprojContent.match(/<AssemblyName>([^<]+)<\/AssemblyName>/);
-
-  if (assemblyNameMatch) {
-    const foundName = assemblyNameMatch[1].trim();
-    // 4. Throw if explicit <AssemblyName> doesn't match
-    if (foundName !== appName) {
-      throw new Error(
-        `Assembly name mismatch: your .csproj declares <AssemblyName>${foundName}</AssemblyName>\n` +
-        `but this dm app is registered as "${appName}".\n` +
-        `\n` +
-        `To fix this:\n` +
-        `  1. Open your .csproj file and update the <AssemblyName> element:\n` +
-        `         <AssemblyName>${appName}</AssemblyName>\n` +
-        `  2. Commit and push the change to your repository.\n` +
-        `  3. Run \`dm deploy ${appName}\` again.`
-      );
-    }
-  } else {
-    // 5. Fall back to .csproj filename stem
-    const projectFile = path.basename(csprojPath, '.csproj');
-    if (projectFile !== appName) {
-      throw new Error(
-        `Assembly name mismatch: your project file is "${projectFile}.csproj"\n` +
-        `which will produce "${projectFile}.dll", but this dm app is registered as "${appName}".\n` +
-        `\n` +
-        `To fix this:\n` +
-        `  1. Open your .csproj file and add <AssemblyName> inside <PropertyGroup>:\n` +
-        `         <AssemblyName>${appName}</AssemblyName>\n` +
-        `  2. Commit and push the change to your repository.\n` +
-        `  3. Run \`dm deploy ${appName}\` again.`
-      );
-    }
-  }
-};
 
 /**
  * Checks and synchronises appsettings files from the env directory to the release directory.
@@ -208,9 +157,10 @@ export const checkAppSettings = async (relDir: string, envDir: string): Promise<
 /**
  * Prepares a .NET project by running dotnet restore and dotnet publish.
  * @param dir The directory containing the project.
+ * @param appName The registered application name (used for assembly name override).
  * @param opts Options including the log directory.
  */
-export const prepareDotnet = async (dir: string, opts: { logDir: string }): Promise<void> => {
+export const prepareDotnet = async (dir: string, appName: string, opts: { logDir: string }): Promise<void> => {
   const logFile = path.join(opts.logDir, 'prepare-' + Date.now() + '.log');
 
   Logger.info('Running dotnet restore...');
@@ -220,7 +170,7 @@ export const prepareDotnet = async (dir: string, opts: { logDir: string }): Prom
   }
 
   Logger.info('Running dotnet publish...');
-  const publishResult = runCommand('dotnet publish -c Release -o ./publish', { cwd: dir, logFile });
+  const publishResult = runCommand(`dotnet publish -c Release -o ./publish -p:AssemblyName=${appName}`, { cwd: dir, logFile });
   if (publishResult.code !== 0) {
     throw new Error(`dotnet publish failed: ${publishResult.stderr}`);
   }

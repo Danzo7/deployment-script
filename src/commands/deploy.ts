@@ -6,7 +6,7 @@ import { prepare } from '../utils/npm-helper.js';
 import { getAppStatus, runApp } from '../utils/pm2-helper.js';
 import { handleRepo, getLastRevision, pushVcsChanges } from '../utils/vcs-helper.js';
 import { checkEnv } from '../utils/env-heper.js';
-import { checkDotnetSdk, checkAssemblyName, checkAppSettings, prepareDotnet } from '../utils/dotnet-helper.js';
+import { checkDotnetSdk, checkAppSettings, prepareDotnet } from '../utils/dotnet-helper.js';
 import { pruneOldBuilds } from '../utils/build-pruner.js';
 import { requireSymlinkPermission } from '../utils/os-helper.js';
 
@@ -49,7 +49,6 @@ export const deploy = async ({
   let isAppSettingsChanged = false;
   if (app.projectType === 'dotnet') {
     await checkDotnetSdk(buildRelDir);
-    await checkAssemblyName(buildRelDir, app.name);
     isAppSettingsChanged = await checkAppSettings(buildRelDir, envDir);
   }
 
@@ -66,7 +65,7 @@ export const deploy = async ({
   }
 
   if (app.projectType === 'dotnet') {
-    await prepareDotnet(buildRelDir, { logDir });
+    await prepareDotnet(buildRelDir, app.name, { logDir });
   } else {
     await prepare(buildRelDir, {
       withInstall: force || isFirstDeploy || isGitChanged || !isRunning,
