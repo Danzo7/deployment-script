@@ -406,14 +406,6 @@ export const StorageRepo = {
       throw new Error(`Storage "${data.name}" already exists`);
     }
 
-    // Check if linkName is already used (only if provided)
-    if (data.linkName) {
-      const existingLink = await db.select().from(storagesTable).where(eq(storagesTable.linkName, data.linkName));
-      if (existingLink.length > 0) {
-        throw new Error(`A storage with link name "${data.linkName}" already exists`);
-      }
-    }
-
     await db.insert(storagesTable).values({
       name: data.name,
       linkName: data.linkName ?? null,
