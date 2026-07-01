@@ -29,3 +29,12 @@ export const setEnvForApp = async ({
     );
  
 };
+
+/**
+ * Launches the interactive TUI env editor for the given app.
+ * Imported lazily so the ink/React dependencies only load when needed.
+ */
+export const launchEnvEditorForApp = async (name: string): Promise<void> => {
+  const { launchEnvEditor } = await import('../tui/launch-env-editor.js');
+  await launchEnvEditor(name);
+};

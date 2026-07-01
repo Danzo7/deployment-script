@@ -10,7 +10,7 @@ import { listApps } from './commands/list.js';
 import { existsSync, mkdirSync } from 'fs';
 import { unlock } from './commands/unlock.js';
 import { clean } from './commands/clean.js';
-import { setEnvForApp } from './commands/set-env.js';
+import { setEnvForApp, launchEnvEditorForApp } from './commands/set-env.js';
 import { Delete } from './commands/delete.js';
 import { startAllApplications } from './commands/start-all.js';
 import { stopAllApplications } from './commands/stop-all.js';
@@ -237,8 +237,8 @@ try {
             }
           }
         )  .command(
-          'set-env <name> <env>',
-          'Set or update an environment variable for an application',
+          'set-env <name> [env]',
+          'Set an env var (KEY=VALUE), or launch interactive editor when no KEY=VALUE is given',
           (yargs) =>
             yargs
               .positional('name', {
@@ -248,22 +248,26 @@ try {
               })
               .positional('env', {
                 type: 'string',
-                demandOption: true,
                 describe:
-                  'Environment variable in the format VAR_NAME=VALUE, e.g., API_URL=https://example.com',
+                  'Environment variable in the format VAR_NAME=VALUE (omit to open the interactive editor)',
               }),
           async (args) => {
-            const { name, env } = args as any;
-                  const [envName, envValue] = env.split('=');
-      
+            const { name, env } = args as { name: string; env?: string };
+
+            if (!env) {
+              // No KEY=VALUE arg — launch interactive TUI editor
+              await launchEnvEditorForApp(name);
+              return;
+            }
+
+            // Non-interactive path — existing behavior, untouched
+            const [envName, envValue] = env.split('=');
             if (!envName || envValue === undefined) {
               Logger.error(
                 `Invalid format for environment variable. Expected format: VAR_NAME=VALUE`
               );
               return;
             }
-      
-            // Call the function to set the environment variable
             await setEnvForApp({ name, envName, envValue });
           }
         )

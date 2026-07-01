@@ -10,10 +10,12 @@
     "forceConsistentCasingInFileNames": true, // Ensure that filenames are case-sensitive
     "outDir": "./dist", // Output directory for compiled files
     "rootDir": "./src", // Root directory of source files
-    "resolveJsonModule": true // Allow importing JSON files as modules
+    "resolveJsonModule": true, // Allow importing JSON files as modules
+    "jsx": "react-jsx" // Enable JSX for ink/React TUI components
   },
   "include": [
-    "src/**/*.ts" // Include all TypeScript files in the src folder
+    "src/**/*.ts", // Include all TypeScript files in the src folder
+    "src/**/*.tsx" // Include all TSX files for ink components
   ],
   "exclude": [
     "node_modules",  // Exclude the node_modules folder,
