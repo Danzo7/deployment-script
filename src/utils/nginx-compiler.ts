@@ -68,7 +68,7 @@ function buildLocationBlocks(domain: Domain, routes: RouteWithApp[], hasSsl: boo
   const sorted = [...routes].sort((a, b) => b.path.length - a.path.length);
 
   return sorted.map((route) => {
-    const locationPath = route.path === '' ? '/' : '/' + route.path;
+    const locationPath = route.path === '' ? '/' : ('/' + route.path + '/');
     const lines = [
       `${INDENT}location ${locationPath} {`,
       `${INDENT}${INDENT}proxy_pass http://${PROXY_TARGET_HOST}:${route.app.port}/;`,
