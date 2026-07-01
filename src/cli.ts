@@ -21,6 +21,7 @@ import { stop } from './commands/stop.js';
 import { rollback } from './commands/rollback.js';
 import { logs } from './commands/logs.js';
 import { monit } from './commands/monit.js';
+import { dashboard } from './commands/dashboard.js';
 import { cleanAll } from './commands/clean-all.js';
 import { storageNew, storageAttach, storageDetach, storageRm, storageLs } from './commands/storage.js';
 import { domainAdd, domainRemove, domainList, domainShow } from './commands/domain.js';
@@ -420,12 +421,24 @@ try {
         )
         .command(
           'monit',
-          'Open PM2 monitor for all applications',
+          'Open the operational dashboard (alias: dashboard)',
           (yargs) => yargs,
-          () => {
+          async () => {
             try {
-              monit();
-              return new Promise(() => {}); // keep process alive — child owns the lifecycle
+              await dashboard();
+            } catch (err) {
+              Logger.error(err);
+              process.exit(1);
+            }
+          }
+        )
+        .command(
+          'dashboard',
+          'Open the operational TUI dashboard',
+          (yargs) => yargs,
+          async () => {
+            try {
+              await dashboard();
             } catch (err) {
               Logger.error(err);
               process.exit(1);

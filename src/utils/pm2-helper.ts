@@ -217,3 +217,109 @@ export const getProcessInfo = (name: string): Promise<{ status: string; proc: pm
     });
   });
         
+
+export interface ProcessMetrics {
+  name: string;
+  status: Status;
+  cpu: number;
+  memBytes: number;
+  uptimeMs: number;
+  restarts: number;
+  unstableRestarts: number;
+  execMode: string;
+  instances: number;
+  pid?: number;
+}
+
+/**
+ * Returns metrics for every PM2-managed process, aggregating cluster workers
+ * by name (summing CPU/mem across instances).
+ * Connects and disconnects automatically — caller does not need to manage the
+ * PM2 daemon connection.
+ */
+export const listAllProcessMetrics = async (): Promise<ProcessMetrics[]> => {
+  return new Promise((resolve, reject) => {
+    pm2.connect((err) => {
+      if (err) return reject(err);
+      pm2.list((listErr, processList) => {
+        pm2.disconnect();
+        if (listErr) return reject(listErr);
+
+        // Group cluster workers by name
+        const byName = new Map<string, pm2.ProcessDescription[]>();
+        for (const p of processList) {
+          const n = p.name ?? '';
+          if (!byName.has(n)) byName.set(n, []);
+          byName.get(n)!.push(p);
+        }
+
+        const results: ProcessMetrics[] = [];
+        for (const [name, procs] of byName) {
+          const first = procs[0];
+          const env = first.pm2_env as any;
+          let cpu = 0;
+          let memBytes = 0;
+          for (const p of procs) {
+            cpu += p.monit?.cpu ?? 0;
+            memBytes += p.monit?.memory ?? 0;
+          }
+          results.push({
+            name,
+            status: env?.status ?? 'unknown',
+            cpu,
+            memBytes,
+            uptimeMs: env?.pm_uptime ? Date.now() - env.pm_uptime : 0,
+            restarts: env?.restart_time ?? 0,
+            unstableRestarts: env?.unstable_restarts ?? 0,
+            execMode: env?.exec_mode ?? 'fork',
+            instances: procs.length,
+            pid: first.pid ?? undefined,
+          });
+        }
+        resolve(results);
+      });
+    });
+  });
+};
+
+export interface BusPacket {
+  event: 'log:out' | 'log:err' | 'process:event' | string;
+  process: { name: string; pm_id?: number };
+  data: any;
+}
+
+/**
+ * Subscribe to the PM2 event bus.
+ * Calls onPacket for every event, onError if the bus fails.
+ * Returns a cleanup function — call it to close the bus and disconnect.
+ *
+ * Uses a single persistent PM2 connection; caller must not call pm2.disconnect()
+ * independently while the bus is live.
+ */
+export const subscribeBus = (
+  onPacket: (packet: BusPacket) => void,
+  onError?: (err: Error) => void,
+): Promise<() => void> => {
+  return new Promise((resolve, reject) => {
+    pm2.connect((err) => {
+      if (err) return reject(err);
+      pm2.launchBus((busErr, bus) => {
+        if (busErr) {
+          pm2.disconnect();
+          return reject(busErr);
+        }
+        const events = ['log:out', 'log:err', 'process:event'];
+        for (const ev of events) {
+          bus.on(ev, (packet: any) => onPacket({ ...packet, event: ev }));
+        }
+        bus.on('error', (e: any) => onError?.(e instanceof Error ? e : new Error(String(e))));
+
+        const cleanup = () => {
+          try { bus.close(); } catch { /* ignore */ }
+          try { pm2.disconnect(); } catch { /* ignore */ }
+        };
+        resolve(cleanup);
+      });
+    });
+  });
+};
