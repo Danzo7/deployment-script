@@ -720,22 +720,25 @@ export function OverviewTab({ data }: OverviewTabProps): React.ReactElement {
 
       {/* 1. Two-column KV grid */}
       <Box flexDirection="row" gap={2}>
-        {/* Left column: Port, Type, Instances, Branch */}
+        {/* Left column: Port, Type, Instances, Branch, Uptime, Exec Mode */}
         <Box flexDirection="column" width={Math.floor(DETAIL_W / 2)}>
           <KVItem label="Port"      value={String(app.port)} />
           <KVItem label="Type"      value={typeDisplay} />
           <KVItem label="Instances" value={instancesDisplay} />
           <KVItem label="Branch"    value={drift?.branch ?? app.branch ?? '—'} />
-          <KVItem label="Exec Path" value={pm2?.execPath ?? '—'} />
+          <KVItem label="Uptime"    value={pm2 && pm2.status === 'online' ? fmtUptime(pm2.uptimeMs) : '—'} />
+          <KVItem label="Exec Mode" value={pm2?.execMode ?? '—'} />
+          <KVItem label="PID"       value={pm2?.pid != null ? String(pm2.pid) : '—'} />
         </Box>
 
-        {/* Right column: Commit (amber), Deployed, Restarts, Active Build, Script */}
+        {/* Right column: Commit (amber), Deployed, Restarts, Active Build, Script, Exec Path */}
         <Box flexDirection="column" width={Math.floor(DETAIL_W / 2)}>
           <KVItem label="Commit"       value={shortHash} valueColor="yellow" />
           <KVItem label="Deployed"     value={fmtDate(deployedAt)} />
           <KVItem label="Restarts"     value={String(restarts)} />
           <KVItem label="Active Build" value={activeBuildDisplay} />
           <KVItem label="Script"       value={pm2?.scriptPath ?? '—'} />
+          <KVItem label="Exec Path"    value={pm2?.execPath ?? '—'} />
         </Box>
       </Box>
 
