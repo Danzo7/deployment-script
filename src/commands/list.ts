@@ -5,31 +5,55 @@ import { AppRepo } from '../db/repos.js';
 import { getAppStatus } from '../utils/pm2-helper.js';
 import { getAppRouteLines } from './domain.js';
 
-export const listApps = async () => {
-  // Read apps with storages eagerly loaded via database join
-  const apps: (AppWithStorages & { status?: string; routes?: string[] })[] = await AppRepo.getAllWithStorages();
+const TYPE_MAP: Record<string, string> = {
+  nextjs: '⚡ Next.js',
+  nestjs: '🦁 NestJS',
+  dotnet: '🔷 .NET',
+};
 
-  // Fetch the status and routes of each app
+export const listApps = async (filterType?: string) => {
+  let apps: (AppWithStorages & { status?: string; routes?: string[] })[] = await AppRepo.getAllWithStorages();
+
+  // Filter by project type if requested
+  if (filterType) {
+    const normalized = filterType.toLowerCase();
+    apps = apps.filter((a) => a.projectType.toLowerCase() === normalized);
+    if (apps.length === 0) {
+      console.log(chalk.yellow(`No apps found with type "${filterType}".`));
+      return;
+    }
+  }
+
   for (const app of apps) {
     app.status = await getAppStatus(app.name);
     app.routes = await getAppRouteLines(app.name);
   }
 
-  // Create a table
+  // Compute dynamic widths based on terminal width
+  const termWidth = process.stdout.columns || 120;
+  // Fixed columns: Port(8), Status(12), Instances(11), Type(12) + borders/padding (6 cols * 3 = ~18)
+  const fixedWidth = 8 + 12 + 11 + 12 + 18;
+  const remaining = Math.max(termWidth - fixedWidth, 60);
+  // Distribute remaining space: name 25%, storages 30%, routes 45%
+  const nameW = Math.max(15, Math.floor(remaining * 0.25));
+  const storageW = Math.max(18, Math.floor(remaining * 0.30));
+  const routesW = Math.max(24, remaining - nameW - storageW);
+
   const table = new Table({
     head: [
       chalk.cyan('Name'),
       chalk.cyan('Port'),
       chalk.cyan('Status'),
-      chalk.cyan('Instances'),
+      chalk.cyan('Inst'),
       chalk.cyan('Type'),
-      chalk.cyan('Linked Storages'),
+      chalk.cyan('Storages'),
       chalk.cyan('Routes'),
     ],
-    colWidths: [20, 10, 15, 12, 10, 30, 50],
+    colWidths: [nameW, 8, 12, 11, 12, storageW, routesW],
+    wordWrap: true,
+    style: { 'padding-left': 1, 'padding-right': 1 },
   });
 
-  // Add rows to the table
   for (const app of apps) {
     const statusColor =
       app.status === 'online'
@@ -40,21 +64,14 @@ export const listApps = async () => {
             ? chalk.yellow
             : chalk.gray;
 
-    // Format project type with emoji
-    const typeDisplay = 
-      app.projectType === 'nextjs' ? '⚡ Next.js' :
-      app.projectType === 'nestjs' ? '🦁 NestJS' :
-      app.projectType === 'dotnet' ? '🔷 .NET' :
-      app.projectType || 'N/A';
+    const typeDisplay = TYPE_MAP[app.projectType] ?? app.projectType ?? 'N/A';
 
-    // Format linked storages from database join
-    const storageDisplay = 
+    const storageDisplay =
       app.storages && app.storages.length > 0
-        ? app.storages.map(storage => storage.name).join(', ')
+        ? app.storages.map((s) => s.name).join('\n')
         : chalk.gray('None');
 
-    // Format routes similar to info command
-    const routesDisplay = 
+    const routesDisplay =
       app.routes && app.routes.length > 0
         ? app.routes.join('\n')
         : chalk.gray('None');
@@ -70,6 +87,5 @@ export const listApps = async () => {
     ]);
   }
 
-  // Print the table
   console.log(table.toString());
 };

@@ -198,9 +198,14 @@ try {
     .command(
       'list',
       'List all applications',
-      (yargs) => yargs,
-      async () => {
-        await listApps();
+      (yargs) =>
+        yargs.option('type', {
+          alias: 't',
+          type: 'string',
+          describe: 'Filter by project type (e.g. nextjs, nestjs, dotnet)',
+        }),
+      async (args) => {
+        await listApps(args.type as string | undefined);
       }
     ).command(
           'unlock <name>',
