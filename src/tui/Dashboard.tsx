@@ -689,12 +689,27 @@ export function OverviewTab({ data }: OverviewTabProps): React.ReactElement {
 
   // ── All domain routes (flattened) ─────────────────────────────────────────
 
-  type RouteEntry = { path: string; appName: string; certValid: boolean };
+  type RouteEntry = { url: string; sslLabel: string; certValid: boolean };
   const allRoutes: RouteEntry[] = [];
   for (const d of domains) {
     const certValid = !d.cert.isExpired && d.cert.mode !== 'none';
+    const protocol = d.cert.mode === 'none' ? 'http' : 'https';
     for (const r of d.routes) {
-      allRoutes.push({ path: r.path, appName: r.appName, certValid });
+      const pathPart = r.path === '/' || r.path === '' ? '/' : `/${r.path.replace(/^\//, '')}`;
+      const url = `${protocol}://${d.name}${pathPart}`;
+      let sslLabel: string;
+      if (d.cert.mode === 'none') {
+        sslLabel = 'no SSL';
+      } else if (d.cert.isExpired) {
+        sslLabel = 'SSL expired';
+      } else if (d.cert.expiringSoon) {
+        sslLabel = `SSL expires ${d.cert.daysRemaining}d`;
+      } else if (d.cert.daysRemaining !== undefined) {
+        sslLabel = `SSL valid · ${d.cert.daysRemaining}d`;
+      } else {
+        sslLabel = d.cert.mode;
+      }
+      allRoutes.push({ url, sslLabel, certValid });
     }
   }
 
@@ -711,14 +726,16 @@ export function OverviewTab({ data }: OverviewTabProps): React.ReactElement {
           <KVItem label="Type"      value={typeDisplay} />
           <KVItem label="Instances" value={instancesDisplay} />
           <KVItem label="Branch"    value={drift?.branch ?? app.branch ?? '—'} />
+          <KVItem label="Exec Path" value={pm2?.execPath ?? '—'} />
         </Box>
 
-        {/* Right column: Commit (amber), Deployed, Restarts, Active Build */}
+        {/* Right column: Commit (amber), Deployed, Restarts, Active Build, Script */}
         <Box flexDirection="column" width={Math.floor(DETAIL_W / 2)}>
           <KVItem label="Commit"       value={shortHash} valueColor="yellow" />
           <KVItem label="Deployed"     value={fmtDate(deployedAt)} />
           <KVItem label="Restarts"     value={String(restarts)} />
           <KVItem label="Active Build" value={activeBuildDisplay} />
+          <KVItem label="Script"       value={pm2?.scriptPath ?? '—'} />
         </Box>
       </Box>
 
@@ -764,10 +781,10 @@ export function OverviewTab({ data }: OverviewTabProps): React.ReactElement {
         ) : (
           allRoutes.map((r, i) => (
             <Box key={i} flexDirection="row" gap={1} marginLeft={2}>
-              <Text>{r.path || '/'}</Text>
-              <Text dimColor>→</Text>
-              <Text>{r.appName}</Text>
-              {r.certValid && <Text color="green">  [https]</Text>}
+              <Text color="magenta">{truncate(r.url, DETAIL_W - 20)}</Text>
+              <Text dimColor color={r.certValid ? 'green' : r.sslLabel === 'no SSL' ? undefined : 'yellow'}>
+                {r.sslLabel}
+              </Text>
             </Box>
           ))
         )}
@@ -912,7 +929,7 @@ export function MetricsTab({
             domain.routes.map((route) => (
               <Box key={`${domain.name}:${route.path}`} flexDirection="column" marginTop={1} marginLeft={2}>
                 {/* Route header: domain + path */}
-                <Text bold>{truncate(domain.name, DETAIL_W - 10)}<Text dimColor>{route.path}</Text></Text>
+                <Text bold>{truncate(domain.name, DETAIL_W - 10)}<Text dimColor>{'/' + route.path.replace(/^\//, '')}</Text></Text>
 
                 {/* Case 1: Domain has never been pushed to Nginx */}
                 {!domain.lastPushedAt && (

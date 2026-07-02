@@ -229,6 +229,8 @@ export interface ProcessMetrics {
   execMode: string;
   instances: number;
   pid?: number;
+  execPath?: string;
+  scriptPath?: string;
 }
 
 /**
@@ -274,6 +276,8 @@ export const listAllProcessMetrics = async (): Promise<ProcessMetrics[]> => {
             execMode: env?.exec_mode ?? 'fork',
             instances: procs.length,
             pid: first.pid ?? undefined,
+            execPath: env?.pm_exec_path ?? undefined,
+            scriptPath: env?.pm_exec_path ?? undefined,
           });
         }
         resolve(results);
