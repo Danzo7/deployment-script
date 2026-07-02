@@ -20,7 +20,6 @@ import { restart } from './commands/restart.js';
 import { stop } from './commands/stop.js';
 import { rollback } from './commands/rollback.js';
 import { logs } from './commands/logs.js';
-import { monit } from './commands/monit.js';
 import { dashboard } from './commands/dashboard.js';
 import { cleanAll } from './commands/clean-all.js';
 import { storageNew, storageAttach, storageDetach, storageRm, storageLs } from './commands/storage.js';
@@ -40,6 +39,13 @@ import { routeRemoveHeader } from './commands/route-remove-header.js';
 import { migrateFromJSON, isMigrationNeeded } from './commands/migrate-db.js';
 import { changeRepo } from './commands/change-repo.js';
 import { installService } from './commands/install-service.js';
+import { startRepl } from './repl.js';
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+
+const _require = createRequire(import.meta.url);
+const _pkg = _require(resolve(dirname(fileURLToPath(import.meta.url)), '../package.json')) as { version: string };
 
 interface InitArgs {
   name: string;
@@ -91,6 +97,14 @@ if (isMigrationNeeded()) {
   Logger.info(chalk.cyan('The database has been migrated to SQL (SQLite/PostgreSQL).'));
   Logger.info(chalk.cyan('Run "dm migrate-db" to migrate your data from db.json to the new database.\n'));
 }
+
+// ─── Interactive REPL mode ────────────────────────────────────────────────────
+// When called with no arguments (just `dm`), launch the interactive shell.
+if (process.argv.slice(2).length === 0) {
+  await startRepl(_pkg.version);
+  process.exit(0);
+}
+
 try {
   await yargs(process.argv.slice(2)).scriptName('dm')
     .middleware((argv) => {
