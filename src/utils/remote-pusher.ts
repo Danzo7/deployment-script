@@ -206,7 +206,7 @@ export class RemotePusher extends NginxPusher {
       fs.writeFileSync(localTemp, snippet);
       await this.ssh.sftpFastPut(localTemp, tempFile);
       await this.ssh.execWithSudo(
-        `mkdir -p ${shellQuote(path.dirname(DM_LOG_FORMAT_SNIPPET_PATH))} && mv ${shellQuote(tempFile)} ${shellQuote(DM_LOG_FORMAT_SNIPPET_PATH)}`
+        `sh -c ${shellQuote(`mkdir -p ${path.dirname(DM_LOG_FORMAT_SNIPPET_PATH)} && mv ${shellQuote(tempFile)} ${shellQuote(DM_LOG_FORMAT_SNIPPET_PATH)}`)}`
       );
     } catch (err: any) {
       Logger.warn(`Could not write dm_json log format snippet on remote: ${err.message}`);
