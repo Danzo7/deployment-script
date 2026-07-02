@@ -71,7 +71,7 @@ export interface AppData {
 
 // ─── Port reachability ────────────────────────────────────────────────────────
 
-function checkPortReachable(port: number, host = '127.0.0.1', timeoutMs = 1500): Promise<boolean> {
+function checkPortReachable(port: number, host = '127.0.0.1', timeoutMs = 400): Promise<boolean> {
   return new Promise((resolve) => {
     const sock = new net.Socket();
     let done = false;
@@ -167,11 +167,13 @@ let _sharedSsh: SshConnection | null = null;
 async function getSharedSsh(): Promise<SshConnection | null> {
   if (!NGINX_REMOTE_HOST) return null;
   if (_sharedSsh) {
-    try {
-      await (_sharedSsh as any).exec('true');
-      return _sharedSsh;
-    } catch {
+    // Only probe if a channel failure already marked the connection dead.
+    // Skip the exec('true') probe on every tick — it adds latency for no benefit
+    // when the connection is healthy.
+    if (!_sharedSsh.isConnected) {
       _sharedSsh = null;
+    } else {
+      return _sharedSsh;
     }
   }
   try {
@@ -338,23 +340,20 @@ export async function refreshDashboard(
       if (!restartBaseline.has(app.name)) restartBaseline.set(app.name, currentRestarts);
       const restartDelta = Math.max(0, currentRestarts - restartBaseline.get(app.name)!);
 
-      // Port reachability
-      let portReachable: boolean | undefined;
-      if (pm2Data?.status === 'online' || !pm2Data) {
-        portReachable = await checkPortReachable(app.port).catch(() => false);
-      }
+      // Port reachability, VCS drift, and routes — run in parallel
+      const [portReachableResult, driftResult, routesResult] = await Promise.all([
+        (pm2Data?.status === 'online' || !pm2Data)
+          ? checkPortReachable(app.port).catch(() => false)
+          : Promise.resolve(undefined),
+        getVcsDriftInfo(app, path.join(app.appDir, 'release'), doGitFetch).catch((): VcsDriftInfo => ({
+          branch: app.branch, behind: 0, ahead: 0, hasLocalChanges: false, fetched: false,
+        })),
+        RouteRepo.getAllByAppIdWithAppAndDomain(app.id).catch(() => [] as RouteWithAppAndDomain[]),
+      ]);
 
-      // VCS drift — uses vcs-helper, handles both git and SVN
-      const relDir = path.join(app.appDir, 'release');
-      const drift = await getVcsDriftInfo(app, relDir, doGitFetch).catch((): VcsDriftInfo => ({
-        branch: app.branch, behind: 0, ahead: 0, hasLocalChanges: false, fetched: false,
-      }));
-
-      // Domains for this app
-      let routes: RouteWithAppAndDomain[] = [];
-      try {
-        routes = await RouteRepo.getAllByAppIdWithAppAndDomain(app.id);
-      } catch { /* tolerate */ }
+      const portReachable = portReachableResult as boolean | undefined;
+      const drift = driftResult;
+      const routes = routesResult;
 
       // Deduplicate domains and build DomainInfo list
       const seenDomains = new Set<string>();
@@ -365,11 +364,8 @@ export async function refreshDashboard(
         if (seenDomains.has(domainName)) continue;
         seenDomains.add(domainName);
 
-        // Re-fetch the domain row to get the latest push/compile timestamps
-        let domain: Domain = route.domain;
-        try {
-          domain = await DomainRepo.findByName(domainName);
-        } catch { /* use what we have from the route join */ }
+        // Re-fetch skipped — route join already includes domain with current timestamps
+        const domain: Domain = route.domain;
 
         const cert = buildCertInfo(domain);
         const isStale = isDomainStale(domain);

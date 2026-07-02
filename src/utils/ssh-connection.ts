@@ -101,10 +101,18 @@ export class SshConnection {
    * non-zero exit; callers decide what failure means for their use case.
    * Use `exec()` for the common "throw on non-zero exit" case instead.
    */
+  /** Whether the connection is currently established. */
+  get isConnected(): boolean {
+    return this.connected;
+  }
+
   private async run(command: string, stdin?: string): Promise<{ code: number; result: ExecResult }> {
     return new Promise((resolve, reject) => {
       this.client.exec(command, (err, stream) => {
         if (err) {
+          // Channel open failure means the underlying TCP connection is dead.
+          // Mark it so getSharedSsh() will reconnect on next poll.
+          this.connected = false;
           reject(err);
           return;
         }
