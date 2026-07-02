@@ -4,6 +4,30 @@ import { PROXY_TARGET_HOST } from '../constants.js';
 import { PROXY_SET_HEADERS, mergeHeaders } from './header-merge.js';
 import { normalizeDomainName } from './route-validation.js';
 import { DomainRepo } from '../db/repos.js';
+// ─── dm_json log format ───────────────────────────────────────────────────────
+
+/**
+ * The nginx log_format name used by dm for structured access logs.
+ * Must be defined in the http {} context (via /etc/nginx/conf.d/dm_log_format.conf)
+ * before it can be referenced in access_log directives.
+ */
+export const DM_LOG_FORMAT_NAME = 'dm_json';
+
+/**
+ * Returns the content of the nginx snippet file that defines the dm_json
+ * log format.  Write this to /etc/nginx/conf.d/dm_log_format.conf once
+ * per nginx host so that all domain configs can reference it.
+ */
+export function compileDmLogFormatSnippet(): string {
+  return (
+    `log_format ${DM_LOG_FORMAT_NAME} '{"ts":"$time_iso8601","method":"$request_method",` +
+    `"uri":"$request_uri","status":$status,"bytes":$body_bytes_sent,` +
+    `"rt":$request_time,"addr":"$remote_addr"}';\n`
+  );
+}
+
+/** Path on the nginx host where the log-format snippet is written. */
+export const DM_LOG_FORMAT_SNIPPET_PATH = '/etc/nginx/conf.d/dm_log_format.conf';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -75,7 +99,7 @@ function buildLocationBlocks(domain: Domain, routes: RouteWithApp[], hasSsl: boo
 
     const lines = [
       `${INDENT}location ${locationPath} {`,
-      `${INDENT}${INDENT}access_log ${routeLogPath};`,
+      `${INDENT}${INDENT}access_log ${routeLogPath} ${DM_LOG_FORMAT_NAME};`,
       `${INDENT}${INDENT}proxy_pass http://${PROXY_TARGET_HOST}:${route.app.port}/;`,
       ...PROXY_SET_HEADERS.map(([n, v]) => `${INDENT}${INDENT}proxy_set_header ${n} ${v};`),
     ];

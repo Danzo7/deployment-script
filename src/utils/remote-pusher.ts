@@ -21,6 +21,7 @@ import {
   validateCertPath,
   generateSecureTempFilename,
 } from './security-validation.js';
+import { compileDmLogFormatSnippet, DM_LOG_FORMAT_SNIPPET_PATH } from './nginx-compiler.js';
 
 /**
  * Remote Nginx pusher - pushes config/certs to a remote host over SSH and
@@ -194,6 +195,28 @@ export class RemotePusher extends NginxPusher {
   }
 
   /**
+   * Ensure the dm_json log_format snippet exists on the remote host.
+   * Written idempotently via a temp file + sudo mv.
+   */
+  private async ensureLogFormatSnippet(): Promise<void> {
+    const snippet = compileDmLogFormatSnippet();
+    const tempFile = `/tmp/${generateSecureTempFilename('dm-log-format', 'conf')}`;
+    const localTemp = path.join(os.tmpdir(), generateSecureTempFilename('dm-log-format', 'conf'));
+    try {
+      fs.writeFileSync(localTemp, snippet);
+      await this.ssh.sftpFastPut(localTemp, tempFile);
+      await this.ssh.execWithSudo(
+        `mkdir -p ${shellQuote(path.dirname(DM_LOG_FORMAT_SNIPPET_PATH))} && mv ${shellQuote(tempFile)} ${shellQuote(DM_LOG_FORMAT_SNIPPET_PATH)}`
+      );
+    } catch (err: any) {
+      Logger.warn(`Could not write dm_json log format snippet on remote: ${err.message}`);
+    } finally {
+      if (fs.existsSync(localTemp)) fs.unlinkSync(localTemp);
+      try { await this.ssh.exec(`rm -f ${shellQuote(tempFile)}`); } catch { /* ignore */ }
+    }
+  }
+
+  /**
    * Validate nginx config on remote
    */
   private async validateNginx(): Promise<void> {
@@ -325,6 +348,7 @@ export class RemotePusher extends NginxPusher {
         await this.transferConfigFile();
         await this.transferCertsIfApplicable();
         await this.createSymlink();
+        await this.ensureLogFormatSnippet();
         await this.validateNginx();
         await this.reloadNginx();
         this.updateMetadata();

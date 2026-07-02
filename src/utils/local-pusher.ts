@@ -15,6 +15,7 @@ import {
   RollbackTarget,
 } from './domain-push-utils.js';
 import { validateCertPath } from './security-validation.js';
+import { compileDmLogFormatSnippet, DM_LOG_FORMAT_SNIPPET_PATH } from './nginx-compiler.js';
 
 /**
  * Local Nginx pusher - uses filesystem operations and local command execution
@@ -106,6 +107,25 @@ export class LocalPusher extends NginxPusher {
       fs.unlinkSync(targetPath);
     }
     fs.symlinkSync(sourcePath, targetPath);
+  }
+
+  /**
+   * Ensure the dm_json log_format snippet exists in /etc/nginx/conf.d/.
+   * Written idempotently — skipped if already present with the same content.
+   */
+  private ensureLogFormatSnippet(): void {
+    const snippet = compileDmLogFormatSnippet();
+    try {
+      const existing = fs.existsSync(DM_LOG_FORMAT_SNIPPET_PATH)
+        ? fs.readFileSync(DM_LOG_FORMAT_SNIPPET_PATH, 'utf8')
+        : null;
+      if (existing === snippet) return;
+      fs.mkdirSync(path.dirname(DM_LOG_FORMAT_SNIPPET_PATH), { recursive: true });
+      fs.writeFileSync(DM_LOG_FORMAT_SNIPPET_PATH, snippet);
+    } catch (err: any) {
+      // Non-fatal: if we can't write (e.g. missing sudo), nginx -t will catch the missing format
+      Logger.warn(`Could not write dm_json log format snippet: ${err.message}`);
+    }
   }
 
   /**
@@ -227,6 +247,7 @@ export class LocalPusher extends NginxPusher {
         this.copyCertsIfApplicable();
       }
       this.createSymlink();
+      this.ensureLogFormatSnippet();
       this.validateNginx();
       this.reloadNginx();
       await this.updateMetadata();
