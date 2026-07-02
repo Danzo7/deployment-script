@@ -169,12 +169,17 @@ export class NginxLogTailer {
     private readonly remoteLogPath?: string,
   ) {}
 
-  /** Derive a conventional Nginx access log path from a domain name */
-  static accessLogPath(domainName: string, isRemote = false): string {
-    // Sanitize: lower-case, replace dots/hyphens with underscores for filename
-    const safe = domainName.toLowerCase().replace(/[^a-z0-9]/g, '_');
-    const dir = isRemote ? '/var/log/nginx' : (os.platform() === 'linux' ? '/var/log/nginx' : '/var/log/nginx');
-    return `${dir}/${safe}.access.log`;
+  /** Derive a per-route Nginx access log path from a domain name and route path.
+   *  e.g. domain="api.example.com", routePath="/v1" → "/var/log/nginx/api_example_com_v1.access.log"
+   *       domain="api.example.com", routePath="/"   → "/var/log/nginx/api_example_com_root.access.log"
+   */
+  static accessLogPath(domainName: string, routePath: string, isRemote = false): string {
+    const safeDomain = domainName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    // Normalise route: strip leading/trailing slashes, replace separators with _
+    const safeRoute = routePath.replace(/^\/+|\/+$/g, '').replace(/[^a-z0-9]/gi, '_') || 'root';
+    const dir = '/var/log/nginx';
+    void isRemote; // path is the same whether local or remote SSH
+    return `${dir}/${safeDomain}_${safeRoute}.access.log`;
   }
 
   async poll(): Promise<void> {

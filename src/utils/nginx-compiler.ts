@@ -66,11 +66,16 @@ function sslDirectives(certPath: string, keyPath: string): string {
 
 function buildLocationBlocks(domain: Domain, routes: RouteWithApp[], hasSsl: boolean): string {
   const sorted = [...routes].sort((a, b) => b.path.length - a.path.length);
+  const safeDomain = domain.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
 
   return sorted.map((route) => {
     const locationPath = route.path === '' ? '/' : ('/' + route.path + '/');
+    const safeRoute = route.path.replace(/[^a-z0-9]/gi, '_').replace(/^_+|_+$/g, '') || 'root';
+    const routeLogPath = `/var/log/nginx/${safeDomain}_${safeRoute}.access.log`;
+
     const lines = [
       `${INDENT}location ${locationPath} {`,
+      `${INDENT}${INDENT}access_log ${routeLogPath};`,
       `${INDENT}${INDENT}proxy_pass http://${PROXY_TARGET_HOST}:${route.app.port}/;`,
       ...PROXY_SET_HEADERS.map(([n, v]) => `${INDENT}${INDENT}proxy_set_header ${n} ${v};`),
     ];

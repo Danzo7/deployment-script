@@ -46,14 +46,12 @@ export interface CertInfo {
 export interface DomainInfo {
   name: string;
   cert: CertInfo;
-  routes: Array<{ path: string; appName: string }>;
+  routes: Array<{ path: string; appName: string; nginxLog?: LogWindow }>;
   lastPushedAt?: Date;
   lastCompiledAt?: Date;
   configPath?: string;
   /** True when compiled but never pushed, or recompiled since last push */
   isStale: boolean;
-  /** Nginx log window — only present when domain has been pushed (lastPushedAt set) */
-  nginxLog?: LogWindow;
 }
 
 export interface AppData {
@@ -209,20 +207,12 @@ const tailerCache = new Map<string, NginxLogTailer>();
  * sites-available with /var/log/nginx and .conf with .access.log.
  * Falls back to NginxLogTailer.accessLogPath() if configPath is unavailable.
  */
-function getTailer(domain: Domain, ssh: SshConnection | null): NginxLogTailer {
-  const key = `${domain.name}:${ssh ? 'remote' : 'local'}`;
+function getTailer(domain: Domain, routePath: string, ssh: SshConnection | null): NginxLogTailer {
+  const safeRoute = routePath.replace(/[^a-z0-9]/gi, '_').replace(/^_+|_+$/g, '') || 'root';
+  const key = `${domain.name}:${safeRoute}:${ssh ? 'remote' : 'local'}`;
   if (tailerCache.has(key)) return tailerCache.get(key)!;
 
-  // Derive log path from configPath if available (e.g. /etc/nginx/sites-available/api_example_com.conf
-  // → /var/log/nginx/api_example_com.access.log), otherwise use the standard convention.
-  let logPath: string;
-  if (domain.configPath) {
-    const basename = path.basename(domain.configPath, '.conf');
-    logPath = `/var/log/nginx/${basename}.access.log`;
-  } else {
-    logPath = NginxLogTailer.accessLogPath(domain.name, !!ssh);
-  }
-
+  const logPath = NginxLogTailer.accessLogPath(domain.name, routePath, !!ssh);
   const tailer = new NginxLogTailer(logPath, ssh ?? undefined);
   tailerCache.set(key, tailer);
   return tailer;
@@ -381,20 +371,25 @@ export async function refreshDashboard(
         const cert = buildCertInfo(domain);
         const isStale = isDomainStale(domain);
 
-        const domainRoutes = routes
-          .filter((r) => r.domain.name === domainName)
-          .map((r) => ({ path: r.path === '' ? '/' : r.path, appName: r.app.name }));
+        const domainRoutes = await Promise.all(
+          routes
+            .filter((r) => r.domain.name === domainName)
+            .map(async (r) => {
+              const routePath = r.path === '' ? '/' : r.path;
+              let nginxLog: LogWindow | undefined;
+              if (domain.lastPushedAt) {
+                const tailer = getTailer(domain, routePath, ssh);
+                if (doLogPoll) {
+                  await tailer.poll().catch(() => { /* tolerate read errors */ });
+                }
+                nginxLog = tailer.getWindow();
+              }
+              return { path: routePath, appName: r.app.name, nginxLog };
+            })
+        );
 
         // Only attach a log tailer when the domain has actually been pushed to Nginx.
         // If lastPushedAt is not set, there's no Nginx serving this domain — no log to read.
-        let nginxLog: LogWindow | undefined;
-        if (domain.lastPushedAt) {
-          const tailer = getTailer(domain, ssh);
-          if (doLogPoll) {
-            await tailer.poll().catch(() => { /* tolerate read errors */ });
-          }
-          nginxLog = tailer.getWindow();
-        }
 
         domainInfoList.push({
           name: domainName,
@@ -404,7 +399,6 @@ export async function refreshDashboard(
           lastCompiledAt: domain.lastCompiledAt,
           configPath: domain.configPath ?? undefined,
           isStale,
-          nginxLog,
         });
       }
 
@@ -412,8 +406,9 @@ export async function refreshDashboard(
       const envChanged = checkEnvChanged(app);
 
       const nginxWindows = domainInfoList
-        .filter((d) => d.nginxLog?.hasData)
-        .map((d) => d.nginxLog!);
+        .flatMap((d) => d.routes)
+        .filter((r) => r.nginxLog?.hasData)
+        .map((r) => r.nginxLog!);
 
       const health = deriveHealth(pm2Data, portReachable, restartDelta, nginxWindows);
 

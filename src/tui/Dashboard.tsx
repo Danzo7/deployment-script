@@ -908,72 +908,60 @@ export function MetricsTab({
             <Text dimColor>No domain routed to this app — request metrics require a proxied domain</Text>
           </Box>
         ) : (
-          domains.map((domain) => (
-            <Box key={domain.name} flexDirection="column" marginTop={1} marginLeft={2}>
-              {/* Domain name header */}
-              <Text bold>{truncate(domain.name, DETAIL_W - 4)}</Text>
+          domains.map((domain) =>
+            domain.routes.map((route) => (
+              <Box key={`${domain.name}:${route.path}`} flexDirection="column" marginTop={1} marginLeft={2}>
+                {/* Route header: domain + path */}
+                <Text bold>{truncate(domain.name, DETAIL_W - 10)}<Text dimColor>{route.path}</Text></Text>
 
-              {/* Case 1: Domain has never been pushed to Nginx */}
-              {!domain.lastPushedAt && (
-                <Box marginLeft={2}>
-                  <Text dimColor>not pushed to Nginx — no request metrics available</Text>
-                </Box>
-              )}
-
-              {/* Case 2: Domain is pushed but log has no data or doesn't exist */}
-              {domain.lastPushedAt && (!domain.nginxLog || !domain.nginxLog.hasData) && (
-                <Box marginLeft={2}>
-                  {domain.nginxLog?.error ? (
-                    <Text dimColor>
-                      log unavailable — {truncate(domain.nginxLog.error, DETAIL_W - 20)}
-                    </Text>
-                  ) : (
-                    <Text dimColor>no requests recorded yet — metrics will appear once traffic flows</Text>
-                  )}
-                </Box>
-              )}
-
-              {/* Case 3: Data available */}
-              {domain.lastPushedAt && domain.nginxLog && domain.nginxLog.hasData && (
-                <Box flexDirection="column" marginLeft={2}>
-                  {/* req/s sparkline — amber; we don't have a history array for per-domain
-                      req/s, so we show the current value inline */}
-                  <Box flexDirection="row" gap={1}>
-                    <Text dimColor>{pad('req/s:', 8)}</Text>
-                    <Text color="yellow">{domain.nginxLog.reqPerSec.toFixed(1)}</Text>
+                {/* Case 1: Domain has never been pushed to Nginx */}
+                {!domain.lastPushedAt && (
+                  <Box marginLeft={2}>
+                    <Text dimColor>not pushed to Nginx — no request metrics available</Text>
                   </Box>
+                )}
 
-                  {/* Status distribution */}
-                  <Box flexDirection="row" gap={2}>
-                    <Text dimColor>status:</Text>
-                    <Text color="green">2XX {domain.nginxLog.statusDist.s2xx}</Text>
-                    <Text color="yellow">4XX {domain.nginxLog.statusDist.s4xx}</Text>
-                    <Text color="red">5XX {domain.nginxLog.statusDist.s5xx}</Text>
+                {/* Case 2: Pushed but log has no data */}
+                {domain.lastPushedAt && (!route.nginxLog || !route.nginxLog.hasData) && (
+                  <Box marginLeft={2}>
+                    {route.nginxLog?.error ? (
+                      <Text dimColor>log unavailable — {truncate(route.nginxLog.error, DETAIL_W - 20)}</Text>
+                    ) : (
+                      <Text dimColor>no requests recorded yet — metrics will appear once traffic flows</Text>
+                    )}
                   </Box>
+                )}
 
-                  {/* p50 / p95 response times — only when dm_json format detected */}
-                  {domain.nginxLog.p50ms !== undefined && (
+                {/* Case 3: Data available */}
+                {domain.lastPushedAt && route.nginxLog && route.nginxLog.hasData && (
+                  <Box flexDirection="column" marginLeft={2}>
+                    <Box flexDirection="row" gap={1}>
+                      <Text dimColor>{pad('req/s:', 8)}</Text>
+                      <Text color="yellow">{route.nginxLog.reqPerSec.toFixed(1)}</Text>
+                    </Box>
                     <Box flexDirection="row" gap={2}>
-                      <Text dimColor>latency:</Text>
-                      <Text>p50 {domain.nginxLog.p50ms}ms</Text>
-                      {domain.nginxLog.p95ms !== undefined && (
-                        <Text>p95 {domain.nginxLog.p95ms}ms</Text>
-                      )}
+                      <Text dimColor>status:</Text>
+                      <Text color="green">2XX {route.nginxLog.statusDist.s2xx}</Text>
+                      <Text color="yellow">4XX {route.nginxLog.statusDist.s4xx}</Text>
+                      <Text color="red">5XX {route.nginxLog.statusDist.s5xx}</Text>
                     </Box>
-                  )}
-
-                  {/* No response-time data — hint to regenerate config */}
-                  {domain.nginxLog.noResponseTime && (
-                    <Box marginTop={0}>
-                      <Text dimColor>
-                        response times unavailable — regenerate nginx config for dm_json format
-                      </Text>
-                    </Box>
-                  )}
-                </Box>
-              )}
-            </Box>
-          ))
+                    {route.nginxLog.p50ms !== undefined && (
+                      <Box flexDirection="row" gap={2}>
+                        <Text dimColor>latency:</Text>
+                        <Text>p50 {route.nginxLog.p50ms}ms</Text>
+                        {route.nginxLog.p95ms !== undefined && (
+                          <Text>p95 {route.nginxLog.p95ms}ms</Text>
+                        )}
+                      </Box>
+                    )}
+                    {route.nginxLog.noResponseTime && (
+                      <Text dimColor>response times unavailable — regenerate nginx config for dm_json format</Text>
+                    )}
+                  </Box>
+                )}
+              </Box>
+            ))
+          )
         )}
       </Box>
 
