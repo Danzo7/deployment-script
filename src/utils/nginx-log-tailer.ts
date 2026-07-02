@@ -1,5 +1,4 @@
 import fs from 'fs';
-import os from 'os';
 import type { SshConnection } from './ssh-connection.js';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -156,18 +155,33 @@ function computeWindow(entries: LogEntry[]): LogWindow {
  * Call `poll()` on a timer; `getWindow()` returns the current computed stats.
  * Intentionally simple — no inotify/chokidar dependency. Portable on Windows
  * for local files; SSH path works on any OS since it's just text over a socket.
+ *
+ * `sshProvider` is a getter so the tailer always uses the current connection —
+ * the shared SSH connection can be replaced on reconnect without invalidating
+ * existing tailer instances.
  */
 export class NginxLogTailer {
   private entries: LogEntry[] = [];
   private localOffset = 0;       // bytes consumed on last local read
   private lastError: string | undefined;
+  private readonly sshProvider: (() => SshConnection | undefined) | undefined;
 
   constructor(
     private readonly logPath: string,
-    private readonly ssh?: SshConnection,
+    ssh?: SshConnection | (() => SshConnection | undefined),
     /** Optional: override the default log path derivation for a custom location */
     private readonly remoteLogPath?: string,
-  ) {}
+  ) {
+    if (typeof ssh === 'function') {
+      this.sshProvider = ssh;
+    } else if (ssh) {
+      this.sshProvider = () => ssh;
+    }
+  }
+
+  private get ssh(): SshConnection | undefined {
+    return this.sshProvider?.();
+  }
 
   /** Derive a per-route Nginx access log path from a domain name and route path.
    *  e.g. domain="api.example.com", routePath="/v1" → "/var/log/nginx/api_example_com_v1.access.log"

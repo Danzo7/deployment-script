@@ -207,13 +207,16 @@ const tailerCache = new Map<string, NginxLogTailer>();
  * sites-available with /var/log/nginx and .conf with .access.log.
  * Falls back to NginxLogTailer.accessLogPath() if configPath is unavailable.
  */
-function getTailer(domain: Domain, routePath: string, ssh: SshConnection | null): NginxLogTailer {
+function getTailer(domain: Domain, routePath: string, isRemote: boolean): NginxLogTailer {
   const safeRoute = routePath.replace(/[^a-z0-9]/gi, '_').replace(/^_+|_+$/g, '') || 'root';
-  const key = `${domain.name}:${safeRoute}:${ssh ? 'remote' : 'local'}`;
+  const key = `${domain.name}:${safeRoute}:${isRemote ? 'remote' : 'local'}`;
   if (tailerCache.has(key)) return tailerCache.get(key)!;
 
-  const logPath = NginxLogTailer.accessLogPath(domain.name, routePath, !!ssh);
-  const tailer = new NginxLogTailer(logPath, ssh ?? undefined);
+  const logPath = NginxLogTailer.accessLogPath(domain.name, routePath, isRemote);
+  // Pass a getter so the tailer always uses the current shared connection,
+  // even after a reconnect replaces the SshConnection instance.
+  const sshProvider = isRemote ? () => _sharedSsh ?? undefined : undefined;
+  const tailer = new NginxLogTailer(logPath, sshProvider);
   tailerCache.set(key, tailer);
   return tailer;
 }
@@ -378,7 +381,7 @@ export async function refreshDashboard(
               const routePath = r.path === '' ? '/' : r.path;
               let nginxLog: LogWindow | undefined;
               if (domain.lastPushedAt) {
-                const tailer = getTailer(domain, routePath, ssh);
+                const tailer = getTailer(domain, routePath, !!ssh);
                 if (doLogPoll) {
                   await tailer.poll().catch(() => { /* tolerate read errors */ });
                 }

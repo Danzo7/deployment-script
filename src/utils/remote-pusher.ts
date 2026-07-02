@@ -5,7 +5,6 @@ import { NginxPusher } from './nginx-pusher.js';
 import { DomainRepo } from '../db/repos.js';
 import { PUSH_CERT_DIR } from '../constants.js';
 import { Logger } from './logger.js';
-import { toISO } from './date-helper.js';
 import { SshConnection, SshCredentials } from './ssh-connection.js';
 import {
   constructSitesAvailablePath,
