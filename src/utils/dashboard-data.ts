@@ -7,7 +7,7 @@ import net from 'net';
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
-import { AppRepo, DomainRepo, RouteRepo } from '../db/repos.js';
+import { AppRepo, RouteRepo } from '../db/repos.js';
 import { parseCertMetadata, CERT_EXPIRY_WARNING_DAYS } from './ssl-helper.js';
 import { SshConnection } from './ssh-connection.js';
 import { NginxLogTailer, LogWindow } from './nginx-log-tailer.js';
@@ -71,7 +71,7 @@ export interface AppData {
 
 // ─── Port reachability ────────────────────────────────────────────────────────
 
-function checkPortReachable(port: number, host = '127.0.0.1', timeoutMs = 400): Promise<boolean> {
+function checkPortReachable(port: number, host = '127.0.0.1', timeoutMs = 1000): Promise<boolean> {
   return new Promise((resolve) => {
     const sock = new net.Socket();
     let done = false;

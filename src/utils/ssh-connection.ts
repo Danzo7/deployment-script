@@ -83,9 +83,22 @@ export class SshConnection {
           resolve();
         })
         .on('error', (err) => {
-          reject(new Error(`Failed to connect to ${this.creds.remoteHost}: ${err.message}`));
+          if (this.connected) {
+            // Connection dropped after being established — mark dead so
+            // getSharedSsh() reconnects on the next poll.
+            this.connected = false;
+          } else {
+            reject(new Error(`Failed to connect to ${this.creds.remoteHost}: ${err.message}`));
+          }
         })
-        .connect(config);
+        .on('close', () => {
+          this.connected = false;
+        })
+        .connect({
+          ...config,
+          keepaliveInterval: 10000, // send keepalive every 10s
+          keepaliveCountMax: 3,     // 3 missed keepalives → connection dead
+        });
     });
   }
 
