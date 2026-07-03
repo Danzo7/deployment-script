@@ -9,6 +9,7 @@ import {
   DashboardState,
 } from '../utils/dashboard-data.js';
 import { Logger } from '../utils/logger.js';
+import { pauseRepl, resumeRepl } from '../utils/repl-context.js';
 
 // ─── Polling cadences ─────────────────────────────────────────────────────────
 const PM2_POLL_MS = 2_000;          // PM2 metrics (fast)
@@ -122,6 +123,7 @@ function DashboardApp() {
 // ─── Exported launcher ────────────────────────────────────────────────────────
 
 export async function launchDashboard(): Promise<void> {
+  pauseRepl();
   Logger.isMuted = true;
 
   // Clear any pending action from previous run
@@ -129,6 +131,7 @@ export async function launchDashboard(): Promise<void> {
 
   const { waitUntilExit } = render(<DashboardApp />);
   await waitUntilExit();
+  resumeRepl();
 
   Logger.isMuted = false;
 

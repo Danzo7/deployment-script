@@ -6,6 +6,7 @@ import { setEnv } from '../utils/env-heper.js';
 import { AppRepo } from '../db/repos.js';
 import { ensureDirectories } from '../utils/file-utils.js';
 import { Logger } from '../utils/logger.js';
+import { pauseRepl, resumeRepl } from '../utils/repl-context.js';
 
 async function applyChanges(envDir: string, rows: EditorRow[]): Promise<void> {
   const toUpsert = rows.filter(r => r.state === 'new' || r.state === 'modified');
@@ -24,6 +25,7 @@ async function applyChanges(envDir: string, rows: EditorRow[]): Promise<void> {
 }
 
 export async function launchEnvEditor(appName: string): Promise<void> {
+  pauseRepl();
   Logger.isMuted = true;
 
   const app = await AppRepo.findByName(appName);
@@ -46,6 +48,7 @@ export async function launchEnvEditor(appName: string): Promise<void> {
   );
 
   await waitUntilExit();
+  resumeRepl();
 
   if (savedCount > 0) {
     Logger.success(`Saved ${savedCount} change${savedCount === 1 ? '' : 's'} to ${appName}.`);
