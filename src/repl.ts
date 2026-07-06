@@ -296,7 +296,7 @@ export async function startRepl(version: string): Promise<void> {
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
-      prompt: `\x01${chalk.cyan('dm> ')}\x02`,
+      prompt: `\x01\x1b[36m\x02dm> \x01\x1b[39m\x02`,
       completer: (line: string) => {
         const hits = TOP_LEVEL_COMMANDS.filter((c) => c.startsWith(line));
         return [hits.length ? hits : TOP_LEVEL_COMMANDS, line];
