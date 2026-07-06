@@ -1,7 +1,7 @@
 import path from 'path';
 import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
-import {  createBuildDirByType, ensureDirectories } from '../utils/file-utils.js';
+import {  createBuildDirByType, ensureDirectories, hasPackageJson } from '../utils/file-utils.js';
 import { prepare } from '../utils/npm-helper.js';
 import { getAppStatus, runApp } from '../utils/pm2-helper.js';
 import { handleRepo, getLastRevision, pushVcsChanges } from '../utils/vcs-helper.js';
@@ -28,7 +28,6 @@ export const deploy = async ({
     await AppRepo.update(app.name,{projectType:"nextjs"});
     app.projectType= "nextjs";
   }
-      
   Logger.info(`Deploying ${Logger.highlight(name)}...`);
 
   const { relDir, envDir, logDir } = ensureDirectories(app.appDir);
@@ -44,7 +43,9 @@ export const deploy = async ({
   const isRunning = appStatus == 'online';
 
   Logger.info('Checking environment variables...');
-  const isEnvChanged = await checkEnv(buildRelDir, envDir,app.projectType==="nextjs"?".env.local":".env");
+  const isEnvChanged = app.projectType === 'static'
+    ? false
+    : await checkEnv(buildRelDir, envDir, app.projectType === "nextjs" ? ".env.local" : ".env");
 
   let isAppSettingsChanged = false;
   if (app.projectType === 'dotnet') {
@@ -67,6 +68,14 @@ export const deploy = async ({
 
   if (app.projectType === 'dotnet') {
     await prepareDotnet(buildRelDir, { logDir });
+  } else if (app.projectType === 'static') {
+    if (hasPackageJson(buildRelDir)) {
+      throw new Error(
+        `Static apps with a package.json build step are not yet supported.\n` +
+        `Commit the pre-built output (dist/ or build/) to your repository and redeploy.`
+      );
+    }
+    // No package.json — pure static files, nothing to prepare
   } else {
     await prepare(buildRelDir, {
       withInstall: force || isFirstDeploy || isGitChanged || !isRunning,

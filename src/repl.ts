@@ -1,9 +1,10 @@
 import readline from 'readline';
 import chalk from 'chalk';
+import { COMMAND_GROUPS, TOP_LEVEL_COMMANDS } from './repl-commands.js';
 import { setReplInterface } from './utils/repl-context.js';
 import { deploy } from './commands/deploy.js';
 import { init } from './commands/init.js';
-import { APP_DIR, NEXT_DIR, NEST_DIR, DOTNET_DIR, SECRET_KEY } from './constants.js';
+import { APP_DIR, NEXT_DIR, NEST_DIR, DOTNET_DIR, STATIC_DIR, SECRET_KEY } from './constants.js';
 import { acquireLock, releaseLock } from './utils/lock-utils.js';
 import { Logger } from './utils/logger.js';
 import { listApps } from './commands/list.js';
@@ -101,80 +102,26 @@ function parseTokens(tokens: string[]): { positional: string[]; flags: Record<st
   return { positional, flags };
 }
 
-// ─── Help text ────────────────────────────────────────────────────────────────
-const HELP = `
-${chalk.bold('Deployment Manager — available commands')}
+// ─── Help text (generated from COMMAND_GROUPS) ────────────────────────────────
+function buildHelp(): string {
+  const lines: string[] = [`\n${chalk.bold('Deployment Manager — available commands')}\n`];
+  for (const group of COMMAND_GROUPS) {
+    lines.push(`  ${chalk.cyan(group.label)}`);
+    for (const cmd of group.commands) {
+      if (cmd.subcommands) {
+        for (const sub of cmd.subcommands) {
+          lines.push(`    ${sub.usage}`);
+        }
+      } else {
+        lines.push(`    ${cmd.usage}`);
+      }
+    }
+    lines.push('');
+  }
+  return lines.join('\n');
+}
 
-  ${chalk.cyan('App lifecycle')}
-    init <name> --repo <url> [--branch b] [--port n] [--instances n] [--type nextjs|nestjs|dotnet] [--project-dir d] [--vcs git|svn]
-    deploy <name> [--force] [--lint]
-    restart <name>
-    stop <name>
-    rollback <name> [--to <index>]
-    start-all
-    stop-all
-    delete <name> <secret>
-
-  ${chalk.cyan('Info & monitoring')}
-    list [--type nextjs|nestjs|dotnet]
-    info <name>
-    logs <name>
-    monit | dashboard
-
-  ${chalk.cyan('Environment')}
-    set-env <name> [KEY=VALUE]
-    unlock <name>
-    clean <name>
-    clean-all
-    update
-
-  ${chalk.cyan('Storage')}
-    storage new <name> [link-name]
-    storage attach <app> <storage>
-    storage detach <app> <storage>
-    storage rm <name>
-    storage ls
-
-  ${chalk.cyan('Domain')}
-    domain add <name>
-    domain remove <name> [--force]
-    domain list
-    domain show <name>
-    domain set-cert <name> --cert <f> --key <f> | --pfx <f> --password <p>
-    domain cert-status <name>
-    domain remove-cert <name>
-    domain reload-certs [name]
-    domain set-header <name> --key <k> --value <v>
-    domain remove-header <name> --key <k>
-    domain compile <name>
-    domain show-config <name>
-    domain push <name>
-
-  ${chalk.cyan('Route')}
-    route add <appName> <domainName> [--location path] [--force]
-    route remove <domainName> [--location path]
-    route list <domainName>
-    route set-header <domainName> --key <k> --value <v> [--location path]
-    route remove-header <domainName> --key <k> [--location path]
-
-  ${chalk.cyan('Database')}
-    migrate-db
-    change-repo <name> --repo <url>
-    install-service [--uninstall]
-
-  ${chalk.cyan('Shell')}
-    help              Show this help
-    clear             Clear the screen
-    exit | quit       Exit the shell
-`;
-
-// ─── Top-level commands for tab-completion ────────────────────────────────────
-const TOP_LEVEL_COMMANDS = [
-  'init', 'deploy', 'list', 'unlock', 'clean', 'clean-all', 'set-env',
-  'delete', 'start-all', 'stop-all', 'update', 'info', 'restart', 'stop',
-  'rollback', 'logs', 'monit', 'dashboard', 'storage', 'domain', 'route',
-  'migrate-db', 'change-repo', 'install-service', 'help', 'clear', 'exit', 'quit',
-];
+const HELP = buildHelp();
 
 // ─── Command dispatcher ───────────────────────────────────────────────────────
 async function dispatch(tokens: string[]): Promise<void> {
@@ -196,7 +143,7 @@ async function dispatch(tokens: string[]): Promise<void> {
       const repo = flag('repo', 'r') as string;
       if (!repo) { Logger.error('--repo is required'); return; }
       const type = (flag('type', 't') as string | undefined) ?? 'nextjs';
-      const appsDir = type === 'nestjs' ? NEST_DIR : type === 'dotnet' ? DOTNET_DIR : NEXT_DIR;
+      const appsDir = type === 'nestjs' ? NEST_DIR : type === 'dotnet' ? DOTNET_DIR : type === 'static' ? STATIC_DIR : NEXT_DIR;
       acquireLock(name);
       try {
         await init({
@@ -573,7 +520,7 @@ async function dispatch(tokens: string[]): Promise<void> {
 export async function startRepl(version: string): Promise<void> {
   // Ensure directories exist (mirrors cli.ts boot-time logic)
   const { existsSync, mkdirSync } = await import('fs');
-  for (const dir of [APP_DIR, NEXT_DIR, NEST_DIR, DOTNET_DIR]) {
+  for (const dir of [APP_DIR, NEXT_DIR, NEST_DIR, DOTNET_DIR, STATIC_DIR]) {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   }
 

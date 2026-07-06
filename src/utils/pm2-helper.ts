@@ -2,6 +2,12 @@ import pm2 from 'pm2';
 import path from 'path';
 import fs from 'fs';
 import { Logger } from './logger.js';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+const _dirname = dirname(fileURLToPath(import.meta.url));
+// Path to dm's own compiled static-server wrapper (dist/static-server/serve.js)
+const STATIC_SERVER_SCRIPT = resolve(_dirname, '..', 'static-server', 'serve.js');
+
 type Status =
   | 'online'
   | 'stopping'
@@ -49,7 +55,7 @@ function pm2Delete(name: string): Promise<void> {
 const getPM2Config = (
   dir: string, 
   config: Omit<pm2.StartOptions, "exec_mode" | "script" | "args"> & {
-  projectType: 'nextjs' | 'nestjs' | 'dotnet',
+  projectType: 'nextjs' | 'nestjs' | 'dotnet' | 'static',
   name: string;
   port: number;
   status: Status;
@@ -98,6 +104,14 @@ const getPM2Config = (
       };
     }
 
+    case 'static':
+      return {
+        ...baseConfig,
+        exec_mode: 'fork',
+        script: STATIC_SERVER_SCRIPT,
+        args: undefined,
+      };
+
     case 'nextjs':
     default:
       return {
@@ -114,7 +128,7 @@ export const runApp = async (
     name: string;
     port: number;
     status: Status;
-    projectType: 'nextjs' | 'nestjs' | 'dotnet';
+    projectType: 'nextjs' | 'nestjs' | 'dotnet' | 'static';
   }
 ) => {
   const pm2Config = getPM2Config(dir, config);

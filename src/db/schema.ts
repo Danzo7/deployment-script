@@ -20,11 +20,11 @@ export const appsTableSqlite = sqliteTable('apps', {
   instances: integer('instances').default(1),
   repo: text('repo').notNull(),
   branch: text('branch').notNull(),
-  vcsType: text('vcsType', { enum: ['git', 'svn'] }).default('git'),
+  vcsType: text('vcsType', { enum: ['git', 'svn', 'local'] }).default('git'),
   lastDeploy: integer('lastDeploy', { mode: 'timestamp' }),
   builds: text('builds'), // JSON array
   activeBuild: text('activeBuild'),
-  projectType: text('projectType', { enum: ['nextjs', 'nestjs', 'dotnet'] }).notNull(),
+  projectType: text('projectType', { enum: ['nextjs', 'nestjs', 'dotnet', 'static'] }).notNull(),
   projectDir: text('projectDir'),
   lastDeployedCommit: text('lastDeployedCommit'), // JSON object
 }, (table) => [
@@ -94,11 +94,11 @@ export const appsTablePostgres = pgTable('apps', {
   instances: pgInteger('instances').default(1),
   repo: pgText('repo').notNull(),
   branch: varchar('branch', { length: 255 }).notNull(),
-  vcsType: varchar('vcs_type', { length: 10, enum: ['git', 'svn'] }).default('git'),
+  vcsType: varchar('vcs_type', { length: 10, enum: ['git', 'svn', 'local'] }).default('git'),
   lastDeploy: timestamp('last_deploy', { mode: 'date' }),
   builds: jsonb('builds'), // JSON array
   activeBuild: varchar('active_build', { length: 500 }),
-  projectType: varchar('project_type', { length: 20, enum: ['nextjs', 'nestjs', 'dotnet'] }).notNull(),
+  projectType: varchar('project_type', { length: 20, enum: ['nextjs', 'nestjs', 'dotnet', 'static'] }).notNull(),
   projectDir: varchar('project_dir', { length: 255 }),
   lastDeployedCommit: jsonb('last_deployed_commit'), // JSON object
 }, (table) => [

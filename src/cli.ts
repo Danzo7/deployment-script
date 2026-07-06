@@ -3,7 +3,7 @@ import yargs from 'yargs';
 import chalk from 'chalk';
 import { deploy } from './commands/deploy.js';
 import { init } from './commands/init.js';
-import { APP_DIR, NEXT_DIR, NEST_DIR, DOTNET_DIR, SECRET_KEY } from './constants.js';
+import { APP_DIR, NEXT_DIR, NEST_DIR, DOTNET_DIR, STATIC_DIR, SECRET_KEY } from './constants.js';
 import { acquireLock, releaseLock } from './utils/lock-utils.js';
 import { Logger } from './utils/logger.js';
 import { listApps } from './commands/list.js';
@@ -53,9 +53,9 @@ interface InitArgs {
   branch: string;
   instances: number;
   port?: number;
-  type?: 'nextjs' | 'nestjs' | 'dotnet';
+  type?: 'nextjs' | 'nestjs' | 'dotnet' | 'static';
   projectDir?: string;
-  vcs?: 'git' | 'svn';
+  vcs?: 'git' | 'svn' | 'local';
 }
 
 interface DeployArgs {
@@ -88,6 +88,9 @@ if (!existsSync(NEST_DIR)) {
 }
 if (!existsSync(DOTNET_DIR)) {
   mkdirSync(DOTNET_DIR, { recursive: true });
+}
+if (!existsSync(STATIC_DIR)) {
+  mkdirSync(STATIC_DIR, { recursive: true });
 }
 const startTime = Date.now(); // Start the timer
 
@@ -149,10 +152,10 @@ try {
           })
           .option('type', {
             type: 'string',
-            choices: ['nextjs', 'nestjs', 'dotnet'],
+            choices: ['nextjs', 'nestjs', 'dotnet', 'static'],
             default: 'nextjs',
             alias: 't',
-            describe: 'The type of application (nextjs, nestjs, or dotnet)',
+            describe: 'The type of application (nextjs, nestjs, dotnet, or static)',
           })
           .option('project-dir', {
             type: 'string',
@@ -161,13 +164,13 @@ try {
           })
           .option('vcs', {
             type: 'string',
-            choices: ['git', 'svn'],
+            choices: ['git', 'svn', 'local'],
             default: 'git',
-            describe: 'Version control system to use (git or svn)',
+            describe: 'Version control system to use (git, svn, or local)',
           }),
       async (args) => {
         try {
-        const appsDir = args.type === 'nestjs' ? NEST_DIR : args.type === 'dotnet' ? DOTNET_DIR : NEXT_DIR;
+        const appsDir = args.type === 'nestjs' ? NEST_DIR : args.type === 'dotnet' ? DOTNET_DIR : args.type === 'static' ? STATIC_DIR : NEXT_DIR;
           await init({ ...args, appsDir, projectDir: args.projectDir, vcsType: args.vcs ?? 'git' });
         } catch (error) {          Logger.error(error);
           process.exit(1);

@@ -8,11 +8,11 @@ export interface App {
   instances?: number; // Number of instances (default 1)
   repo: string; // Repository URL or path
   branch: string; // Branch name or SVN path suffix (e.g. trunk, branches/x)
-  vcsType?: 'git' | 'svn'; // Version control system (default: git)
+  vcsType?: 'git' | 'svn' | 'local'; // Version control system (default: git)
   lastDeploy?: Date; // Optional last deployment timestamp
   builds?: string[];
   activeBuild?: string; // path to the active build directory
-  projectType: 'nextjs' | 'nestjs' | 'dotnet'; // Project framework type
+  projectType: 'nextjs' | 'nestjs' | 'dotnet' | 'static'; // Project framework type
   projectDir?: string; // Optional subdirectory within the repo that contains the project (for monorepos)
   lastDeployedCommit?: {
     hash: string;    // Short commit hash (7 chars) or SVN revision

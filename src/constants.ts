@@ -12,6 +12,7 @@ export const APP_DIR =
 export const NEXT_DIR = process.env?.NEXT_DIR ?? APP_DIR;
 export const NEST_DIR = process.env?.NEST_DIR ?? APP_DIR;
 export const DOTNET_DIR = process.env?.DOTNET_DIR ?? APP_DIR;
+export const STATIC_DIR = process.env?.STATIC_DIR ?? APP_DIR;
 export const STORAGE_DIR =
   process.env.STORAGE_DIR ?? path.join(APP_DIR, 'storages');
 export const DOMAINS_DIR =

@@ -138,6 +138,38 @@ export const createBuildDirForNestJS = (appDir: string, projectDir?: string): st
   return buildDir;
 };
 
+export const createBuildDirForStatic = (appDir: string, projectDir?: string): string => {
+  const buildDir = path.join(appDir, 'builds', 'build-' + Date.now());
+  const releaseDir = path.join(appDir, 'release');
+  const sourceRoot = projectDir ? path.join(releaseDir, projectDir) : releaseDir;
+
+  // Look for a conventional static output folder — dist takes priority over build
+  const distFolder = path.join(sourceRoot, 'dist');
+  const buildFolder = path.join(sourceRoot, 'build');
+
+  let staticSource: string | undefined;
+  if (fs.existsSync(distFolder)) {
+    staticSource = distFolder;
+  } else if (fs.existsSync(buildFolder)) {
+    staticSource = buildFolder;
+  }
+
+  if (!staticSource) {
+    throw new Error(
+      `No static output folder found for static app.\n` +
+      `Expected a "dist/" or "build/" folder inside ${sourceRoot}.\n` +
+      `Make sure your site is built before deploying (e.g. run "npm run build" locally and commit the output, or use a CI step that produces dist/ or build/).`
+    );
+  }
+
+  fs.mkdirSync(buildDir, { recursive: true });
+  // Copy the contents of dist/ or build/ directly into the build dir (not nested)
+  fsExtra.copySync(staticSource, buildDir);
+
+  Logger.info(`Copied static output from "${path.basename(staticSource)}/" into build directory.`);
+  return buildDir;
+};
+
 export const createBuildDirForDotnet = (appDir: string, projectDir?: string): string => {
   const buildDir = path.join(appDir, 'builds', 'build-' + Date.now());
   const releaseDir = path.join(appDir, 'release');
@@ -156,7 +188,11 @@ export const createBuildDirForDotnet = (appDir: string, projectDir?: string): st
 };
 
 /**
- * Creates a build directory based on the project type
+ * Returns true if a package.json exists in the given directory.
+ */
+export const hasPackageJson = (dir: string): boolean =>
+  fs.existsSync(path.join(dir, 'package.json'));
+ /*
  * @param appDir The application directory
  * @param projectType The type of project ('nextjs' | 'nestjs' | 'dotnet')
  * @param projectDir Optional subdirectory within the release dir (for monorepos)
@@ -165,7 +201,7 @@ export const createBuildDirForDotnet = (appDir: string, projectDir?: string): st
  */
 export const createBuildDirByType = (
   appDir: string,
-  projectType: 'nextjs' | 'nestjs' | 'dotnet',
+  projectType: 'nextjs' | 'nestjs' | 'dotnet' | 'static',
   projectDir?: string,
   storages?: Storage[]): string => {
   let buildDir: string;
@@ -175,6 +211,9 @@ export const createBuildDirByType = (
       break;
     case 'dotnet':
       buildDir = createBuildDirForDotnet(appDir, projectDir);
+      break;
+    case 'static':
+      buildDir = createBuildDirForStatic(appDir, projectDir);
       break;
     case 'nextjs':
     default:

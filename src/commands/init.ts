@@ -6,6 +6,7 @@ import { ensureDirectories } from '../utils/file-utils.js';
 import { checkSvn } from '../utils/svn-helper.js';
 import { checkDotnetInstalled } from '../utils/dotnet-helper.js';
 import { checkGit } from '../utils/git-helper.js';
+import { checkLocalFolder } from '../utils/local-folder-helper.js';
 
 export const init = async ({
   name,
@@ -24,14 +25,15 @@ export const init = async ({
   instances?: number;
   port?: number;
   appsDir: string;
-  type?: 'nextjs' | 'nestjs' | 'dotnet';
+  type?: 'nextjs' | 'nestjs' | 'dotnet' | 'static';
   projectDir?: string;
-  vcsType?: 'git' | 'svn';
+  vcsType?: 'git' | 'svn' | 'local';
 }) => {
-  if (!repo) throw new Error('Repository URL is required.');
+  if (!repo) throw new Error('Repository URL or local folder path is required.');
 
   if (vcsType === 'svn') checkSvn();
   if (vcsType === 'git') checkGit();
+  if (vcsType === 'local') checkLocalFolder(repo);
   if (type === 'dotnet') checkDotnetInstalled();
 
   // Check if app already exists

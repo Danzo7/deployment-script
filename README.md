@@ -1,6 +1,6 @@
 # Deployment Manager (dm)
 
-A CLI tool for managing the full lifecycle of **Next.js**, **NestJS**, and **.NET Core** applications — from initialization and deployment to process management, reverse proxy configuration, and SSL. Built on PM2 and supports Git and SVN.
+A CLI tool for managing the full lifecycle of **Next.js**, **NestJS**, **.NET Core**, and **static site** applications — from initialization and deployment to process management, reverse proxy configuration, and SSL. Built on PM2 and supports Git, SVN, and local folder sources.
 
 **Version 2.0+**: Now powered by Drizzle ORM with SQLite/PostgreSQL support for better performance and reliability.
 
@@ -149,13 +149,13 @@ dm init <name> --repo <url> [options]
 
 | Option | Alias | Default | Description |
 |---|---|---|---|
-| `--repo` | `-r` | required | Git or SVN repository URL |
-| `--branch` | `-b` | `main` | Branch to deploy from (or SVN path like `trunk`, `branches/x`) |
+| `--repo` | `-r` | required | Git/SVN repository URL or local folder path |
+| `--branch` | `-b` | `main` | Branch to deploy from (or SVN path like `trunk`, `branches/x`). Not used for local sources. |
 | `--instances` | `-i` | `1` | Number of PM2 cluster workers |
 | `--port` | `-p` | auto | Port number (auto-assigned from 50xxx range if omitted) |
-| `--type` | `-t` | `nextjs` | App type: `nextjs`, `nestjs`, or `dotnet` |
+| `--type` | `-t` | `nextjs` | App type: `nextjs`, `nestjs`, `dotnet`, or `static` |
 | `--project-dir` | `-d` | — | Subdirectory within the repo (for monorepos) |
-| `--vcs` | — | `git` | Version control: `git` or `svn` |
+| `--vcs` | — | `git` | Version control: `git`, `svn`, or `local` |
 
 ```bash
 # Basic Next.js app
@@ -169,6 +169,15 @@ dm init my-dotnet-api --repo https://github.com/org/dotnet-app --type dotnet
 
 # SVN repository
 dm init legacy-app --repo https://svn.example.com/repo --branch trunk --vcs svn
+
+# Local folder source
+dm init my-local-app --repo /path/to/local/folder --vcs local --type nextjs
+
+# Static site from a Git repo
+dm init my-static --repo https://github.com/org/static-site --type static
+
+# Static site from a local folder
+dm init my-static --repo /path/to/dist --vcs local --type static
 ```
 
 After init, run `dm deploy <name>` to perform the first deployment.
@@ -192,14 +201,15 @@ dm deploy <name> [--force] [--lint]
 
 **What deploy does:**
 
-1. Clones the repo on first deploy, or fetches and pulls latest changes
-2. Detects changes (git hash, env vars, appsettings)
-3. For Node.js: runs `npm install` and `npm run build`
+1. Syncs source: clones/pulls for Git, `svn update` for SVN, or copies the local folder for `--vcs local`
+2. Detects changes (git hash / SVN revision / folder mtime, env vars, appsettings)
+3. For Next.js / NestJS: runs `npm install` and `npm run build`
 4. For .NET: runs `dotnet restore` and `dotnet publish -c Release`
-5. Creates a timestamped build snapshot
-6. Symlinks attached storage volumes into the new build
-7. Starts or restarts the app via PM2
-8. Records the deployed commit hash and build path
+5. For static: no build step — files are served as-is
+6. Creates a timestamped build snapshot
+7. Symlinks attached storage volumes into the new build
+8. Starts or restarts the app via PM2
+9. Records the deployed revision and build path
 
 ```bash
 dm deploy my-app
@@ -763,18 +773,13 @@ dm unlock my-app
 
 ## Monorepo Support
 
-If your repo contains multiple projects (e.g., a shared library alongside `PublicApi/` and `AdminApi/` directories), use `--project-dir` on init to point `dm` at the specific subdirectory.
+Use `--project-dir` to point `dm` at a subdirectory within the repo. The repo is always cloned at its root; `--project-dir` only affects where builds run and where artifacts are expected.
 
 ```bash
-# Two .NET projects from the same repo
 dm init public-api --repo https://github.com/org/monorepo --type dotnet --project-dir PublicApi
 dm init admin-api  --repo https://github.com/org/monorepo --type dotnet --project-dir AdminApi
-
-# Node.js monorepo
-dm init frontend --repo https://github.com/org/monorepo --type nextjs --project-dir apps/web
+dm init frontend   --repo https://github.com/org/monorepo --type nextjs --project-dir apps/web
 ```
-
-The repo is always cloned at its root. `--project-dir` only affects where builds run and where artifacts are expected.
 
 ---
 
@@ -797,6 +802,7 @@ Each deployment creates a timestamped build directory (`builds/build-<timestamp>
 Apps run under PM2:
 - **Next.js / NestJS** — cluster mode, scaled by `--instances`
 - **.NET** — fork mode (single process), `dotnet <appName>.dll`
+- **Static** — fork mode, sirv file server serving the release directory directly (no build step)
 
 Log files land in `<APP_DIR>/<name>/logs/`.
 
@@ -850,10 +856,12 @@ Each app has a file-based lock preventing concurrent `dm` operations on the same
 
 ### VCS support
 
-| Feature | Git | SVN |
-|---|---|---|
-| First deploy | `git clone` | `svn checkout` |
-| Update | `git fetch` + `git pull` | `svn update` |
-| Change detection | commit hash | revision number |
-| Lint auto-push | supported (`--lint`) | not supported |
-| Branch syntax | branch name | `trunk`, `branches/x`, `tags/x` |
+| Feature | Git | SVN | Local |
+|---|---|---|---|
+| First deploy | `git clone` | `svn checkout` | folder copy |
+| Update | `git fetch` + `git pull` | `svn update` | mtime diff + re-copy |
+| Change detection | commit hash | revision number | folder mtime |
+| Lint auto-push | supported (`--lint`) | not supported | not supported |
+| Branch syntax | branch name | `trunk`, `branches/x`, `tags/x` | n/a |
+
+Use `--vcs local` with a path to a local directory instead of a repository URL. On each deploy `dm` compares the folder's latest mtime against the previous run — unchanged folders are skipped. `--branch` and `--lint` are not applicable for local sources.

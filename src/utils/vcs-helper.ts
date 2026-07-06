@@ -2,6 +2,7 @@ import { App } from '../db/model.js';
 import { simpleGit, CheckRepoActions } from 'simple-git';
 import { handleGitRepo, getLastCommit, discardUncommittedChanges, pushChanges, changeRemoteUrl } from './git-helper.js';
 import { handleSvnRepo, getLastSvnRevision, discardSvnChanges, relocateSvnRepo } from './svn-helper.js';
+import { handleLocalFolder, getLocalFolderRevision } from './local-folder-helper.js';
 import fs from 'fs';
 
 export const handleRepo = (
@@ -11,15 +12,21 @@ export const handleRepo = (
   if (app.vcsType === 'svn') {
     return handleSvnRepo({ dir, repo: app.repo, branch: app.branch });
   }
+  if (app.vcsType === 'local') {
+    return handleLocalFolder({ dir, repo: app.repo });
+  }
   return handleGitRepo({ dir, repo: app.repo, branch: app.branch });
 };
 
 export const getLastRevision = async (
-  app: Pick<App, 'vcsType'>,
+  app: Pick<App, 'vcsType' | 'repo'>,
   dir: string
 ): Promise<{ hash: string; message: string; author: string; date: string } | null> => {
   if (app.vcsType === 'svn') {
     return getLastSvnRevision(dir);
+  }
+  if (app.vcsType === 'local') {
+    return getLocalFolderRevision(app.repo);
   }
   return getLastCommit(dir);
 };
@@ -40,6 +47,9 @@ export const discardLocalChanges = async (
   if (app.vcsType === 'svn') {
     return discardSvnChanges(dir);
   }
+  if (app.vcsType === 'local') {
+    return; // nothing to discard — release dir is a copy, source is untouched
+  }
   return discardUncommittedChanges(dir);
 };
 
@@ -50,6 +60,9 @@ export const changeRepoUrl = async (
 ): Promise<void> => {
   if (app.vcsType === 'svn') {
     return relocateSvnRepo(dir, newRepo, app.branch);
+  }
+  if (app.vcsType === 'local') {
+    return; // repo path is updated in the DB by the caller; no in-dir action needed
   }
   return changeRemoteUrl(dir, newRepo);
 };
@@ -79,6 +92,11 @@ export const getVcsDriftInfo = async (
 ): Promise<VcsDriftInfo> => {
   if (!fs.existsSync(dir)) {
     return { branch: app.branch, behind: 0, ahead: 0, hasLocalChanges: false, fetched: false };
+  }
+
+  if (app.vcsType === 'local') {
+    // Local folders have no remote — nothing to drift against
+    return { branch: 'local', behind: 0, ahead: 0, hasLocalChanges: false, fetched: false };
   }
 
   if (app.vcsType === 'svn') {
