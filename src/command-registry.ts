@@ -81,6 +81,13 @@ export interface LeafCommand {
   lockArg?: string;
   /** True for commands that intentionally keep the process alive (e.g. `logs`). */
   streaming?: boolean;
+  /**
+   * Optional teardown hook called by the REPL after a streaming command exits
+   * (either via Ctrl+C or the underlying process ending). Use this for any
+   * cleanup that is specific to the REPL context (e.g. restoring terminal
+   * state) — the CLI path never calls it.
+   */
+  onStreamEnd?: () => void | Promise<void>;
   /** Receives a plain object combining resolved positionals + options. */
   handler: (args: Record<string, any>) => Promise<void> | void;
 }
@@ -108,6 +115,12 @@ function coerce(raw: string | boolean, type: PrimType): string | number | boolea
  * Resolves positional tokens + parsed flags into the same shape a yargs
  * handler would receive, applying defaults/choices/required checks —
  * so REPL commands are validated exactly like their CLI counterparts.
+ *
+ * Handles:
+ *  - `--no-<flag>` negation for boolean options (sets the option to false)
+ *  - boolean options: treats the string tokens "true"/"false" correctly so
+ *    `--force true` and `--force false` work as expected in the REPL
+ *  - alias resolution for both the flag name and its alias
  */
 export function resolveLeafArgs(
   node: LeafCommand,
@@ -115,6 +128,24 @@ export function resolveLeafArgs(
   flagTokens: Record<string, string | boolean>
 ): Record<string, any> {
   const args: Record<string, any> = {};
+
+  // Build a lookup: flagName → key, alias → key, 'no-flagName' → key (bool negation)
+  const flagToKey = new Map<string, string>();
+  const negatedKeys = new Set<string>(); // keys where --no-<flag> was provided
+  for (const [key, spec] of Object.entries(node.options ?? {})) {
+    const flagName = spec.flag ?? key;
+    flagToKey.set(flagName, key);
+    if (spec.alias) flagToKey.set(spec.alias, key);
+    if (spec.type === 'boolean') flagToKey.set(`no-${flagName}`, key);
+  }
+
+  // Pre-scan flagTokens for --no-<flag> negations
+  for (const rawFlag of Object.keys(flagTokens)) {
+    const key = flagToKey.get(rawFlag);
+    if (key !== undefined && rawFlag.startsWith('no-')) {
+      negatedKeys.add(key);
+    }
+  }
 
   (node.positionals ?? []).forEach((p, i) => {
     const raw = positionalTokens[i];
@@ -127,6 +158,14 @@ export function resolveLeafArgs(
 
   for (const [key, spec] of Object.entries(node.options ?? {})) {
     const flagName = spec.flag ?? key;
+
+    // --no-<flag> takes precedence: sets boolean to false immediately
+    if (negatedKeys.has(key)) {
+      if (spec.type !== 'boolean') throw new Error(`--no-${flagName} is only valid for boolean flags`);
+      args[key] = false;
+      continue;
+    }
+
     const raw = flagTokens[flagName] ?? (spec.alias ? flagTokens[spec.alias] : undefined);
 
     if (raw === undefined) {
@@ -135,6 +174,8 @@ export function resolveLeafArgs(
       continue;
     }
 
+    // For boolean flags, accept the bare flag (raw === true from parseTokens)
+    // as well as explicit string "true"/"false" from --flag=true style input.
     const value = coerce(raw, spec.type);
     if (spec.choices && !spec.choices.includes(value as string)) {
       throw new Error(`Invalid value for --${flagName}. Choices: ${spec.choices.join(', ')}`);

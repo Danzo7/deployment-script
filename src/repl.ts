@@ -41,10 +41,24 @@ function tokenise(line: string): string[] {
 }
 
 // ─── Option parser ────────────────────────────────────────────────────────────
-// Parses --flag, --flag=value, --flag value, -f, -f value from a token array.
+// Parses --flag, --flag=value, --flag value, -f, -f value, --no-flag from a
+// token array.
+//
+// Because this parser is type-unaware, it uses a conservative heuristic when
+// deciding whether the token after a bare --flag is its value or a separate
+// positional: only consume the next token as the flag's value if it looks
+// explicitly like one (i.e. it is "true", "false", starts with a digit, or
+// starts with a quote character). Anything else is left as a positional for
+// resolveLeafArgs to handle.
+//
+// --no-flag is stored as flags['no-flag'] = true; resolveLeafArgs normalises
+// that into the boolean negation for the matching option.
 function parseTokens(tokens: string[]): { positional: string[]; flags: Record<string, string | boolean> } {
   const positional: string[] = [];
   const flags: Record<string, string | boolean> = {};
+
+  const looksLikeValue = (s: string) =>
+    s === 'true' || s === 'false' || /^\d/.test(s) || s.startsWith('"') || s.startsWith("'");
 
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
@@ -55,7 +69,7 @@ function parseTokens(tokens: string[]): { positional: string[]; flags: Record<st
         flags[k] = rest.join('=');
       } else {
         const next = tokens[i + 1];
-        if (next !== undefined && !next.startsWith('-')) {
+        if (next !== undefined && !next.startsWith('-') && looksLikeValue(next)) {
           flags[body] = next;
           i++;
         } else {
@@ -65,7 +79,7 @@ function parseTokens(tokens: string[]): { positional: string[]; flags: Record<st
     } else if (t.startsWith('-') && t.length === 2) {
       const key = t.slice(1);
       const next = tokens[i + 1];
-      if (next !== undefined && !next.startsWith('-')) {
+      if (next !== undefined && !next.startsWith('-') && looksLikeValue(next)) {
         flags[key] = next;
         i++;
       } else {
@@ -93,6 +107,46 @@ function optionSummary(options?: Record<string, { flag?: string; alias?: string;
       return spec.demandOption ? token : `[${token}]`;
     })
     .join(' ');
+}
+
+// Builds a yargs-style per-command help block shown when the user provides
+// wrong/missing arguments in the REPL — so instead of just "Missing required
+// argument: <name>", they see the full picture of what the command expects.
+function buildLeafHelp(node: LeafCommand): string {
+  const lines: string[] = [];
+
+  lines.push(`\n  ${chalk.bold(node.usage)}`);
+  lines.push(`  ${chalk.gray(node.describe)}\n`);
+
+  if (node.positionals?.length) {
+    lines.push(chalk.cyan('  Positionals:'));
+    const col = Math.max(...node.positionals.map((p) => p.name.length)) + 2;
+    for (const p of node.positionals) {
+      const req = p.demandOption ? chalk.red(' [required]') : '';
+      lines.push(`    ${p.name.padEnd(col)}${p.describe ?? ''}${req}`);
+    }
+    lines.push('');
+  }
+
+  if (node.options && Object.keys(node.options).length) {
+    lines.push(chalk.cyan('  Options:'));
+    const entries = Object.entries(node.options);
+    const col = Math.max(...entries.map(([k, s]) => (s.flag ?? k).length)) + 4;
+    for (const [key, spec] of entries) {
+      const flag = spec.flag ?? key;
+      const alias = spec.alias ? `-${spec.alias}, ` : '    ';
+      const label = `${alias}--${flag}`;
+      const meta: string[] = [`[${spec.type}]`];
+      if (spec.choices) meta.push(`[choices: ${spec.choices.join(', ')}]`);
+      if (spec.default !== undefined) meta.push(`[default: ${spec.default}]`);
+      if (spec.demandOption) meta.push(chalk.red('[required]'));
+      const desc = spec.describe ? `  ${spec.describe}` : '';
+      lines.push(`    ${label.padEnd(col)}${meta.join(' ')}${desc}`);
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
 }
 
 function buildHelp(): string {
@@ -139,11 +193,12 @@ async function runStreamingInRepl(node: LeafCommand, args: Record<string, any>):
 
     const origExit = process.exit.bind(process) as (code?: number) => never;
 
-    const restore = () => {
+    const restore = async () => {
       (process as any).exit = origExit;
       process.removeAllListeners('SIGINT');
       for (const l of existingSigInt) process.on('SIGINT', l);
       console.log('');
+      if (node.onStreamEnd) await node.onStreamEnd();
       resolveDone();
     };
 
@@ -180,7 +235,7 @@ async function runNode(node: CommandNode, fullUsage: string, rest: string[]): Pr
     args = resolveLeafArgs(node, positional, flags);
   } catch (err: any) {
     Logger.error(err?.message ?? String(err));
-    Logger.info(`Usage: ${fullUsage}`);
+    console.log(buildLeafHelp(node));
     return;
   }
 
