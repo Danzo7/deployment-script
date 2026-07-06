@@ -39,29 +39,10 @@ export const update = async () => {
       Logger.info('Already up to date.');
     }
     
-    // Check if we need to rebuild (if package.json or source files changed)
-    const needsRebuild = status.modified.includes('package.json') || 
-                         status.modified.some(file => file.startsWith('src/')) ||
-                         status.created.some(file => file.startsWith('src/')) ||
-                         status.deleted.some(file => file.startsWith('src/')) ||
-                         status.behind > 0;
-    
-    if (needsRebuild) {
-      Logger.info('Building the project...');
-      
-      // Run npm install if package.json changed
-      if (status.modified.includes('package.json')) {
-        Logger.info('Installing dependencies...');
-        execSync('npm install', { cwd: projectRoot, stdio: 'inherit' });
-      }
-      
-      // Build the project
-      Logger.info('Compiling...');
-      execSync('npm run build', { cwd: projectRoot, stdio: 'inherit' });
-      
-      Logger.success('Build completed successfully.');
-    } else {
-      Logger.info('No rebuild needed.');
+    if (status.behind > 0) {
+      Logger.info('Installing dependencies and building...');
+      execSync('npm install', { cwd: projectRoot, stdio: 'inherit' });
+      Logger.success('Install and build completed successfully.');
     }
     
     Logger.success('dm tool updated successfully!');
