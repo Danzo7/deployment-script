@@ -151,10 +151,13 @@ export async function startRemoteServer(port: number): Promise<void> {
     const ip = (client as any)._sock?.remoteAddress ?? 'unknown';
     let authedAs: { method: string; identity: string; fingerprint: string } | undefined;
 
+    Logger.info(`[remote] connection attempt from ${ip}`);
+
     // ── Lockout check ────────────────────────────────────────────────────────
     const lockRemaining = isLockedOut(ip);
     if (lockRemaining > 0) {
       auditLog({ event: 'auth-throttled', ip, retryInMs: lockRemaining });
+      Logger.warn(`[remote] ${ip} is rate-limited — rejected`);
       client.end();
       return;
     }
@@ -181,6 +184,7 @@ export async function startRemoteServer(port: number): Promise<void> {
           clearAttempts(ip);
           authedAs = { method: 'publickey', identity: match.comment || match.fingerprint, fingerprint: match.fingerprint };
           auditLog({ event: 'auth-ok', ip, method: 'publickey', fingerprint: match.fingerprint, user: match.comment || match.fingerprint });
+          Logger.success(`[remote] authenticated: ${authedAs.identity} from ${ip}`);
           return ctx.accept();
         }
         recordFailedAttempt(ip);
@@ -230,6 +234,7 @@ export async function startRemoteServer(port: number): Promise<void> {
           }
 
           auditLog({ event: 'shell-open', ip, ...authedAs });
+          Logger.info(`[remote] session opened — user: ${identity}  ip: ${ip}  active sessions: ${activeSessions.size}`);
 
           const child = spawnReplSession(ptyCols, ptyRows, ptyTerm, identity);
 
@@ -259,6 +264,7 @@ export async function startRemoteServer(port: number): Promise<void> {
             channel.exit(exitCode);
             channel.end();
             auditLog({ event: 'shell-close', ip, ...authedAs, exitCode });
+            Logger.info(`[remote] session closed — user: ${identity}  ip: ${ip}  active sessions: ${activeSessions.size}`);
           });
 
           channel.on('close', () => {
@@ -351,7 +357,12 @@ export async function startRemoteServer(port: number): Promise<void> {
     });
 
     client.on('close', () => {
-      if (authedAs) auditLog({ event: 'disconnect', ip, ...authedAs });
+      if (authedAs) {
+        auditLog({ event: 'disconnect', ip, ...authedAs });
+        Logger.info(`[remote] disconnected — user: ${authedAs.identity}  ip: ${ip}`);
+      } else {
+        Logger.info(`[remote] unauthenticated connection closed from ${ip}`);
+      }
     });
 
     // Kill the associated PTY on any client-level error so the process

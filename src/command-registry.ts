@@ -731,20 +731,20 @@ export const COMMANDS: Record<string, CommandNode> = {
         },
         handler: async ({ host, port, identity }) => { await remoteConnect(host, port, identity); },
       },
-      'key-add': {
+      add: {
         kind: 'leaf',
-        usage: 'key-add',
-        describe: 'Authorize a public key for remote access (interactive: prompts for key and name)',
+        usage: 'add',
+        describe: 'Authorize a public key for remote access (interactive: prompts for username then key). Clients can get their public key with: ssh-keygen -y -f ~/.ssh/id_ed25519',
         group: 'Remote',
         handler: async () => { await remoteKeyAdd(); },
       },
-      'key-remove': {
+      remove: {
         kind: 'leaf',
-        usage: 'key-remove <fingerprint>',
-        describe: 'Revoke an authorized public key by its fingerprint',
+        usage: 'remove <username>',
+        describe: 'Revoke an authorized public key by username',
         group: 'Remote',
-        positionals: [{ name: 'fingerprint', demandOption: true, describe: 'Key fingerprint (SHA256:...) from "dm remote key-list"' }],
-        handler: async ({ fingerprint }) => { await remoteKeyRemove(fingerprint); },
+        positionals: [{ name: 'username', demandOption: true, describe: 'The username whose key should be revoked (see "dm remote key-list")' }],
+        handler: async ({ username }) => { await remoteKeyRemove(username); },
       },
       'key-list': {
         kind: 'leaf',

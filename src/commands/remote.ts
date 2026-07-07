@@ -6,7 +6,7 @@ import { startRemoteServer } from '../utils/ssh-server.js';
 import { connectRemote } from '../utils/ssh-client.js';
 import {
   addAuthorizedKey,
-  removeAuthorizedKey,
+  removeAuthorizedKeyByUsername,
   listAuthorizedKeys,
 } from '../utils/remote-auth.js';
 import { REMOTE_PORT } from '../constants.js';
@@ -31,17 +31,18 @@ export async function remoteConnect(host: string, port?: number, identity?: stri
 export async function remoteKeyAdd(): Promise<void> {
   assertNotRemoteSession();
 
-  // Interactive prompts: paste key, then provide a name.
+  // Interactive prompts: username first, then paste the public key.
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const ask = (q: string): Promise<string> => new Promise((res) => rl.question(q, res));
 
-  let publicKey: string;
   let name: string;
+  let publicKey: string;
   try {
+    name = (await ask('Username for this key: ')).trim();
+    if (!name) { Logger.error('No username provided.'); return; }
+    Logger.info(`Clients can get their public key by running: ssh-keygen -y -f ~/.ssh/id_ed25519`);
     publicKey = (await ask('Paste the public key: ')).trim();
     if (!publicKey) { Logger.error('No key provided.'); return; }
-    name = (await ask('Name / username for this key: ')).trim();
-    if (!name) { Logger.error('No name provided.'); return; }
   } finally {
     rl.close();
   }
@@ -50,17 +51,17 @@ export async function remoteKeyAdd(): Promise<void> {
   Logger.success(`Authorized key added (${key.fingerprint}) — user: ${chalk.bold(key.comment)}`);
 }
 
-export async function remoteKeyRemove(fingerprint: string): Promise<void> {
+export async function remoteKeyRemove(username: string): Promise<void> {
   assertNotRemoteSession();
-  const removed = removeAuthorizedKey(fingerprint);
-  if (removed) Logger.success(`Removed key ${fingerprint}`);
-  else Logger.error(`No key found matching fingerprint: ${fingerprint}`);
+  const removed = removeAuthorizedKeyByUsername(username);
+  if (removed) Logger.success(`Removed key for user: ${username}`);
+  else Logger.error(`No key found for user: ${username}`);
 }
 
 export async function remoteKeyList(): Promise<void> {
   const keys = listAuthorizedKeys();
   if (!keys.length) {
-    Logger.info(`No authorized keys. Add one with: dm remote key-add "$(cat ~/.ssh/id_ed25519.pub)"`);
+    Logger.info(`No authorized keys. Add one with: dm remote add`);
     return;
   }
   const table = new Table({ head: ['Fingerprint', 'Comment'] });

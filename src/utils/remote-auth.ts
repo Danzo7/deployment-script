@@ -116,11 +116,14 @@ export function addAuthorizedKey(keyOrPath: string, username?: string): Authoriz
   if (existing.some((k) => k.fingerprint === fp)) {
     throw new Error(`Key already authorized (${fp})`);
   }
+  const parts = raw.split(' ');
+  const comment = username?.trim() || parts[2] || '';
+  if (comment && existing.some((k) => k.comment === comment)) {
+    throw new Error(`Username "${comment}" is already in use. Choose a different name.`);
+  }
 
   // Build the line: always "type base64 username" so the comment is the username.
   // If no username given, keep whatever comment was in the original key.
-  const parts = raw.split(' ');
-  const comment = username?.trim() || parts[2] || '';
   const line = `${parts[0]} ${parts[1]}${comment ? ' ' + comment : ''}`;
 
   fs.appendFileSync(REMOTE_AUTHORIZED_KEYS_PATH, line + '\n', { mode: 0o600 });
@@ -130,6 +133,15 @@ export function addAuthorizedKey(keyOrPath: string, username?: string): Authoriz
 export function removeAuthorizedKey(fingerprint: string): boolean {
   const existing = parseAuthorizedKeysFile();
   const remaining = existing.filter((k) => k.fingerprint !== fingerprint);
+  if (remaining.length === existing.length) return false;
+  const content = remaining.map((k) => k.raw).join('\n') + (remaining.length ? '\n' : '');
+  fs.writeFileSync(REMOTE_AUTHORIZED_KEYS_PATH, content, { mode: 0o600 });
+  return true;
+}
+
+export function removeAuthorizedKeyByUsername(username: string): boolean {
+  const existing = parseAuthorizedKeysFile();
+  const remaining = existing.filter((k) => k.comment !== username);
   if (remaining.length === existing.length) return false;
   const content = remaining.map((k) => k.raw).join('\n') + (remaining.length ? '\n' : '');
   fs.writeFileSync(REMOTE_AUTHORIZED_KEYS_PATH, content, { mode: 0o600 });
