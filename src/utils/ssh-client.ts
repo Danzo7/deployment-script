@@ -39,9 +39,6 @@ export function ensureClientKey(): string | undefined {
   const pubPath = DEFAULT_KEY_PATH + '.pub';
 
   if (fs.existsSync(DEFAULT_KEY_PATH) && fs.existsSync(pubPath)) {
-    const pub = fs.readFileSync(pubPath, 'utf8').trim();
-    Logger.info('Your public key (share this with the server admin if not yet authorized):');
-    console.log(chalk.cyan(pub));
     return DEFAULT_KEY_PATH;
   }
 
@@ -49,19 +46,17 @@ export function ensureClientKey(): string | undefined {
   if (!fs.existsSync(sshDir)) fs.mkdirSync(sshDir, { recursive: true, mode: 0o700 });
 
   Logger.info('No SSH key found. Generating a new ed25519 key pair…');
-
   const keys = (sshUtils as any).generateKeyPairSync('ed25519') as { private: string; public: string };
-
   fs.writeFileSync(DEFAULT_KEY_PATH, keys.private, { mode: 0o600 });
   fs.writeFileSync(pubPath, keys.public, { mode: 0o644 });
 
-  console.log('');
   Logger.success('SSH key generated successfully.');
   Logger.info('Share the following public key with the server admin to get authorized:');
   console.log('');
   console.log(chalk.cyan(keys.public.trim()));
   console.log('');
-  return DEFAULT_KEY_PATH;
+  Logger.info('Once authorized, run this command again to connect.');
+  return undefined;
 }
 
 // ── Target parsing ───────────────────────────────────────────────────────────
