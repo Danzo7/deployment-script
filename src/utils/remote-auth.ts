@@ -8,8 +8,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import fs from 'fs';
-import { createHash } from 'crypto';
-import { utils as sshUtils, ParsedKey } from 'ssh2';
+import {
+  parseOpenSshPublicKey,
+  fingerprintKey,
+  type ParsedSshPublicKey,
+} from './ssh-crypto.js';
 import {
   REMOTE_DIR,
   REMOTE_AUTHORIZED_KEYS_PATH,
@@ -31,7 +34,7 @@ export interface AuthorizedKey {
   raw: string;
   comment: string;
   fingerprint: string;
-  parsed: ParsedKey;
+  parsed: ParsedSshPublicKey;
 }
 
 function parseAuthorizedKeysFile(): AuthorizedKey[] {
@@ -41,16 +44,12 @@ function parseAuthorizedKeysFile(): AuthorizedKey[] {
   for (const raw of lines) {
     const line = raw.trim();
     if (!line || line.startsWith('#')) continue;
-    const parsed = sshUtils.parseKey(line);
-    if (parsed instanceof Error || Array.isArray(parsed)) continue;
-    const fp = computeFingerprint(parsed.getPublicSSH());
-    keys.push({ raw: line, parsed, fingerprint: fp, comment: line.split(' ')[2] ?? '' });
+    const parsed = parseOpenSshPublicKey(line);
+    if (!parsed) continue;
+    const fp = fingerprintKey(parsed);
+    keys.push({ raw: line, parsed, fingerprint: fp, comment: parsed.comment });
   }
   return keys;
-}
-
-function computeFingerprint(publicSSH: Buffer): string {
-  return 'SHA256:' + createHash('sha256').update(publicSSH).digest('base64').replace(/=+$/, '');
 }
 
 export function listAuthorizedKeys(): AuthorizedKey[] {
@@ -79,13 +78,13 @@ export function addAuthorizedKey(keyOrPath: string, username?: string): Authoriz
     ? fs.readFileSync(keyOrPath, 'utf8').trim()
     : keyOrPath.trim();
 
-  const parsed = sshUtils.parseKey(raw);
-  if (parsed instanceof Error || Array.isArray(parsed)) {
+  const parsed = parseOpenSshPublicKey(raw);
+  if (!parsed) {
     throw new Error('Invalid SSH public key. Expected format: ssh-ed25519 AAAA... [comment]');
   }
 
   // Reject weak/legacy key types (DSA, etc.)
-  const keyType = (parsed as any).type as string;
+  const keyType = parsed.type;
   if (!ALLOWED_KEY_TYPES.has(keyType)) {
     throw new Error(
       `Key type "${keyType}" is not allowed. Use one of: ed25519, ecdsa-sha2-nistp256/384/521, or RSA ≥ 4096 bits`
@@ -94,21 +93,31 @@ export function addAuthorizedKey(keyOrPath: string, username?: string): Authoriz
 
   // For RSA keys, enforce minimum bit length.
   if (keyType === 'ssh-rsa') {
-    // ssh2's ParsedKey exposes the modulus buffer at parsed.n (node-forge style).
-    const modulus: Buffer | undefined = (parsed as any).n;
-    if (!modulus) {
+    // RSA wire format: [tag][e][n] — each as length-prefixed uint
+    // Skip: 4+tagLen bytes (tag), then 4+eLen bytes (exponent), then 4 bytes (modulus length)
+    const wire = parsed.wire;
+    try {
+      const tagLen = wire.readUInt32BE(0);
+      let offset = 4 + tagLen;
+      const eLen = wire.readUInt32BE(offset);
+      offset += 4 + eLen;
+      const nLen = wire.readUInt32BE(offset);
+      const modulus = wire.slice(offset + 4, offset + 4 + nLen);
+      // Strip leading zero byte (sign byte) if present
+      const effectiveLen = modulus[0] === 0 ? modulus.length - 1 : modulus.length;
+      const bitLength = effectiveLen * 8;
+      if (bitLength < RSA_MIN_BITS) {
+        throw new Error(
+          `RSA key is ${bitLength} bits. Minimum accepted size is ${RSA_MIN_BITS} bits. Use an ed25519 key for best security.`
+        );
+      }
+    } catch (e: any) {
+      if (e.message?.includes('bits')) throw e;
       throw new Error('Could not determine RSA key size. Provide an ed25519 or ECDSA key instead.');
-    }
-    // Bit length = byte length × 8, minus leading zero bits in the first byte.
-    const bitLength = (modulus.length - 1) * 8 + (8 - Math.clz32(modulus[0]));
-    if (bitLength < RSA_MIN_BITS) {
-      throw new Error(
-        `RSA key is ${bitLength} bits. Minimum accepted size is ${RSA_MIN_BITS} bits. Use an ed25519 key for best security.`
-      );
     }
   }
 
-  const fp = computeFingerprint(parsed.getPublicSSH());
+  const fp = fingerprintKey(parsed);
   const existing = parseAuthorizedKeysFile();
   if (existing.some((k) => k.fingerprint === fp)) {
     throw new Error(`Key already authorized (${fp})`);
@@ -136,7 +145,7 @@ export function removeAuthorizedKey(fingerprint: string): boolean {
 /** Used during SSH publickey auth — matches on raw SSH wire bytes. */
 export function findAuthorizedKeyByPublicSSH(publicSSH: Buffer): AuthorizedKey | undefined {
   return parseAuthorizedKeysFile().find(
-    (k) => Buffer.compare(k.parsed.getPublicSSH(), publicSSH) === 0
+    (k) => Buffer.compare(k.parsed.wire, publicSSH) === 0
   );
 }
 
