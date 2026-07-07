@@ -10,8 +10,7 @@
 // the server admin.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { Client } from 'ssh2';
-import { generateEd25519KeyPair } from './ssh-crypto.js';
+import { Client, utils as sshUtils } from 'ssh2';
 import fs from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
@@ -47,16 +46,16 @@ export function ensureClientKey(): string | undefined {
 
   Logger.info('No SSH key found. Generating a new ed25519 key pair…');
 
-  const keys = generateEd25519KeyPair();
+  const keys = (sshUtils as any).generateKeyPairSync('ed25519') as { private: string; public: string };
 
-  fs.writeFileSync(DEFAULT_KEY_PATH, keys.privateKey, { mode: 0o600 });
-  fs.writeFileSync(pubPath, keys.publicKey, { mode: 0o644 });
+  fs.writeFileSync(DEFAULT_KEY_PATH, keys.private, { mode: 0o600 });
+  fs.writeFileSync(pubPath, keys.public, { mode: 0o644 });
 
   console.log('');
   Logger.success('SSH key generated successfully.');
   Logger.info('Share the following public key with the server admin to get authorized:');
   console.log('');
-  console.log(chalk.cyan(keys.publicKey.trim()));
+  console.log(chalk.cyan(keys.public.trim()));
   console.log('');
   return DEFAULT_KEY_PATH;
 }

@@ -7,8 +7,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import fs from 'fs';
-import { generateKeyPairSync, createPublicKey } from 'crypto';
-import { spkiDerToSshWire, fingerprintSshWire } from './ssh-crypto.js';
+import { generateKeyPairSync, createHash } from 'crypto';
+import { utils as sshUtils } from 'ssh2';
 import { REMOTE_HOST_KEY_PATH } from '../constants.js';
 import { ensureRemoteDir } from './remote-auth.js';
 
@@ -27,8 +27,8 @@ export function loadOrCreateHostKey(): Buffer {
 
 /** SHA256 fingerprint matching the format `ssh-keygen -lf` produces. */
 export function fingerprintHostKey(pem: Buffer): string {
-  const pubKeyObj = createPublicKey({ key: pem, format: 'pem' });
-  const spkiDer = pubKeyObj.export({ type: 'spki', format: 'der' }) as Buffer;
-  const wire = spkiDerToSshWire(spkiDer);
-  return fingerprintSshWire(wire);
+  const parsed = sshUtils.parseKey(pem);
+  if (parsed instanceof Error) throw parsed;
+  const pub = Array.isArray(parsed) ? parsed[0].getPublicSSH() : parsed.getPublicSSH();
+  return 'SHA256:' + createHash('sha256').update(pub).digest('base64').replace(/=+$/, '');
 }
