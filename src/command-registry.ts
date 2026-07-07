@@ -714,7 +714,7 @@ export const COMMANDS: Record<string, CommandNode> = {
         group: 'Remote',
         streaming: true,
         options: {
-          port: { alias: 'p', type: 'number', default: 2022, describe: 'Port to listen on (default: REMOTE_PORT env var or 2022)' },
+          port: { alias: 'p', type: 'number', default: REMOTE_PORT, describe: 'Port to listen on (default: REMOTE_PORT env var or 2022)' },
         },
         handler: async ({ port }) => { await remoteServe(port); },
       },
