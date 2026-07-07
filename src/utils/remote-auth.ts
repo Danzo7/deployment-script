@@ -9,7 +9,10 @@
 
 import fs from 'fs';
 import { createHash } from 'crypto';
-import { utils as sshUtils, ParsedKey } from 'ssh2';
+import ssh2 from 'ssh2';
+import type { ParsedKey } from 'ssh2';
+
+const { utils: sshUtils } = ssh2;
 import {
   REMOTE_DIR,
   REMOTE_AUTHORIZED_KEYS_PATH,

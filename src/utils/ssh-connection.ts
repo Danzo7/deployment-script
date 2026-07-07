@@ -1,6 +1,9 @@
 import fs from 'fs';
-import { Client, ConnectConfig } from 'ssh2';
+import ssh2 from 'ssh2';
+import type { Client as ClientType, ConnectConfig } from 'ssh2';
 import { validateSshCredentials } from './security-validation.js';
+
+const { Client } = ssh2;
 
 export interface SshCredentials {
   remoteHost: string;
@@ -24,7 +27,7 @@ export interface ExecResult {
  * "what to do" rather than "how to talk to a remote shell."
  */
 export class SshConnection {
-  private client: Client = new Client();
+  private client: ClientType = new Client();
   private connected = false;
   private readonly host: string;
   private readonly username: string;

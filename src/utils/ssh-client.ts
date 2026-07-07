@@ -10,8 +10,12 @@
 // the server admin.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { Client, utils as sshUtils } from 'ssh2';
+import ssh2 from 'ssh2';
+import type { Client as ClientType } from 'ssh2';
 import fs from 'fs';
+
+const { Client } = ssh2;
+const { utils: sshUtils } = ssh2;
 import { homedir } from 'os';
 import { join } from 'path';
 import readline from 'readline';
@@ -194,7 +198,7 @@ export async function connectRemote(host: string, port?: number, identity?: stri
 
 // ── Wire local terminal to the remote shell ──────────────────────────────────
 
-function attachInteractive(conn: Client, stream: NodeJS.ReadWriteStream): void {
+function attachInteractive(conn: ClientType, stream: NodeJS.ReadWriteStream): void {
   const stdin = process.stdin;
   const wasRaw = stdin.isTTY ? (stdin as any).isRaw : false;
 

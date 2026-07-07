@@ -8,7 +8,9 @@
 
 import fs from 'fs';
 import { generateKeyPairSync, createHash } from 'crypto';
-import { utils as sshUtils } from 'ssh2';
+import ssh2 from 'ssh2';
+
+const { utils: sshUtils } = ssh2;
 import { REMOTE_HOST_KEY_PATH } from '../constants.js';
 import { ensureRemoteDir } from './remote-auth.js';
 

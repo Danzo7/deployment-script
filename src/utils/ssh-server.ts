@@ -18,9 +18,12 @@
 //  - client 'error' events kill the associated PTY child to prevent leaks.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { Server, ServerChannel } from 'ssh2';
+import ssh2 from 'ssh2';
+import type { Server as ServerType, ServerChannel } from 'ssh2';
 import { createRequire } from 'module';
 import { AddressInfo } from 'net';
+
+const { Server } = ssh2;
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { Logger } from './logger.js';
