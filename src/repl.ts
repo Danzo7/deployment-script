@@ -159,6 +159,7 @@ function buildHelp(): string {
   };
 
   for (const [key, node] of Object.entries(COMMANDS)) {
+    if (node.cliOnly) continue;
     if (isGroup(node)) {
       for (const [, subNode] of Object.entries(node.subcommands)) {
         if (isGroup(subNode)) continue; // no 2-level nesting today
@@ -180,7 +181,12 @@ function buildHelp(): string {
   )}\n    help              Show this help\n    clear             Clear the screen\n    exit | quit       Exit the shell\n`;
 }
 
-const TOP_LEVEL_COMMANDS = [...Object.keys(COMMANDS), 'help', 'clear', 'exit', 'quit'];
+const TOP_LEVEL_COMMANDS = [
+  ...Object.entries(COMMANDS)
+    .filter(([, node]) => !node.cliOnly)
+    .map(([key]) => key),
+  'help', 'clear', 'exit', 'quit',
+];
 
 // ─── Streaming commands (e.g. `logs`) ────────────────────────────────────────
 // `logs` tails until Ctrl+C. In the CLI that just means "keep the process
@@ -279,6 +285,12 @@ async function dispatch(tokens: string[]): Promise<void> {
   const node = COMMANDS[cmdKey];
   if (!node) {
     Logger.error(`Unknown command: ${chalk.bold(cmdKey)}. Type ${chalk.cyan('help')} for available commands.`);
+    return;
+  }
+
+  // cliOnly commands are not available in the REPL at all.
+  if (node.cliOnly) {
+    Logger.error(`Command "${chalk.bold(cmdKey)}" is only available via the CLI (\`dm ${cmdKey}\`), not the interactive shell.`);
     return;
   }
 

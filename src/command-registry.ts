@@ -90,6 +90,12 @@ export interface LeafCommand {
   /** True for commands that intentionally keep the process alive (e.g. `logs`). */
   streaming?: boolean;
   /**
+   * If true, this command is only available in the CLI (`dm <command>`) and
+   * will not appear in the REPL help, tab-completion, or be executable from
+   * the interactive shell. Use for risky/infrastructure commands.
+   */
+  cliOnly?: boolean;
+  /**
    * Optional teardown hook called by the REPL after a streaming command exits
    * (either via Ctrl+C or the underlying process ending). Use this for any
    * cleanup that is specific to the REPL context (e.g. restoring terminal
@@ -105,6 +111,12 @@ export interface GroupCommand {
   describe: string;
   group: string;
   subcommands: Record<string, CommandNode>;
+  /**
+   * If true, this entire command group is only available in the CLI and will
+   * not appear in the REPL help, tab-completion, or be executable from the
+   * interactive shell. Use for risky/infrastructure command groups.
+   */
+  cliOnly?: boolean;
 }
 
 export type CommandNode = LeafCommand | GroupCommand;
@@ -288,6 +300,7 @@ export const COMMANDS: Record<string, CommandNode> = {
     usage: 'delete <name> <secret>',
     describe: 'Delete an application',
     group: 'App lifecycle',
+    cliOnly: true,
     positionals: [
       { name: 'name', demandOption: true, describe: 'The name of the application' },
       { name: 'secret', demandOption: true, describe: 'The secret key' },
@@ -409,6 +422,7 @@ export const COMMANDS: Record<string, CommandNode> = {
     usage: 'update',
     describe: 'Update the dm tool',
     group: 'Environment',
+    cliOnly: true,
     handler: async () => { await update(); },
   },
 
@@ -678,6 +692,7 @@ export const COMMANDS: Record<string, CommandNode> = {
     usage: 'migrate-db',
     describe: 'Migrate data from legacy db.json to SQL database',
     group: 'Database',
+    cliOnly: true,
     handler: async () => { await migrateFromJSON(); },
   },
 
@@ -686,6 +701,7 @@ export const COMMANDS: Record<string, CommandNode> = {
     usage: 'change-repo <name>',
     describe: 'Change the repository URL for an application',
     group: 'Database',
+    cliOnly: true,
     positionals: [{ name: 'name', demandOption: true, describe: 'The name of the application' }],
     options: { repo: { alias: 'r', type: 'string', demandOption: true, describe: 'The new repository URL' } },
     lockArg: 'name',
@@ -697,6 +713,7 @@ export const COMMANDS: Record<string, CommandNode> = {
     usage: 'install-service',
     describe: 'Install auto-startup service to run "dm start-all" on boot',
     group: 'Database',
+    cliOnly: true,
     options: { uninstall: { type: 'boolean', default: false, describe: 'Uninstall the auto-startup service' } },
     handler: async ({ uninstall }) => { await installService({ uninstall }); },
   },
@@ -706,6 +723,7 @@ export const COMMANDS: Record<string, CommandNode> = {
     kind: 'group',
     describe: 'Remote access to the dm shell on another machine over SSH',
     group: 'Remote',
+    cliOnly: true,
     subcommands: {
       serve: {
         kind: 'leaf',
