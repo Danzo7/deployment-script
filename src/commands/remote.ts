@@ -24,8 +24,6 @@ export async function remoteServe(port: number): Promise<void> {
   await startRemoteServer(port);
 }
 
-
-
 export async function remoteConnect(host: string, port?: number, identity?: string): Promise<void> {
   await connectRemote(host, port, identity);
 }
