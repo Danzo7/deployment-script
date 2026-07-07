@@ -46,7 +46,6 @@ import { changeRepo } from './commands/change-repo.js';
 import { installService } from './commands/install-service.js';
 import {
   remoteServe,
-  remoteServeInternal,
   remoteConnect,
   remoteKeyAdd,
   remoteKeyRemove,
@@ -711,26 +710,15 @@ export const COMMANDS: Record<string, CommandNode> = {
       serve: {
         kind: 'leaf',
         usage: 'serve',
-        describe: 'Start the dm SSH server via PM2 (runs in background, auto-restarts on crash)',
+        describe: 'Start the dm SSH server in the foreground',
         group: 'Remote',
+        streaming: true,
         options: {
           port: { alias: 'p', type: 'number', default: 2022, describe: 'Port to listen on (default: REMOTE_PORT env var or 2022)' },
-          stop: { type: 'boolean', default: false, describe: 'Stop and remove the running server from PM2' },
         },
-        handler: async ({ port, stop }) => { await remoteServe(port, stop); },
+        handler: async ({ port }) => { await remoteServe(port); },
       },
-      // Internal-only: called by the PM2-managed child process. Not shown in help.
-      '_serve-internal': {
-        kind: 'leaf',
-        usage: '_serve-internal',
-        describe: 'Internal — runs the SSH server loop (invoked by PM2, not by users)',
-        group: 'Remote',
-        options: {
-          port: { alias: 'p', type: 'number', default: 2022, describe: 'Port' },
-        },
-        streaming: true,
-        handler: async ({ port }) => { await remoteServeInternal(port); },
-      },
+
       connect: {
         kind: 'leaf',
         usage: 'connect --host <ip>',
