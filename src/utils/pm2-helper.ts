@@ -44,7 +44,7 @@ function pm2Stop(name: string): Promise<void> {
 //     pm2.restart(name, (err) => (err ? reject(err) : resolve()));
 //   });
 // }
-function pm2Delete(name: string): Promise<void> {
+export function pm2Delete(name: string): Promise<void> {
   return new Promise((resolve, reject) => {
     pm2.delete(name, (err) => (err ? reject(err) : resolve()));
   });
@@ -215,6 +215,18 @@ export const deletePm2App = async (name: string) => {
     });
   });
 };
+
+/** Describe a process using an already-open PM2 connection (no connect/disconnect). */
+export const describeConnected = (name: string): Promise<{ status: string; proc: pm2.ProcessDescription | undefined }> =>
+  new Promise((resolve, reject) => {
+    pm2.describe(name, (descErr, list) => {
+      if (descErr) return reject(descErr);
+      const proc = list?.[0];
+      const env = proc?.pm2_env as any;
+      const status = env?.status ?? 'not-found';
+      resolve({ status, proc });
+    });
+  });
 
 export const getProcessInfo = (name: string): Promise<{ status: string; proc: pm2.ProcessDescription | undefined }> =>
   new Promise((resolve, reject) => {

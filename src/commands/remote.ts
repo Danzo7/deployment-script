@@ -5,7 +5,7 @@ import { resolve } from 'path';
 import { Logger } from '../utils/logger.js';
 import { startRemoteServer } from '../utils/ssh-server.js';
 import { connectRemote } from '../utils/ssh-client.js';
-import { pm2Connect, pm2Disconnect, pm2Start, getProcessInfo, deletePm2App } from '../utils/pm2-helper.js';
+import { pm2Connect, pm2Disconnect, pm2Start, pm2Delete, describeConnected, getProcessInfo, deletePm2App } from '../utils/pm2-helper.js';
 import {
   addAuthorizedKey,
   removeAuthorizedKey,
@@ -16,16 +16,15 @@ import { REMOTE_PORT, ROOT_DIR } from '../constants.js';
 const PM2_NAME = 'dm-remote';
 
 async function remoteServeStart(port: number): Promise<void> {
-  const { status } = await getProcessInfo(PM2_NAME);
-  if (status !== 'stopped' && status !== 'not-found') {
-    Logger.warn(`dm remote server is already running (pm2: ${chalk.bold(PM2_NAME)}, status: ${status}).`);
-    Logger.info(`Use ${chalk.cyan('dm remote serve --stop')} to stop it, or ${chalk.cyan('dm remote status')} to check.`);
-    return;
-  }
-  if (status === 'stopped') await deletePm2App(PM2_NAME);
-
   try {
     await pm2Connect();
+    const { status } = await describeConnected(PM2_NAME);
+    if (status !== 'stopped' && status !== 'not-found') {
+      Logger.warn(`dm remote server is already running (pm2: ${chalk.bold(PM2_NAME)}, status: ${status}).`);
+      Logger.info(`Use ${chalk.cyan('dm remote serve --stop')} to stop it, or ${chalk.cyan('dm remote status')} to check.`);
+      return;
+    }
+    if (status === 'stopped') await pm2Delete(PM2_NAME);
     await pm2Start({
       name: PM2_NAME,
       script: process.execPath,
