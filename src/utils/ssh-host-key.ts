@@ -7,7 +7,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import fs from 'fs';
-import { generateKeyPairSync, createHash } from 'crypto';
+import { createHash } from 'crypto';
 import ssh2 from 'ssh2';
 
 const { utils: sshUtils } = ssh2;
@@ -18,10 +18,7 @@ import { ensureRemoteDir } from './remote-auth.js';
 export function loadOrCreateHostKey(): Buffer {
   ensureRemoteDir();
   if (!fs.existsSync(REMOTE_HOST_KEY_PATH)) {
-    const { privateKey } = generateKeyPairSync('ed25519', {
-      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-      publicKeyEncoding: { type: 'spki', format: 'pem' },
-    });
+    const { private: privateKey } = sshUtils.generateKeyPairSync('ed25519');
     fs.writeFileSync(REMOTE_HOST_KEY_PATH, privateKey, { mode: 0o600 });
   }
   return fs.readFileSync(REMOTE_HOST_KEY_PATH);
