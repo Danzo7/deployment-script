@@ -43,6 +43,7 @@
     "simple-git": "^3.27.0",
     "sirv": "^3.0.2",
     "ssh2": "^1.17.0",
+    "node-pty": "^1.0.0",
     "yargs": "^17.7.2"
   },
   "devDependencies": {

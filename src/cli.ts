@@ -9,6 +9,7 @@ import { COMMANDS, CommandNode, LeafCommand, isGroup, ensureAppDirectories } fro
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
+import { REMOTE_PORT } from './constants.js';
 
 const _require = createRequire(import.meta.url);
 const _pkg = _require(resolve(dirname(fileURLToPath(import.meta.url)), '../package.json')) as { version: string };
@@ -106,6 +107,27 @@ if (isMigrationNeeded()) {
 // When called with no arguments (just `dm`), launch the interactive shell.
 if (process.argv.slice(2).length === 0) {
   await startRepl(_pkg.version);
+  process.exit(0);
+}
+
+// ─── Quick connect: `dm --host <ip> [--port <p>]` ────────────────────────────
+// Shorthand so remote users never need to know about the `remote connect`
+// subcommand — just `dm --host 10.10.10.10` is enough.
+const rawArgs = process.argv.slice(2);
+const hostIdx = rawArgs.findIndex((a) => a === '--host' || a === '-H');
+if (hostIdx !== -1) {
+  const host = rawArgs[hostIdx + 1];
+  if (!host || host.startsWith('-')) {
+    Logger.error('--host requires a value, e.g. dm --host 10.10.10.10');
+    process.exit(1);
+  }
+  const portIdx = rawArgs.findIndex((a) => a === '--port' || a === '-p');
+  const port = portIdx !== -1 ? Number(rawArgs[portIdx + 1]) : REMOTE_PORT;
+  const identIdx = rawArgs.findIndex((a) => a === '--identity' || a === '-i');
+  const identity = identIdx !== -1 ? rawArgs[identIdx + 1] : undefined;
+
+  const { connectRemote } = await import('./utils/ssh-client.js');
+  await connectRemote(host, port, identity);
   process.exit(0);
 }
 

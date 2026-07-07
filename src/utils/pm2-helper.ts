@@ -17,17 +17,17 @@ type Status =
   | 'one-launch-status'
   | 'not-found'| string; 
 
-function pm2Connect(): Promise<void> {
+export function pm2Connect(): Promise<void> {
   return new Promise((resolve, reject) => {
     pm2.connect((err) => (err ? reject(err) : resolve()));
   });
 }
 
-function pm2Disconnect(): void {
+export function pm2Disconnect(): void {
   pm2.disconnect();
 }
 
-function pm2Start(config: pm2.StartOptions): Promise<void> {
+export function pm2Start(config: pm2.StartOptions): Promise<void> {
   return new Promise((resolve, reject) => {
     pm2.start(config, (err) => (err ? reject(err) : resolve()));
   });

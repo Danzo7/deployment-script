@@ -33,3 +33,12 @@ export const DATABASE_URL = process.env.DATABASE_URL ?? undefined;
 
 // Security
 export const SECRET_KEY = process.env.SECRET_KEY ?? undefined;
+
+// Remote SSH access
+export const REMOTE_PORT = parseInt(process.env.REMOTE_PORT ?? '2022', 10);
+export const REMOTE_DIR = path.join(ROOT_DIR, '.remote');
+export const REMOTE_HOST_KEY_PATH = path.join(REMOTE_DIR, 'host_ed25519_key');
+export const REMOTE_AUTHORIZED_KEYS_PATH = path.join(REMOTE_DIR, 'authorized_keys');
+export const REMOTE_LOGIN_ATTEMPTS_PATH = path.join(REMOTE_DIR, 'login_attempts.json');
+export const REMOTE_AUDIT_LOG_PATH = path.join(REMOTE_DIR, 'audit.log');
+export const REMOTE_KNOWN_HOSTS_PATH = path.join(REMOTE_DIR, 'known_hosts.json');

@@ -12,7 +12,7 @@
 
 import { deploy } from './commands/deploy.js';
 import { init } from './commands/init.js';
-import { APP_DIR, NEXT_DIR, NEST_DIR, DOTNET_DIR, STATIC_DIR, SECRET_KEY } from './constants.js';
+import { APP_DIR, NEXT_DIR, NEST_DIR, DOTNET_DIR, STATIC_DIR, SECRET_KEY, REMOTE_PORT } from './constants.js';
 import { listApps } from './commands/list.js';
 import { unlock } from './commands/unlock.js';
 import { clean } from './commands/clean.js';
@@ -44,6 +44,15 @@ import { routeRemoveHeader } from './commands/route-remove-header.js';
 import { migrateFromJSON } from './commands/migrate-db.js';
 import { changeRepo } from './commands/change-repo.js';
 import { installService } from './commands/install-service.js';
+import {
+  remoteServe,
+  remoteServeInternal,
+  remoteConnect,
+  remoteKeyAdd,
+  remoteKeyRemove,
+  remoteKeyList,
+  remoteStatus,
+} from './commands/remote.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -691,6 +700,79 @@ export const COMMANDS: Record<string, CommandNode> = {
     group: 'Database',
     options: { uninstall: { type: 'boolean', default: false, describe: 'Uninstall the auto-startup service' } },
     handler: async ({ uninstall }) => { await installService({ uninstall }); },
+  },
+
+  // ── Remote access ──────────────────────────────────────────────────────────
+  remote: {
+    kind: 'group',
+    describe: 'Remote access to the dm shell on another machine over SSH',
+    group: 'Remote',
+    subcommands: {
+      serve: {
+        kind: 'leaf',
+        usage: 'serve',
+        describe: 'Start the dm SSH server via PM2 (runs in background, auto-restarts on crash)',
+        group: 'Remote',
+        options: {
+          port: { alias: 'p', type: 'number', default: 2022, describe: 'Port to listen on (default: REMOTE_PORT env var or 2022)' },
+          stop: { type: 'boolean', default: false, describe: 'Stop and remove the running server from PM2' },
+        },
+        handler: async ({ port, stop }) => { await remoteServe(port, stop); },
+      },
+      // Internal-only: called by the PM2-managed child process. Not shown in help.
+      '_serve-internal': {
+        kind: 'leaf',
+        usage: '_serve-internal',
+        describe: 'Internal — runs the SSH server loop (invoked by PM2, not by users)',
+        group: 'Remote',
+        options: {
+          port: { alias: 'p', type: 'number', default: 2022, describe: 'Port' },
+        },
+        streaming: true,
+        handler: async ({ port }) => { await remoteServeInternal(port); },
+      },
+      connect: {
+        kind: 'leaf',
+        usage: 'connect --host <ip>',
+        describe: 'Connect to a remote dm shell. Generates an SSH key if you don\'t have one yet.',
+        group: 'Remote',
+        options: {
+          host: { alias: 'H', type: 'string', demandOption: true, describe: 'Server IP or hostname' },
+          port: { alias: 'p', type: 'number', describe: `Port (default: ${REMOTE_PORT})` },
+          identity: { alias: 'i', type: 'string', describe: 'Path to SSH private key (default: ~/.ssh/id_ed25519)' },
+        },
+        handler: async ({ host, port, identity }) => { await remoteConnect(host, port, identity); },
+      },
+      'key-add': {
+        kind: 'leaf',
+        usage: 'key-add',
+        describe: 'Authorize a public key for remote access (interactive: prompts for key and name)',
+        group: 'Remote',
+        handler: async () => { await remoteKeyAdd(); },
+      },
+      'key-remove': {
+        kind: 'leaf',
+        usage: 'key-remove <fingerprint>',
+        describe: 'Revoke an authorized public key by its fingerprint',
+        group: 'Remote',
+        positionals: [{ name: 'fingerprint', demandOption: true, describe: 'Key fingerprint (SHA256:...) from "dm remote key-list"' }],
+        handler: async ({ fingerprint }) => { await remoteKeyRemove(fingerprint); },
+      },
+      'key-list': {
+        kind: 'leaf',
+        usage: 'key-list',
+        describe: 'List all authorized public keys',
+        group: 'Remote',
+        handler: async () => { await remoteKeyList(); },
+      },
+      status: {
+        kind: 'leaf',
+        usage: 'status',
+        describe: 'Show remote access configuration (keys, port)',
+        group: 'Remote',
+        handler: async () => { await remoteStatus(); },
+      },
+    },
   },
 };
 

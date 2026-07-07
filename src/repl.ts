@@ -1,7 +1,9 @@
 import readline, { Interface } from 'readline';
 import chalk from 'chalk';
+import fs from 'fs';
 import { Logger } from './utils/logger.js';
 import { acquireLock, releaseLock } from './utils/lock-utils.js';
+import { REMOTE_AUDIT_LOG_PATH } from './constants.js';
 import {
   setReplInterface,
   getActiveRl,
@@ -268,6 +270,12 @@ async function dispatch(tokens: string[]): Promise<void> {
       process.exit(0);
   }
 
+  // Block sensitive commands from remote sessions entirely.
+  if (REMOTE_USER && REMOTE_BLOCKED_COMMANDS.has(cmdKey)) {
+    Logger.error(`Command "${chalk.bold(cmdKey)}" is not allowed in a remote session. Run it locally on the server.`);
+    return;
+  }
+
   const node = COMMANDS[cmdKey];
   if (!node) {
     Logger.error(`Unknown command: ${chalk.bold(cmdKey)}. Type ${chalk.cyan('help')} for available commands.`);
@@ -275,6 +283,32 @@ async function dispatch(tokens: string[]): Promise<void> {
   }
 
   await runNode(node, isGroup(node) ? cmdKey : node.usage, rest);
+}
+
+// ─── Remote session restrictions ─────────────────────────────────────────────
+// Commands that must never be executed from within a remote SSH session.
+// This covers anything that could modify the server's security posture:
+// key management, password auth, server lifecycle, self-update, and
+// system service installation.
+const REMOTE_BLOCKED_COMMANDS = new Set([
+  'remote',         // entire group: key-add, key-remove, set-password, serve…
+  'update',         // self-update could pull malicious code
+  'install-service',// modifies OS startup configuration
+  'migrate-db',     // direct DB mutation outside normal app flow
+]);
+
+// ─── Remote command audit ─────────────────────────────────────────────────────
+// When the REPL runs inside a remote session (DM_REMOTE_USER is set), every
+// dispatched command is appended to the audit log so it's attributable to the
+// connecting key — distinguishable from local usage.
+const REMOTE_USER = process.env.DM_REMOTE_USER;
+
+function auditCommand(line: string): void {
+  if (!REMOTE_USER) return;
+  try {
+    const entry = JSON.stringify({ ts: new Date().toISOString(), event: 'repl-command', identity: REMOTE_USER, command: line });
+    fs.appendFileSync(REMOTE_AUDIT_LOG_PATH, entry + '\n');
+  } catch { /* non-fatal */ }
 }
 
 // ─── REPL entry point ─────────────────────────────────────────────────────────
@@ -316,6 +350,7 @@ export async function startRepl(version: string): Promise<void> {
       const line = rawLine.trim();
       if (!line) { rl.prompt(); return; }
 
+      auditCommand(line);
       const tokens = tokenise(line);
       try {
         await dispatch(tokens);

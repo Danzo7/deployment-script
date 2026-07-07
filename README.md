@@ -60,6 +60,14 @@ A CLI tool for managing the full lifecycle of **Next.js**, **NestJS**, **.NET Co
   - [clean](#dm-clean-name)
   - [clean-all](#dm-clean-all)
   - [unlock](#dm-unlock-name)
+- [Remote Access](#remote-access)
+  - [dm --host](#dm---host-ip)
+  - [remote serve](#dm-remote-serve)
+  - [remote key-add](#dm-remote-key-add)
+  - [remote key-remove](#dm-remote-key-remove)
+  - [remote key-list](#dm-remote-key-list)
+  - [remote status](#dm-remote-status)
+- [Remote Access Security](#remote-access-security)
 - [Monorepo Support](#monorepo-support)
 - [How It Works](#how-it-works)
 
@@ -835,7 +843,7 @@ The push command handles the complete deployment lifecycle:
 - **Local push**: Direct filesystem operations on the same machine
 - **Remote push**: Uses SCP for file transfer and SSH for command execution
 
-Configure remote targets via environment variables (`NGINX_REMOTE_HOST`, `NGINX_REMOTE_PASSWORD` or `NGINX_REMOTE_KEY`). Password authentication takes priority if both are set.
+Configure remote targets via environment variables (`NGINX_REMOTE_HOST`, `NGINX_REMOTE_KEY`). For password-based SSH to the Nginx host, set `NGINX_REMOTE_PASSWORD` instead.
 
 **Config compilation:**
 
@@ -865,3 +873,174 @@ Each app has a file-based lock preventing concurrent `dm` operations on the same
 | Branch syntax | branch name | `trunk`, `branches/x`, `tags/x` | n/a |
 
 Use `--vcs local` with a path to a local directory instead of a repository URL. On each deploy `dm` compares the folder's latest mtime against the previous run — unchanged folders are skipped. `--branch` and `--lint` are not applicable for local sources.
+
+---
+
+---
+
+## Remote Access
+
+`dm` includes a built-in SSH server that exposes the `dm` REPL over the network. Authentication is public-key only — no passwords.
+
+### `dm --host <ip>`
+
+Connect to a remote `dm` server. This is the only command remote users need.
+
+```bash
+dm --host 10.10.10.10
+dm --host 10.10.10.10 --port 3022   # custom port
+dm --host 10.10.10.10 --identity ~/.ssh/my_key   # specific key
+```
+
+**First time — no SSH key yet?** `dm` detects this automatically, generates an ed25519 key pair using pure Node.js (no `ssh-keygen` required, works on all platforms), and prints your public key:
+
+```
+No SSH key found. Generating a new ed25519 key pair…
+✔ SSH key generated successfully.
+Share the following public key with the server admin to get authorized:
+
+ssh-ed25519 AAAAC3Nz...
+```
+
+Send that line to the server admin. They run `dm remote key-add` to authorize you.
+
+**First connection to a new server** — you'll be shown the host key fingerprint for verification (TOFU, like SSH):
+
+```
+The authenticity of host '10.10.10.10:2022' can't be established.
+Host key fingerprint: SHA256:...
+Trust this host and continue? (yes/no)
+```
+
+Confirm it matches what the admin sees in `pm2 logs dm-remote`. The fingerprint is saved locally and never asked again for the same server.
+
+**Key not authorized yet?** Instead of a raw error you get a clear message with your public key reprinted for easy copying.
+
+---
+
+### `dm remote serve`
+
+Start the SSH server as a PM2-managed background process.
+
+```bash
+dm remote serve              # start on default port (2022 or REMOTE_PORT env var)
+dm remote serve --port 3022  # custom port
+dm remote serve --stop       # stop and remove from PM2
+```
+
+The host key fingerprint is printed in the startup logs — share it with users connecting for the first time:
+
+```bash
+pm2 logs dm-remote
+```
+
+---
+
+### `dm remote key-add`
+
+Authorize a new user's public key. Runs interactively:
+
+```bash
+dm remote key-add
+```
+
+```
+Paste the public key: ssh-ed25519 AAAAC3Nz... alice-laptop
+Name / username for this key: alice
+✔ Authorized key added (SHA256:...) — user: alice
+```
+
+The name is used in audit logs and as the remote session identity (`DM_REMOTE_USER`).
+
+---
+
+### `dm remote key-remove <fingerprint>`
+
+Revoke an authorized key by its fingerprint (shown in `dm remote key-list`).
+
+```bash
+dm remote key-remove SHA256:abc123...
+```
+
+---
+
+### `dm remote key-list`
+
+List all authorized keys and their associated usernames.
+
+```bash
+dm remote key-list
+```
+
+---
+
+### `dm remote status`
+
+Show server health: authorized key count, port, auth mode, and PM2 process status.
+
+```bash
+dm remote status
+```
+
+---
+
+## Remote Access Security
+
+`dm remote serve` starts an SSH server that exposes the `dm` REPL over the network. Authentication is **public key only** — password auth is not supported. Keep the following in mind when deploying it.
+
+### Run as a non-root, least-privilege user
+
+Do not run `dm remote serve` as root. If it runs as root, every remote session inherits root privileges with no sandboxing. Use a dedicated low-privilege OS user instead:
+
+```bash
+# Create a dedicated user (Linux)
+useradd -r -s /sbin/nologin dmuser
+# Run the server as that user via PM2
+pm2 start "dm remote serve" --name dm-remote --user dmuser
+```
+
+Avoid binding to privileged ports (< 1024) as root. Use a high port (e.g. the default `2022`) and front it with a firewall port-forward or reverse proxy if you need a standard port number.
+
+### Bind address
+
+By default the server binds to `127.0.0.1` (loopback only). To expose it on a specific interface, set `REMOTE_BIND`:
+
+```bash
+REMOTE_BIND=10.0.0.5 dm remote serve
+```
+
+If `REMOTE_BIND` is set to anything other than `127.0.0.1`/`localhost`, the server prints a startup warning. Never bind to `0.0.0.0` on a public-facing machine without firewall rules in place.
+
+### Session limits
+
+| Env var | Default | Description |
+|---|---|---|
+| `REMOTE_MAX_SESSIONS` | `10` | Max simultaneous sessions across all keys |
+| `REMOTE_MAX_SESSIONS_PER_KEY` | `3` | Max simultaneous sessions per authenticated key |
+| `REMOTE_IDLE_TIMEOUT_MS` | `1800000` | Idle session kill timeout in ms (default 30 min) |
+
+### IP allowlisting
+
+There is no built-in IP allowlist — public-key authentication is the primary control. For additional defense-in-depth, pair `dm remote serve` with an OS-level firewall rule or `fail2ban` to restrict which source IPs can reach the SSH port at all. Application-layer rate limiting (built in) cannot stop a raw TCP SYN flood; that requires firewall-level protection.
+
+### Crash-loop alerting
+
+`dm remote serve` runs under PM2 (`autorestart: true`). To get alerted on crash loops, configure PM2 monitoring:
+
+```bash
+# Example: use pm2-logrotate + an external alerting hook, or set up a systemd
+# OnFailure= unit that calls your alerting endpoint if PM2 itself crashes.
+pm2 install pm2-logrotate
+```
+
+Alternatively, wrap the PM2 process under a systemd unit with `OnFailure=` pointing to a notification service.
+
+### Accepted SSH key types
+
+`dm remote key-add` (interactive) enforces a minimum key-strength policy. Accepted types:
+
+- `ssh-ed25519` (recommended)
+- `ecdsa-sha2-nistp256`, `ecdsa-sha2-nistp384`, `ecdsa-sha2-nistp521`
+- `ssh-rsa` — accepted only at **≥ 4096 bits**; shorter RSA keys are rejected
+
+DSA keys and RSA keys below 4096 bits are refused with an error naming the rejected algorithm.
