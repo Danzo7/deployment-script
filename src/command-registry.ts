@@ -52,6 +52,7 @@ import {
   remoteKeyList,
   remoteStatus,
 } from './commands/remote.js';
+import { logClear } from './commands/log-clear.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -345,6 +346,18 @@ export const COMMANDS: Record<string, CommandNode> = {
       const { logs } = await import('./commands/logs.js');
       logs({ name });
     },
+  },
+
+  'log-clear': {
+    kind: 'leaf',
+    usage: 'log-clear [name]',
+    describe: 'Clear log files for an application (or all apps with --all)',
+    group: 'Info & monitoring',
+    positionals: [{ name: 'name', describe: 'Application name (omit when using --all)' }],
+    options: {
+      all: { type: 'boolean', default: false, describe: 'Clear logs for all applications' },
+    },
+    handler: async ({ name, all }) => { await logClear({ name, all }); },
   },
 
   monit: {
