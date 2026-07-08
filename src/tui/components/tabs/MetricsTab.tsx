@@ -101,15 +101,15 @@ function NginxLogsView({
     );
   }
 
-  // Sort all entries by timestamp descending (most recent first for display)
-  allEntries.sort((a, b) => b.ts.getTime() - a.ts.getTime());
+  // Sort chronologically (oldest first) — same as LogsTab scroll model
+  allEntries.sort((a, b) => a.ts.getTime() - b.ts.getTime());
 
   const contentRows = Math.max(1, maxVisible - 3); // header + hint rows
   const total = allEntries.length;
-  // scrollOffset=0 → show tail; higher → scroll up into history
+  // scrollOffset=0 → tail; PgUp increases offset → scroll back in history
   const end = Math.max(0, total - scrollOffset);
   const start = Math.max(0, end - contentRows);
-  const visible = allEntries.slice(start, end).reverse(); // back to chronological for display
+  const visible = allEntries.slice(start, end);
 
   return (
     <Box flexDirection="column" width={DETAIL_W}>
