@@ -15,7 +15,7 @@ function certColor(cert: DomainInfo['cert']): string {
     if (cert.daysRemaining < 30) return 'yellow';
     return 'green';
   }
-  return cert.mode === 'none' ? 'red' : 'green';
+  return 'green';
 }
 
 function certLabel(cert: DomainInfo['cert']): string {
