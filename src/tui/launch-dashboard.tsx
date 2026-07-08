@@ -46,18 +46,26 @@ function DashboardApp(): React.ReactElement {
       // Only keep lines for the currently selected app
       if (name !== selectedAppName.current) return;
 
-      let line: string | null = null;
+      const newLines: string[] = [];
       if (packet.event === 'log:out') {
-        line = `[${name}] ${String(packet.data).trim()}`;
+        const raw = String(packet.data ?? '');
+        for (const l of raw.split('\n')) {
+          const t = l.trim();
+          if (t) newLines.push(`[${name}] ${t}`);
+        }
       } else if (packet.event === 'log:err') {
-        line = `[${name}][err] ${String(packet.data).trim()}`;
+        const raw = String(packet.data ?? '');
+        for (const l of raw.split('\n')) {
+          const t = l.trim();
+          if (t) newLines.push(`[${name}][err] ${t}`);
+        }
       } else if (packet.event === 'process:event') {
-        line = `[${name}] ← PM2: ${packet.data ?? ''}`;
+        newLines.push(`[${name}] ← PM2: ${packet.data ?? ''}`);
       }
 
-      if (line) {
+      if (newLines.length > 0) {
         setLogLines((prev) => {
-          const next = [...prev, line!];
+          const next = [...prev, ...newLines];
           return next.length > MAX_LOG_LINES ? next.slice(-MAX_LOG_LINES) : next;
         });
       }
@@ -150,13 +158,19 @@ function DashboardApp(): React.ReactElement {
   }, []);
 
   const handleLogsTabActive = useCallback((active: boolean) => {
-    // When switching to logs tab, seed from file immediately so there's something to see
+    // Only seed from file if the buffer is empty — avoids replacing live-streamed lines
     if (active) {
       const appName = selectedAppName.current;
       if (appName) {
-        readAppLogs(appName, 300).then((lines) => {
-          if (selectedAppName.current === appName) setLogLines(lines);
-        }).catch(() => {});
+        setLogLines((prev) => {
+          if (prev.length > 0) return prev; // already have lines, don't clobber
+          readAppLogs(appName, 300).then((lines) => {
+            if (selectedAppName.current === appName) {
+              setLogLines((cur) => (cur.length === 0 ? lines : cur));
+            }
+          }).catch(() => {});
+          return prev;
+        });
       }
     }
   }, []);

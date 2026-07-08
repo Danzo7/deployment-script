@@ -248,48 +248,32 @@ export class NginxLogTailer {
     }
     try {
       let chunk: string;
-      if (this.localOffset === 0) {
-        // Initial seed: grab last 2000 lines AND file size in a single exec to
-        // avoid opening two SSH channels (which causes "Channel open failure" under load).
-        const result = await sshConn.execWithSudoFallback(
-          `sh -c 'wc -c < "${path}" 2>/dev/null || echo "0"; echo "---SPLIT---"; tail -n 2000 "${path}" 2>/dev/null || echo ""'`
-        );
-        const splitIdx = result.indexOf('---SPLIT---\n');
-        if (splitIdx !== -1) {
-          const sizeStr = result.slice(0, splitIdx).trim();
-          this.localOffset = parseInt(sizeStr, 10) || 0;
-          chunk = result.slice(splitIdx + '---SPLIT---\n'.length);
-        } else {
-          // Fallback: just use what we got as the chunk
-          chunk = result;
-          this.localOffset = 1; // prevent re-seed on next tick
-        }
-      } else {
-        // Subsequent polls: get size + new bytes in a single exec
-        const MAX_READ = 256 * 1024;
-        const result = await sshConn.execWithSudoFallback(
-          `sh -c 'SIZE=$(wc -c < "${path}" 2>/dev/null || echo "0"); echo "$SIZE"; echo "---SPLIT---"; ` +
-          `if [ "$SIZE" -lt "${this.localOffset}" ]; then ` +
-          `  echo "ROTATED"; ` +
-          `elif [ "$SIZE" -gt "${this.localOffset}" ]; then ` +
-          `  tail -c +$((${this.localOffset} + 1)) "${path}" 2>/dev/null | head -c ${MAX_READ}; ` +
-          `fi; true'`
-        );
-        const splitIdx = result.indexOf('---SPLIT---\n');
-        if (splitIdx === -1) return;
-        const sizeStr = result.slice(0, splitIdx).trim();
-        const newSize = parseInt(sizeStr, 10) || 0;
-        const body = result.slice(splitIdx + '---SPLIT---\n'.length);
+      const MAX_READ = 256 * 1024;
 
-        if (body.startsWith('ROTATED')) {
-          // Log was rotated — reset and re-seed on next tick
+      if (this.localOffset === 0) {
+        // Initial seed: read last 2000 lines then get file size
+        chunk = await sshConn.execWithSudoFallback(`tail -n 2000 "${path}" 2>/dev/null || true`);
+        const sizeStr = await sshConn.execWithSudoFallback(`wc -c < "${path}" 2>/dev/null || echo 0`);
+        this.localOffset = parseInt(sizeStr.trim(), 10) || 0;
+      } else {
+        // Get current file size
+        const sizeStr = await sshConn.execWithSudoFallback(`wc -c < "${path}" 2>/dev/null || echo 0`);
+        const newSize = parseInt(sizeStr.trim(), 10) || 0;
+
+        if (newSize < this.localOffset) {
+          // Log rotated — reset and re-seed next tick
           this.localOffset = 0;
           return;
         }
         if (newSize <= this.localOffset) return; // no new bytes
-        chunk = body;
+
+        // Read only the new bytes
+        chunk = await sshConn.execWithSudoFallback(
+          `tail -c +$((${this.localOffset} + 1)) "${path}" 2>/dev/null | head -c ${MAX_READ} || true`
+        );
         this.localOffset = newSize;
       }
+
       this.ingestText(chunk);
       this.lastError = undefined;
     } catch (err: any) {
