@@ -50,7 +50,7 @@ function NginxLogLine({ entry, width }: { entry: LogEntry; width: number }): Rea
   return (
     <Box flexDirection="row" gap={1}>
       <Text dimColor>{ts}</Text>
-      {addr ? <Text dimColor>{addr}</Text> : null}
+      {addr ? <Text color="cyan">{addr}</Text> : null}
       <Text dimColor>{method}</Text>
       <Text color={statusColor(entry.status)}>{status}</Text>
       <Text>{uri}</Text>
