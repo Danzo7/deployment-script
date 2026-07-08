@@ -309,6 +309,8 @@ export async function refreshDashboard(
   }
 
   // ── SSH (for remote Nginx log tailing) ────────────────────────────────────
+  // Always call getSharedSsh() before log polling so a dead connection is
+  // replaced before we attempt any channel opens this tick.
   const ssh = await getSharedSsh();
   const sshReachable = !!ssh;
 
@@ -322,8 +324,11 @@ export async function refreshDashboard(
   const freeMemBytes = os.freemem();
 
   // ── Per-app data ───────────────────────────────────────────────────────────
-  const appDataList: AppData[] = await Promise.all(
-    apps.map(async (app): Promise<AppData> => {
+  // NOTE: We intentionally serialize per-app data collection (not Promise.all) to
+  // avoid opening dozens of SSH channels simultaneously when log polling is active.
+  // Port checks and git fetches within each app still run in parallel.
+  const appDataList: AppData[] = [];
+  for (const app of apps) {
 
       // PM2 — look up via listAllProcessMetrics result
       const pm2Data: ProcessMetrics | null = pm2Reachable
@@ -411,7 +416,7 @@ export async function refreshDashboard(
 
       const health = deriveHealth(pm2Data, portReachable, restartDelta, nginxWindows);
 
-      return {
+      appDataList.push({
         app,
         pm2: pm2Data,
         pm2Error,
@@ -422,9 +427,8 @@ export async function refreshDashboard(
         restartDelta,
         health,
         envChanged,
-      };
-    })
-  );
+      });
+  }
 
   return {
     apps: appDataList,

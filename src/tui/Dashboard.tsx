@@ -47,6 +47,8 @@ const TERM_H = Math.max(process.stdout.rows ?? 30, 20);
 const LIST_W = Math.max(20, Math.min(32, Math.floor(TERM_W * 0.28)));
 const DETAIL_W = TERM_W - LIST_W - 3; // 3 for border/gap chars
 const TOAST_TTL_TICKS = 10;
+// Approximate header lines: TopBar(1) + FilterBar(1) + DetailHeader(~3) + TabBar(1) + Keybar(2) = ~8
+const DETAIL_H = Math.max(5, TERM_H - 8);
 
 // ─── Colour-semantic helpers ──────────────────────────────────────────────────
 //
@@ -560,6 +562,8 @@ export function TabBar({ active }: TabBarProps): React.ReactElement {
 
 interface OverviewTabProps {
   data: AppData;
+  scrollOffset: number;
+  maxVisible: number;
 }
 
 /**
@@ -573,7 +577,7 @@ interface OverviewTabProps {
  *
  * Requirements: 7.1–7.8
  */
-export function OverviewTab({ data }: OverviewTabProps): React.ReactElement {
+export function OverviewTab({ data, scrollOffset, maxVisible }: OverviewTabProps): React.ReactElement {
   const { app, pm2, drift, domains, envChanged } = data;
 
   // ── Helpers ──────────────────────────────────────────────────────────────
@@ -717,7 +721,7 @@ export function OverviewTab({ data }: OverviewTabProps): React.ReactElement {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <Box flexDirection="column" width={DETAIL_W} gap={1}>
+    <Box flexDirection="column" width={DETAIL_W} height={maxVisible} gap={1} overflow="hidden">
 
       {/* 1. Two-column KV grid */}
       <Box flexDirection="row" gap={2}>
@@ -805,6 +809,8 @@ interface MetricsTabProps {
   cpuHistory: number[];
   memHistory: number[];
   totalMemBytes?: number;
+  scrollOffset: number;
+  maxVisible: number;
 }
 
 /**
@@ -823,6 +829,8 @@ export function MetricsTab({
   cpuHistory,
   memHistory,
   totalMemBytes,
+  scrollOffset,
+  maxVisible,
 }: MetricsTabProps): React.ReactElement {
   const { pm2, pm2Error, domains, restartDelta } = data;
 
@@ -870,7 +878,7 @@ export function MetricsTab({
   const hasDomains = domains.length > 0;
 
   return (
-    <Box flexDirection="column" width={DETAIL_W} gap={1}>
+    <Box flexDirection="column" width={DETAIL_W} height={maxVisible} gap={1} overflow="hidden">
 
       {/* ── CPU sparkline row ── */}
       <Box flexDirection="row" gap={1}>
@@ -994,6 +1002,8 @@ export function MetricsTab({
 
 interface LogsTabProps {
   logLines: string[];
+  scrollOffset: number;
+  maxVisible: number;
 }
 
 /** Severity levels for individual log lines. */
@@ -1053,28 +1063,37 @@ function parseLogLine(raw: string): ParsedLogLine {
  *
  * Requirements: 9.1–9.8
  */
-export function LogsTab({ logLines }: LogsTabProps): React.ReactElement {
-  const maxVisible = Math.max(1, TERM_H - 12);
+export function LogsTab({ logLines, scrollOffset, maxVisible }: LogsTabProps): React.ReactElement {
+  // maxVisible is the available height minus the header row
+  const contentRows = Math.max(1, maxVisible - 1);
 
   if (logLines.length === 0) {
     return (
-      <Box width={DETAIL_W} flexDirection="column">
+      <Box width={DETAIL_W} flexDirection="column" height={maxVisible}>
         <Text dimColor>No log output captured yet. Logs stream in as the app produces them.</Text>
         <Text dimColor>Press X to clear logs.</Text>
       </Box>
     );
   }
 
-  // Show the most recent N lines
-  const visibleLines = logLines.slice(-maxVisible);
+  // scrollOffset=0 means bottom (newest), increases scroll upward
+  const totalLines = logLines.length;
+  const start = Math.max(0, totalLines - contentRows - scrollOffset);
+  const end   = Math.max(0, totalLines - scrollOffset);
+  const visibleLines = logLines.slice(start, end);
   const parsed = visibleLines.map(parseLogLine);
+  const isAtBottom = scrollOffset === 0;
 
   return (
-    <Box flexDirection="column" width={DETAIL_W}>
-      {/* Header showing total count */}
+    <Box flexDirection="column" width={DETAIL_W} height={maxVisible}>
+      {/* Header */}
       <Box flexDirection="row" justifyContent="space-between" width={DETAIL_W}>
-        <Text dimColor>{logLines.length} lines{logLines.length > maxVisible ? ` (showing last ${maxVisible})` : ''}</Text>
-        <Text dimColor>X clear</Text>
+        <Text dimColor>
+          {totalLines} lines
+          {totalLines > contentRows ? ` (showing ${start + 1}–${end})` : ''}
+          {!isAtBottom ? '  ↑ scrolled' : ''}
+        </Text>
+        <Text dimColor>X clear  PgUp/PgDn scroll</Text>
       </Box>
       {parsed.map((entry, i) => {
         const tsText = entry.timestamp ? `${entry.timestamp} ` : '';
@@ -1097,7 +1116,6 @@ export function LogsTab({ logLines }: LogsTabProps): React.ReactElement {
           );
         }
 
-        // info — dim full line
         return (
           <Text key={i} dimColor>
             {tsText}{'· '}{entry.message}
@@ -1114,6 +1132,8 @@ interface DeploysTabProps {
   data: AppData;
   deployCursor: number;
   onAction: (action: DashboardAction) => void;
+  scrollOffset: number;
+  maxVisible: number;
 }
 
 /**
@@ -1137,7 +1157,7 @@ interface DeploysTabProps {
  *
  * Requirements: 10.1–10.6
  */
-export function DeploysTab({ data, deployCursor }: DeploysTabProps): React.ReactElement {
+export function DeploysTab({ data, deployCursor, scrollOffset, maxVisible }: DeploysTabProps): React.ReactElement {
   const { app } = data;
   const builds = app.builds ?? [];
 
@@ -1161,9 +1181,13 @@ export function DeploysTab({ data, deployCursor }: DeploysTabProps): React.React
   const activeCommit = app.lastDeployedCommit;
   const activeDeployDate = app.lastDeploy;
 
+  // Slice visible builds based on scroll offset
+  const visibleBuilds = builds.slice(scrollOffset, scrollOffset + maxVisible);
+
   return (
-    <Box flexDirection="column" width={DETAIL_W}>
-      {builds.map((buildPath, idx) => {
+    <Box flexDirection="column" width={DETAIL_W} height={maxVisible}>
+      {visibleBuilds.map((buildPath, visIdx) => {
+        const idx = visIdx + scrollOffset;
         const isActive = idx === activeBuildIndex;
         const isCursor = idx === deployCursor;
 
@@ -1237,6 +1261,8 @@ export function DeploysTab({ data, deployCursor }: DeploysTabProps): React.React
 
 interface DomainsTabProps {
   data: AppData;
+  scrollOffset: number;
+  maxVisible: number;
 }
 
 /**
@@ -1257,7 +1283,7 @@ interface DomainsTabProps {
  *
  * Requirements: 11.1–11.5
  */
-export function DomainsTab({ data }: DomainsTabProps): React.ReactElement {
+export function DomainsTab({ data, scrollOffset, maxVisible }: DomainsTabProps): React.ReactElement {
   const { domains } = data;
 
   // ── Cert badge helpers ────────────────────────────────────────────────────
@@ -1300,7 +1326,7 @@ export function DomainsTab({ data }: DomainsTabProps): React.ReactElement {
   // ── Domain cards ──────────────────────────────────────────────────────────
 
   return (
-    <Box flexDirection="column" width={DETAIL_W}>
+    <Box flexDirection="column" width={DETAIL_W} height={maxVisible} overflow="hidden">
       {domains.map((domain, idx) => {
         const badgeColor = certColor(domain.cert);
         const badge = certLabel(domain.cert);
@@ -1424,8 +1450,7 @@ export function Keybar({ activeTab }: KeybarProps): React.ReactElement {
             <Hint label="X" desc="clear logs" />
             <Hint label="c" desc="copy line" />
           </>
-        );
-      case 'deploys':
+        );      case 'deploys':
         return (
           <>
             <Hint label="↵" desc="rollback to selected" />
@@ -1451,6 +1476,7 @@ export function Keybar({ activeTab }: KeybarProps): React.ReactElement {
       <Box flexDirection="row">
         {/* Always-visible hints */}
         <Hint label="Tab" desc="switch tab" />
+        <Hint label="PgUp/PgDn" desc="scroll" />
         <Hint label="Esc" desc="back/dismiss" />
         <Hint label="q" desc="quit" />
 
@@ -1716,6 +1742,7 @@ export function Dashboard(props: DashboardProps): React.ReactElement {
   const [deployCursor, setDeployCursor] = useState(0);
   const [toastAppName, setToastAppName] = useState<string | null>(null);
   const [toastTick, setToastTick] = useState(0);
+  const [tabScrollOffset, setTabScrollOffset] = useState(0);
 
   // ── Refs ───────────────────────────────────────────────────────────────────
   const cpuHistories = useRef<Map<string, number[]>>(new Map());
@@ -1754,9 +1781,14 @@ export function Dashboard(props: DashboardProps): React.ReactElement {
     setDeployCursor(0);
   }, [selectedApp?.app.name]);
 
+  // ── Effect 4a: Tab scroll reset ────────────────────────────────────────────
+  useEffect(() => {
+    setTabScrollOffset(0);
+  }, [tab, selectedApp?.app.name]);
+
   // ── Effect 4: Crash-loop toast + tick ──────────────────────────────────────
   useEffect(() => {
-    // Scan ALL apps (not just selected) so background crash-loops are caught
+    // Crash-loop toast
     if (!toastAppName) {
       const looping = apps.find(a => a.restartDelta >= 3);
       if (looping) {
@@ -1766,6 +1798,10 @@ export function Dashboard(props: DashboardProps): React.ReactElement {
     }
     if (toastAppName) {
       setToastTick(t => t + 1);
+    }
+    // Auto-scroll logs to bottom when new entries arrive (only if already at bottom)
+    if (tab === 'logs') {
+      setTabScrollOffset(o => o === 0 ? 0 : o);
     }
   }, [props.state?.tickCount]);
 
@@ -1863,8 +1899,14 @@ export function Dashboard(props: DashboardProps): React.ReactElement {
       }
     } else if (key.tab || input === 'l') {
       setTab(t => TABS[(TABS.indexOf(t) + 1) % TABS.length]);
+      setTabScrollOffset(0);
     } else if (input === 'h') {
       setTab(t => TABS[(TABS.indexOf(t) - 1 + TABS.length) % TABS.length]);
+      setTabScrollOffset(0);
+    } else if (key.pageUp) {
+      setTabScrollOffset(o => o + Math.max(1, Math.floor(DETAIL_H / 2)));
+    } else if (key.pageDown) {
+      setTabScrollOffset(o => Math.max(0, o - Math.max(1, Math.floor(DETAIL_H / 2))));
     } else if (input === 'r') {
       if (selectedApp) setActionMode('confirm-restart');
     } else if (input === 'S') {
@@ -1918,11 +1960,11 @@ export function Dashboard(props: DashboardProps): React.ReactElement {
               <DetailHeader app={selectedApp} />
               <TabBar active={tab} />
               {/* Active tab content */}
-              {tab === 'overview' && <OverviewTab data={selectedApp} />}
-              {tab === 'metrics' && <MetricsTab data={selectedApp} cpuHistory={cpuHistory} memHistory={memHistory} totalMemBytes={totalMemBytes} />}
-              {tab === 'logs' && <LogsTab logLines={props.logLines} />}
-              {tab === 'deploys' && <DeploysTab data={selectedApp} deployCursor={deployCursor} onAction={props.onAction} />}
-              {tab === 'domains' && <DomainsTab data={selectedApp} />}
+              {tab === 'overview' && <OverviewTab data={selectedApp} scrollOffset={tabScrollOffset} maxVisible={DETAIL_H} />}
+              {tab === 'metrics' && <MetricsTab data={selectedApp} cpuHistory={cpuHistory} memHistory={memHistory} totalMemBytes={totalMemBytes} scrollOffset={tabScrollOffset} maxVisible={DETAIL_H} />}
+              {tab === 'logs' && <LogsTab logLines={props.logLines} scrollOffset={tabScrollOffset} maxVisible={DETAIL_H} />}
+              {tab === 'deploys' && <DeploysTab data={selectedApp} deployCursor={deployCursor} onAction={props.onAction} scrollOffset={tabScrollOffset} maxVisible={DETAIL_H} />}
+              {tab === 'domains' && <DomainsTab data={selectedApp} scrollOffset={tabScrollOffset} maxVisible={DETAIL_H} />}
             </>
           ) : (
             <Box flexDirection="column">

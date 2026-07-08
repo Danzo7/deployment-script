@@ -91,8 +91,10 @@ function parseLine(raw: string): LogEntry | null {
 
 // ─── Ring buffer ───────────────────────────────────────────────────────────
 
-const WINDOW_SECONDS = 120;
-const MAX_ENTRIES = 5000;
+// Keep 24 hours of log entries. We parse timestamps from the log lines so old
+// entries don't vanish just because the dashboard was opened recently.
+const WINDOW_SECONDS = 86_400;
+const MAX_ENTRIES = 10_000;
 
 function trimWindow(entries: LogEntry[]): LogEntry[] {
   const cutoff = Date.now() - WINDOW_SECONDS * 1000;
@@ -197,11 +199,12 @@ export class NginxLogTailer {
   }
 
   async poll(): Promise<void> {
-    if (this.ssh) {
+    if (this.ssh && this.ssh.isConnected) {
       await this.pollRemote();
-    } else {
+    } else if (!this.ssh) {
       this.pollLocal();
     }
+    // If ssh exists but not connected, skip this tick — pollRemote handles the error message
     this.entries = trimWindow(this.entries);
   }
 
@@ -225,7 +228,7 @@ export class NginxLogTailer {
         const buf = Buffer.alloc(toRead);
         const bytesRead = fs.readSync(fd, buf, 0, toRead, this.localOffset);
         this.localOffset += bytesRead;
-        const text = buf.slice(0, bytesRead).toString('utf8');
+        const text = buf.subarray(0, bytesRead).toString('utf8');
         this.ingestText(text);
         this.lastError = undefined;
       } finally {
@@ -238,33 +241,54 @@ export class NginxLogTailer {
 
   private async pollRemote(): Promise<void> {
     const path = this.remoteLogPath ?? this.logPath;
+    const sshConn = this.ssh;
+    if (!sshConn || !sshConn.isConnected) {
+      this.lastError = 'Remote log read failed: SSH not connected';
+      return;
+    }
     try {
-      // Read last 200 lines on first poll, then track by byte offset
       let chunk: string;
       if (this.localOffset === 0) {
-        // Use tail -n for initial seed — get last 200 lines without reading entire file
-        chunk = await this.ssh!.exec(`tail -n 200 "${path}" 2>/dev/null || echo ""`);
-        // Record current file size so next poll only reads new bytes
-        const sizeStr = await this.ssh!.exec(`wc -c < "${path}" 2>/dev/null || echo "0"`);
-        this.localOffset = parseInt(sizeStr.trim(), 10) || 0;
-      } else {
-        // Read from offset using dd/tail trick
-        const newSizeStr = await this.ssh!.exec(`wc -c < "${path}" 2>/dev/null || echo "0"`);
-        const newSize = parseInt(newSizeStr.trim(), 10) || 0;
-        if (newSize < this.localOffset) {
-          // rotated
-          this.localOffset = 0;
-          chunk = await this.ssh!.exec(`tail -n 200 "${path}" 2>/dev/null || echo ""`);
-        } else if (newSize === this.localOffset) {
-          return;
+        // Initial seed: grab last 2000 lines AND file size in a single exec to
+        // avoid opening two SSH channels (which causes "Channel open failure" under load).
+        const result = await sshConn.exec(
+          `wc -c < "${path}" 2>/dev/null || echo "0"; echo "---SPLIT---"; tail -n 2000 "${path}" 2>/dev/null || echo ""`
+        );
+        const splitIdx = result.indexOf('---SPLIT---\n');
+        if (splitIdx !== -1) {
+          const sizeStr = result.slice(0, splitIdx).trim();
+          this.localOffset = parseInt(sizeStr, 10) || 0;
+          chunk = result.slice(splitIdx + '---SPLIT---\n'.length);
         } else {
-          const skip = this.localOffset;
-          const count = Math.min(newSize - skip, 256 * 1024);
-          chunk = await this.ssh!.exec(
-            `dd if="${path}" bs=1 skip=${skip} count=${count} 2>/dev/null || echo ""`
-          );
-          this.localOffset = newSize;
+          // Fallback: just use what we got as the chunk
+          chunk = result;
+          this.localOffset = 1; // prevent re-seed on next tick
         }
+      } else {
+        // Subsequent polls: get size + new bytes in a single exec
+        const MAX_READ = 256 * 1024;
+        const result = await sshConn.exec(
+          `SIZE=$(wc -c < "${path}" 2>/dev/null || echo "0"); echo "$SIZE"; echo "---SPLIT---"; ` +
+          `if [ "$SIZE" -lt "${this.localOffset}" ]; then ` +
+          `  echo "ROTATED"; ` +
+          `elif [ "$SIZE" -gt "${this.localOffset}" ]; then ` +
+          `  dd if="${path}" bs=1 skip=${this.localOffset} count=${MAX_READ} 2>/dev/null; ` +
+          `fi`
+        );
+        const splitIdx = result.indexOf('---SPLIT---\n');
+        if (splitIdx === -1) return;
+        const sizeStr = result.slice(0, splitIdx).trim();
+        const newSize = parseInt(sizeStr, 10) || 0;
+        const body = result.slice(splitIdx + '---SPLIT---\n'.length);
+
+        if (body.startsWith('ROTATED')) {
+          // Log was rotated — reset and re-seed on next tick
+          this.localOffset = 0;
+          return;
+        }
+        if (newSize <= this.localOffset) return; // no new bytes
+        chunk = body;
+        this.localOffset = newSize;
       }
       this.ingestText(chunk);
       this.lastError = undefined;

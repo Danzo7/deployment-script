@@ -123,6 +123,9 @@ export class SshConnection {
   }
 
   private async run(command: string, stdin?: string): Promise<{ code: number; result: ExecResult }> {
+    if (!this.connected) {
+      throw new Error('(SSH) Not connected');
+    }
     return new Promise((resolve, reject) => {
       this.client.exec(command, (err, stream) => {
         if (err) {
