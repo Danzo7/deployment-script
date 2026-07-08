@@ -286,7 +286,13 @@ export function Dashboard(props: DashboardProps): React.ReactElement {
                 />
               )}
               {tab === 'logs' && (
-                <LogsTab logLines={props.logLines} scrollOffset={tabScrollOffset} maxVisible={DETAIL_H} />
+                <LogsTab
+                  logLines={props.logLines.filter((l) =>
+                    selectedSummary ? l.startsWith(`[${selectedSummary.app.name}]`) : true
+                  )}
+                  scrollOffset={tabScrollOffset}
+                  maxVisible={DETAIL_H}
+                />
               )}
               {tab === 'deploys' && (
                 <DeploysTab

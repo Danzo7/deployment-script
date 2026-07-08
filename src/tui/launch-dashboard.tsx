@@ -33,6 +33,8 @@ function DashboardApp(): React.ReactElement {
   const selectedAppName = useRef<string | null>(null);
   // Track the last app name we fetched detail for so we can invalidate immediately on switch
   const lastDetailAppName = useRef<string | null>(null);
+  // Ref mirror of globalState so the detail loop always reads the latest value (avoids stale closure)
+  const globalStateRef = useRef<GlobalState | null>(null);
 
   const detailTickRef = useRef(0);
 
@@ -76,8 +78,9 @@ function DashboardApp(): React.ReactElement {
 
     const tick = async () => {
       try {
-        const next = await listApps(globalState);
+        const next = await listApps(globalStateRef.current);
         if (alive) {
+          globalStateRef.current = next;
           setGlobalState(next);
           setLoading(false);
         }
@@ -97,14 +100,15 @@ function DashboardApp(): React.ReactElement {
 
     const tick = async () => {
       const appName = selectedAppName.current;
+      const currentGlobalState = globalStateRef.current;
 
-      if (!appName || !globalState) {
+      if (!appName || !currentGlobalState) {
         if (alive) timer = setTimeout(tick, DETAIL_POLL_MS);
         return;
       }
 
       // Find the summary for this app from the latest global state
-      const summary: AppSummary | undefined = globalState.summaries.find(
+      const summary: AppSummary | undefined = currentGlobalState.summaries.find(
         (s) => s.app.name === appName
       );
 
