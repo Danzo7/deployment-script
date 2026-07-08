@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import type { AppSummary, AppDetail } from '../../../utils/dashboard-data.js';
+import type { LogEntry } from '../../../utils/nginx-log-tailer.js';
 import { DETAIL_W, fmtMem, pad, truncate, sparkline } from '../shared.js';
 
 interface MetricsTabProps {
@@ -11,9 +12,133 @@ interface MetricsTabProps {
   totalMemBytes?: number;
   maxVisible: number;
   scrollOffset: number;
+  metricsView: 'stats' | 'logs';
 }
 
-export function MetricsTab({ summary, detail, cpuHistory, memHistory, totalMemBytes, maxVisible }: MetricsTabProps): React.ReactElement {
+// ─── Nginx log entry renderer ─────────────────────────────────────────────────
+
+function statusColor(code: number): string {
+  if (code >= 500) return 'red';
+  if (code >= 400) return 'yellow';
+  if (code >= 300) return 'cyan';
+  return 'green';
+}
+
+function fmtTs(ts: Date): string {
+  const h = String(ts.getHours()).padStart(2, '0');
+  const m = String(ts.getMinutes()).padStart(2, '0');
+  const s = String(ts.getSeconds()).padStart(2, '0');
+  return `${h}:${m}:${s}`;
+}
+
+function fmtBytes(b: number): string {
+  if (b < 1024) return `${b}b`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(0)}k`;
+  return `${(b / 1024 / 1024).toFixed(1)}M`;
+}
+
+function NginxLogLine({ entry, width }: { entry: LogEntry; width: number }): React.ReactElement {
+  const ts = fmtTs(entry.ts);
+  const method = pad(entry.method, 4);
+  const status = String(entry.status);
+  const rt = entry.responseTime !== undefined ? `${(entry.responseTime * 1000).toFixed(0)}ms` : '';
+  const bytes = fmtBytes(entry.bytes);
+  // Reserve space: ts(8) + method(5) + status(4) + rt(7) + bytes(6) + gaps = ~35
+  const uriWidth = Math.max(8, width - 35);
+  const uri = truncate(entry.uri, uriWidth);
+  return (
+    <Box flexDirection="row" gap={1}>
+      <Text dimColor>{ts}</Text>
+      <Text dimColor>{method}</Text>
+      <Text color={statusColor(entry.status)}>{status}</Text>
+      <Text>{uri}</Text>
+      {rt ? <Text dimColor>{rt}</Text> : null}
+      <Text dimColor>{bytes}</Text>
+    </Box>
+  );
+}
+
+// ─── Logs sub-view ────────────────────────────────────────────────────────────
+
+function NginxLogsView({
+  detail,
+  scrollOffset,
+  maxVisible,
+}: {
+  detail: AppDetail | null;
+  scrollOffset: number;
+  maxVisible: number;
+}): React.ReactElement {
+  if (!detail) {
+    return <Box marginLeft={2}><Text dimColor>loading…</Text></Box>;
+  }
+
+  // Collect all entries across all domains/routes, sorted newest-first
+  const allEntries: LogEntry[] = [];
+  for (const domain of detail.domains) {
+    for (const route of domain.routes) {
+      if (route.nginxLog?.recentEntries) {
+        allEntries.push(...route.nginxLog.recentEntries);
+      }
+    }
+  }
+
+  if (allEntries.length === 0) {
+    const hasUnpushed = detail.domains.some((d) => !d.lastPushedAt);
+    const isLoading = detail.domains.some((d) =>
+      d.routes.some((r) => r.nginxLog?.loading)
+    );
+    return (
+      <Box flexDirection="column" marginLeft={2}>
+        <Text dimColor>
+          {isLoading
+            ? 'loading…'
+            : hasUnpushed
+              ? 'not pushed to Nginx — no access logs available'
+              : 'no requests recorded yet'}
+        </Text>
+      </Box>
+    );
+  }
+
+  // Sort all entries by timestamp descending (most recent first for display)
+  allEntries.sort((a, b) => b.ts.getTime() - a.ts.getTime());
+
+  const contentRows = Math.max(1, maxVisible - 3); // header + hint rows
+  const total = allEntries.length;
+  // scrollOffset=0 → show tail; higher → scroll up into history
+  const end = Math.max(0, total - scrollOffset);
+  const start = Math.max(0, end - contentRows);
+  const visible = allEntries.slice(start, end).reverse(); // back to chronological for display
+
+  return (
+    <Box flexDirection="column" width={DETAIL_W}>
+      <Box flexDirection="row" justifyContent="space-between" width={DETAIL_W}>
+        <Text dimColor>
+          nginx access log — {total} entries{total > contentRows ? ` (${start + 1}–${end})` : ''}
+          {scrollOffset > 0 ? '  ↑ scrolled' : '  ↓ live'}
+        </Text>
+        <Text dimColor>PgUp/PgDn scroll</Text>
+      </Box>
+      {visible.map((entry, i) => (
+        <Box key={`${entry.ts.getTime()}-${i}`}>
+          <NginxLogLine entry={entry} width={DETAIL_W} />
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
+// ─── Stats sub-view ───────────────────────────────────────────────────────────
+
+function StatsView({
+  summary,
+  detail,
+  cpuHistory,
+  memHistory,
+  totalMemBytes,
+  maxVisible,
+}: Pick<MetricsTabProps, 'summary' | 'detail' | 'cpuHistory' | 'memHistory' | 'totalMemBytes' | 'maxVisible'>): React.ReactElement {
   const { pm2, pm2Error, restartDelta } = summary;
   const domains = detail?.domains ?? [];
 
@@ -85,16 +210,18 @@ export function MetricsTab({ summary, detail, cpuHistory, memHistory, totalMemBy
 
                 {domain.lastPushedAt && (!route.nginxLog || !route.nginxLog.hasData) && (
                   <Box marginLeft={2} flexDirection="column">
-                    {route.nginxLog?.error
-                      ? <Text color="red">log error — {truncate(route.nginxLog.error, DETAIL_W - 14)}</Text>
-                      : <Text dimColor>no requests recorded yet — metrics will appear once traffic flows</Text>}
-                    {route.nginxLog && (
+                    {route.nginxLog?.loading
+                      ? <Text dimColor>loading…</Text>
+                      : route.nginxLog?.error
+                        ? <Text color="red">log error — {truncate(route.nginxLog.error, DETAIL_W - 14)}</Text>
+                        : <Text dimColor>no requests recorded yet — metrics will appear once traffic flows</Text>}
+                    {route.nginxLog && !route.nginxLog.loading && (
                       <Text dimColor>  path: {truncate(route.nginxLog.logPath, DETAIL_W - 10)}</Text>
                     )}
                     {route.nginxLog?.rawSample && (
                       <Text dimColor>  raw: {truncate(route.nginxLog.rawSample.replace(/\n/g, '↵'), DETAIL_W - 8)}</Text>
                     )}
-                    {route.nginxLog && !route.nginxLog.error && !route.nginxLog.rawSample && (
+                    {route.nginxLog && !route.nginxLog.loading && !route.nginxLog.error && !route.nginxLog.rawSample && (
                       <Text dimColor>  (file read returned empty)</Text>
                     )}
                   </Box>
@@ -129,6 +256,46 @@ export function MetricsTab({ summary, detail, cpuHistory, memHistory, totalMemBy
           )
         )}
       </Box>
+    </Box>
+  );
+}
+
+// ─── MetricsTab ───────────────────────────────────────────────────────────────
+
+export function MetricsTab({
+  summary, detail, cpuHistory, memHistory, totalMemBytes,
+  maxVisible, scrollOffset, metricsView,
+}: MetricsTabProps): React.ReactElement {
+  return (
+    <Box flexDirection="column" width={DETAIL_W} height={maxVisible} overflow="hidden">
+      {/* Sub-view toggle bar */}
+      <Box flexDirection="row" gap={2} marginBottom={1}>
+        <Text bold={metricsView === 'stats'} color={metricsView === 'stats' ? 'yellow' : undefined} dimColor={metricsView !== 'stats'}>
+          stats
+        </Text>
+        <Text dimColor>│</Text>
+        <Text bold={metricsView === 'logs'} color={metricsView === 'logs' ? 'yellow' : undefined} dimColor={metricsView !== 'logs'}>
+          access logs
+        </Text>
+        <Text dimColor>  v to toggle</Text>
+      </Box>
+
+      {metricsView === 'stats' ? (
+        <StatsView
+          summary={summary}
+          detail={detail}
+          cpuHistory={cpuHistory}
+          memHistory={memHistory}
+          totalMemBytes={totalMemBytes}
+          maxVisible={maxVisible - 2}
+        />
+      ) : (
+        <NginxLogsView
+          detail={detail}
+          scrollOffset={scrollOffset}
+          maxVisible={maxVisible - 2}
+        />
+      )}
     </Box>
   );
 }

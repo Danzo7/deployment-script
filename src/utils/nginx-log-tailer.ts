@@ -24,6 +24,8 @@ export interface LogWindow {
   p95ms?: number;
   /** True when we successfully parsed at least one line */
   hasData: boolean;
+  /** True when the tailer has not yet completed a successful file-access poll */
+  loading?: boolean;
   /** Non-empty when we couldn't read the log at all */
   error?: string;
   /** True when the log exists but no $request_time field was found */
@@ -32,6 +34,8 @@ export interface LogWindow {
   logPath: string;
   /** First 200 chars of raw content received — shown when hasData is false for diagnosis */
   rawSample?: string;
+  /** Most recent log entries (up to 200) — for live log view */
+  recentEntries: LogEntry[];
 }
 
 // ─── Log-format parsers ─────────────────────────────────────────────────────
@@ -114,6 +118,7 @@ function computeWindow(entries: LogEntry[]): Omit<LogWindow, 'logPath'> {
       reqPerSec: 0,
       statusDist: { s2xx: 0, s3xx: 0, s4xx: 0, s5xx: 0 },
       hasData: false,
+      recentEntries: [],
     };
   }
 
@@ -151,6 +156,7 @@ function computeWindow(entries: LogEntry[]): Omit<LogWindow, 'logPath'> {
     p95ms,
     hasData: true,
     noResponseTime,
+    recentEntries: entries.slice(-200),
   };
 }
 
@@ -170,6 +176,8 @@ export class NginxLogTailer {
   private entries: LogEntry[] = [];
   private localOffset = 0;       // bytes consumed on last local read
   private lastError: string | undefined;
+  /** True once the file has been successfully accessed at least once (no "not found" error) */
+  private hasPolled = false;
   private readonly sshProvider: (() => SshConnection | undefined) | undefined;
 
   constructor(
@@ -224,7 +232,11 @@ export class NginxLogTailer {
         // Log was rotated — reset offset
         this.localOffset = 0;
       }
-      if (size === this.localOffset) return; // no new data
+      if (size === this.localOffset) {
+        this.lastError = undefined;
+        this.hasPolled = true;
+        return; // no new data
+      }
 
       const fd = fs.openSync(this.logPath, 'r');
       try {
@@ -235,6 +247,7 @@ export class NginxLogTailer {
         const text = buf.subarray(0, bytesRead).toString('utf8');
         this.ingestText(text);
         this.lastError = undefined;
+        this.hasPolled = true;
       } finally {
         fs.closeSync(fd);
       }
@@ -264,6 +277,7 @@ export class NginxLogTailer {
       if (size < this.localOffset) {
         // Log rotated — reset and re-seed next tick
         this.localOffset = 0;
+        this.hasPolled = true;
         return;
       }
 
@@ -279,6 +293,7 @@ export class NginxLogTailer {
       }
 
       this.lastError = undefined;
+      this.hasPolled = true;
     } catch (err: any) {
       this.lastError = `Remote log read failed: ${err.message}`;
     }
@@ -327,6 +342,7 @@ export class NginxLogTailer {
 
   getWindow(): LogWindow {
     const w = computeWindow(this.entries);
+    if (!this.hasPolled) w.loading = true;
     if (this.lastError) w.error = this.lastError;
     if (!w.hasData) w.rawSample = this.lastRawSample;
     return { ...w, logPath: this.logPath };
@@ -337,5 +353,6 @@ export class NginxLogTailer {
     this.localOffset = 0;
     this.lastError = undefined;
     this.lastRawSample = undefined;
+    this.hasPolled = false;
   }
 }

@@ -96,6 +96,7 @@ export function Dashboard(props: DashboardProps): React.ReactElement {
 
   const [cursor, setCursor] = useState(0);
   const [tab, setTab] = useState<DetailTab>('overview');
+  const [metricsView, setMetricsView] = useState<'stats' | 'logs'>('stats');
   const [actionMode, setActionMode] = useState<ActionMode>('none');
   const [cmdInput, setCmdInput] = useState('');
   const [filterQuery, setFilterQuery] = useState('');
@@ -147,7 +148,7 @@ export function Dashboard(props: DashboardProps): React.ReactElement {
 
   // Reset scroll and deploy cursor when selection/tab changes
   useEffect(() => { setDeployCursor(0); }, [selectedSummary?.app.name]);
-  useEffect(() => { setTabScrollOffset(0); }, [tab, selectedSummary?.app.name]);
+  useEffect(() => { setTabScrollOffset(0); setMetricsView('stats'); }, [tab, selectedSummary?.app.name]);
 
   // Crash-loop toast
   useEffect(() => {
@@ -236,6 +237,9 @@ export function Dashboard(props: DashboardProps): React.ReactElement {
       if (selectedSummary) props.onAction({ type: 'logs', appName: selectedSummary.app.name });
     } else if (input === 'X' && tab === 'logs') {
       props.onClearLogs();
+    } else if (input === 'v' && tab === 'metrics') {
+      setMetricsView((v) => v === 'stats' ? 'logs' : 'stats');
+      setTabScrollOffset(0);
     } else if (key.return && tab === 'deploys') {
       if (selectedSummary) {
         const activeIdx = selectedSummary.app.builds?.findIndex((b) => b === selectedSummary.app.activeBuild) ?? -1;
@@ -307,6 +311,7 @@ export function Dashboard(props: DashboardProps): React.ReactElement {
                   totalMemBytes={totalMemBytes}
                   scrollOffset={tabScrollOffset}
                   maxVisible={DETAIL_H}
+                  metricsView={metricsView}
                 />
               )}
               {tab === 'logs' && (

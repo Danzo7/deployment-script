@@ -21,7 +21,7 @@ export function Keybar({ activeTab }: KeybarProps): React.ReactElement {
       case 'overview':
         return <><Hint label="r" desc="restart" /><Hint label="S" desc="stop" /><Hint label="D" desc="redeploy" /><Hint label="E" desc="env" /></>;
       case 'metrics':
-        return <><Hint label="c" desc="copy value" /></>;
+        return <><Hint label="v" desc="toggle logs" /><Hint label="c" desc="copy value" /></>;
       case 'logs':
         return <><Hint label="X" desc="clear" /><Hint label="c" desc="copy line" /></>;
       case 'deploys':
