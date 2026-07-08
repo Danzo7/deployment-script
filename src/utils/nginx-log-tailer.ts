@@ -251,8 +251,8 @@ export class NginxLogTailer {
       if (this.localOffset === 0) {
         // Initial seed: grab last 2000 lines AND file size in a single exec to
         // avoid opening two SSH channels (which causes "Channel open failure" under load).
-        const result = await sshConn.exec(
-          `wc -c < "${path}" 2>/dev/null || echo "0"; echo "---SPLIT---"; tail -n 2000 "${path}" 2>/dev/null || echo ""`
+        const result = await sshConn.execWithSudoFallback(
+          `sh -c 'wc -c < "${path}" 2>/dev/null || echo "0"; echo "---SPLIT---"; tail -n 2000 "${path}" 2>/dev/null || echo ""'`
         );
         const splitIdx = result.indexOf('---SPLIT---\n');
         if (splitIdx !== -1) {
@@ -267,13 +267,13 @@ export class NginxLogTailer {
       } else {
         // Subsequent polls: get size + new bytes in a single exec
         const MAX_READ = 256 * 1024;
-        const result = await sshConn.exec(
-          `SIZE=$(wc -c < "${path}" 2>/dev/null || echo "0"); echo "$SIZE"; echo "---SPLIT---"; ` +
+        const result = await sshConn.execWithSudoFallback(
+          `sh -c 'SIZE=$(wc -c < "${path}" 2>/dev/null || echo "0"); echo "$SIZE"; echo "---SPLIT---"; ` +
           `if [ "$SIZE" -lt "${this.localOffset}" ]; then ` +
           `  echo "ROTATED"; ` +
           `elif [ "$SIZE" -gt "${this.localOffset}" ]; then ` +
-          `  dd if="${path}" bs=1 skip=${this.localOffset} count=${MAX_READ} 2>/dev/null; ` +
-          `fi`
+          `  tail -c +$((${this.localOffset} + 1)) "${path}" 2>/dev/null | head -c ${MAX_READ}; ` +
+          `fi; true'`
         );
         const splitIdx = result.indexOf('---SPLIT---\n');
         if (splitIdx === -1) return;
