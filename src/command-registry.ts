@@ -745,7 +745,7 @@ export const COMMANDS: Record<string, CommandNode> = {
         options: {
           host: { alias: 'H', type: 'string', demandOption: true, describe: 'Server IP or hostname' },
           port: { alias: 'p', type: 'number', describe: `Port (default: ${REMOTE_PORT})` },
-          identity: { alias: 'i', type: 'string', describe: 'Path to SSH private key (default: ~/.ssh/id_ed25519)' },
+          identity: { alias: 'i', type: 'string', describe: 'Key algorithm to use: ed25519 (default), ed25519_sk (FIDO2), ecdsa, ecdsa_sk (FIDO2), rsa (≥4096 bits)' },
         },
         handler: async ({ host, port, identity }) => { await remoteConnect(host, port, identity); },
       },

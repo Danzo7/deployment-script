@@ -62,11 +62,14 @@ export function listAuthorizedKeys(): AuthorizedKey[] {
 
 // Allowed public key algorithms — DSA and unknown types are rejected.
 // RSA is accepted only at ≥ 4096 bits; shorter RSA keys are rejected.
+// Keep in sync with ALGORITHM_KEY_MAP in ssh-client.ts.
 const ALLOWED_KEY_TYPES = new Set([
   'ssh-ed25519',
+  'sk-ssh-ed25519@openssh.com',       // FIDO2 ed25519 (e.g. YubiKey)
   'ecdsa-sha2-nistp256',
   'ecdsa-sha2-nistp384',
   'ecdsa-sha2-nistp521',
+  'sk-ecdsa-sha2-nistp256@openssh.com', // FIDO2 ECDSA (e.g. YubiKey)
   'ssh-rsa', // length validated separately below
 ]);
 
@@ -91,7 +94,7 @@ export function addAuthorizedKey(keyOrPath: string, username?: string): Authoriz
   const keyType = (parsed as any).type as string;
   if (!ALLOWED_KEY_TYPES.has(keyType)) {
     throw new Error(
-      `Key type "${keyType}" is not allowed. Use one of: ed25519, ecdsa-sha2-nistp256/384/521, or RSA ≥ 4096 bits`
+      `Key type "${keyType}" is not allowed. Use one of: ed25519, sk-ssh-ed25519 (FIDO2), ecdsa-sha2-nistp256/384/521, sk-ecdsa-sha2-nistp256 (FIDO2), or RSA ≥ 4096 bits`
     );
   }
 
