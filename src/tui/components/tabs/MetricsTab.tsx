@@ -91,6 +91,12 @@ export function MetricsTab({ summary, detail, cpuHistory, memHistory, totalMemBy
                     {route.nginxLog && (
                       <Text dimColor>  path: {truncate(route.nginxLog.logPath, DETAIL_W - 10)}</Text>
                     )}
+                    {route.nginxLog?.rawSample && (
+                      <Text dimColor>  raw: {truncate(route.nginxLog.rawSample.replace(/\n/g, '↵'), DETAIL_W - 8)}</Text>
+                    )}
+                    {route.nginxLog && !route.nginxLog.error && !route.nginxLog.rawSample && (
+                      <Text dimColor>  (file read returned empty)</Text>
+                    )}
                   </Box>
                 )}
 

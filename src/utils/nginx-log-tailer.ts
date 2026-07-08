@@ -30,6 +30,8 @@ export interface LogWindow {
   noResponseTime?: boolean;
   /** The log file path being tailed — useful for debugging */
   logPath: string;
+  /** First 200 chars of raw content received — shown when hasData is false for diagnosis */
+  rawSample?: string;
 }
 
 // ─── Log-format parsers ─────────────────────────────────────────────────────
@@ -283,7 +285,12 @@ export class NginxLogTailer {
     }
   }
 
+  private lastRawSample: string | undefined;
+
   private ingestText(text: string): void {
+    if (!this.lastRawSample && text.trim()) {
+      this.lastRawSample = text.slice(0, 200);
+    }
     const lines = text.split('\n');
     for (const line of lines) {
       const entry = parseLine(line);
@@ -294,6 +301,7 @@ export class NginxLogTailer {
   getWindow(): LogWindow {
     const w = computeWindow(this.entries);
     if (this.lastError) w.error = this.lastError;
+    if (!w.hasData) w.rawSample = this.lastRawSample;
     return { ...w, logPath: this.logPath };
   }
 
@@ -301,5 +309,6 @@ export class NginxLogTailer {
     this.entries = [];
     this.localOffset = 0;
     this.lastError = undefined;
+    this.lastRawSample = undefined;
   }
 }
