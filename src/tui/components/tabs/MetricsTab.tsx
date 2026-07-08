@@ -107,7 +107,10 @@ function NginxLogsView({
   const contentRows = Math.max(1, maxVisible - 3); // header + hint rows
   const total = allEntries.length;
   // scrollOffset=0 → tail; PgUp increases offset → scroll back in history
-  const end = Math.max(0, total - scrollOffset);
+  // Clamp so we never scroll past the first line
+  const maxOffset = Math.max(0, total - contentRows);
+  const clampedOffset = Math.min(scrollOffset, maxOffset);
+  const end = Math.max(0, total - clampedOffset);
   const start = Math.max(0, end - contentRows);
   const visible = allEntries.slice(start, end);
 
@@ -116,7 +119,7 @@ function NginxLogsView({
       <Box flexDirection="row" justifyContent="space-between" width={DETAIL_W}>
         <Text dimColor>
           nginx access log — {total} entries{total > contentRows ? ` (${start + 1}–${end})` : ''}
-          {scrollOffset > 0 ? '  ↑ scrolled' : '  ↓ live'}
+          {clampedOffset > 0 ? '  ↑ scrolled' : '  ↓ live'}
         </Text>
         <Text dimColor>PgUp/PgDn scroll</Text>
       </Box>

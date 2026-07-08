@@ -25,42 +25,61 @@ interface LogsTabProps {
 }
 
 export function LogsTab({ logLines, scrollOffset, maxVisible }: LogsTabProps): React.ReactElement {
-  const contentRows = Math.max(1, maxVisible - 1);
-
   if (logLines.length === 0) {
     return (
-      <Box width={DETAIL_W} flexDirection="column" height={maxVisible}>
-        <Text dimColor>No log output captured yet. Logs stream in as the app produces them.</Text>
-        <Text dimColor>Press X to clear logs.</Text>
+      <Box flexDirection="column" width={DETAIL_W} height={maxVisible} overflow="hidden">
+        <Box flexDirection="row" justifyContent="space-between" width={DETAIL_W}>
+          <Text dimColor>pm2 log — 0 lines</Text>
+          <Text dimColor>X clear</Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text dimColor>No log output captured yet. Logs stream in as the app produces them.</Text>
+        </Box>
       </Box>
     );
   }
 
+  const contentRows = Math.max(1, maxVisible - 3); // reserve header + hint rows like NginxLogsView
   const total = logLines.length;
-  const start = Math.max(0, total - contentRows - scrollOffset);
-  const end = Math.max(0, total - scrollOffset);
+  const maxOffset = Math.max(0, total - contentRows);
+  const clampedOffset = Math.min(scrollOffset, maxOffset);
+  const end = Math.max(0, total - clampedOffset);
+  const start = Math.max(0, end - contentRows);
   const parsed = logLines.slice(start, end).map(parseLogLine);
 
   return (
-    <Box flexDirection="column" width={DETAIL_W} height={maxVisible}>
+    <Box flexDirection="column" width={DETAIL_W} height={maxVisible} overflow="hidden">
+      {/* Header row — pinned, never overwritten */}
       <Box flexDirection="row" justifyContent="space-between" width={DETAIL_W}>
         <Text dimColor>
-          {total} lines{total > contentRows ? ` (showing ${start + 1}–${end})` : ''}
-          {scrollOffset > 0 ? '  ↑ scrolled' : ''}
+          pm2 log — {total} {total === 1 ? 'line' : 'lines'}{total > contentRows ? ` (${start + 1}–${end})` : ''}
+          {clampedOffset > 0 ? '  ↑ scrolled' : '  ↓ live'}
         </Text>
-        <Text dimColor>X clear  PgUp/PgDn scroll</Text>
+        <Text dimColor>X clear  PgUp/PgDn</Text>
       </Box>
+
       {parsed.map((e, i) => {
         const ts = e.timestamp ? `${e.timestamp} ` : '';
-        if (e.severity === 'error') return <Text key={i} color="red">{ts}{'✕ '}{e.message}</Text>;
+        if (e.severity === 'error') return (
+          <Box key={i} flexDirection="row" gap={1}>
+            <Text dimColor>{ts}</Text>
+            <Text color="red">✕</Text>
+            <Text color="red">{e.message}</Text>
+          </Box>
+        );
         if (e.severity === 'warn') return (
-          <Box key={i} flexDirection="row">
-            {ts !== '' && <Text>{ts}</Text>}
-            <Text color="yellow">{'! '}</Text>
+          <Box key={i} flexDirection="row" gap={1}>
+            {ts !== '' && <Text dimColor>{ts}</Text>}
+            <Text color="yellow">!</Text>
             <Text>{e.message}</Text>
           </Box>
         );
-        return <Text key={i} dimColor>{ts}{'· '}{e.message}</Text>;
+        return (
+          <Box key={i} flexDirection="row" gap={1}>
+            <Text dimColor>{ts}·</Text>
+            <Text dimColor>{e.message}</Text>
+          </Box>
+        );
       })}
     </Box>
   );

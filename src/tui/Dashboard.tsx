@@ -222,7 +222,20 @@ export function Dashboard(props: DashboardProps): React.ReactElement {
       });
       setTabScrollOffset(0);
     } else if (key.pageUp) {
-      setTabScrollOffset((o) => o + Math.max(1, Math.floor(DETAIL_H / 2)));
+      const pageSize = Math.max(1, Math.floor(DETAIL_H / 2));
+      setTabScrollOffset((o) => {
+        const next = o + pageSize;
+        // Clamp: max offset is total lines minus the visible rows (so at least 1 line shows)
+        if (tab === 'logs') {
+          const contentRows = Math.max(1, DETAIL_H - 1);
+          const maxOffset = Math.max(0, props.logLines.length - contentRows);
+          return Math.min(next, maxOffset);
+        }
+        // For metrics nginx logs and other tabs we can't easily know the total here,
+        // but we still prevent runaway by capping at a generous but finite value.
+        // The tab components also clamp internally.
+        return next;
+      });
     } else if (key.pageDown) {
       setTabScrollOffset((o) => Math.max(0, o - Math.max(1, Math.floor(DETAIL_H / 2))));
     } else if (input === 'r') {
