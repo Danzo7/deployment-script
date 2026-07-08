@@ -1,131 +1,165 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { render, useApp } from 'ink';
 import { subscribeBus, readRecentLogs, openSharedPm2, closeSharedPm2 } from '../utils/pm2-helper.js';
-import { Dashboard, DashboardAction } from './Dashboard.js';
+import { Dashboard } from './Dashboard.js';
+import type { DashboardAction } from './Dashboard.js';
 import {
-  refreshDashboard,
+  listApps,
+  fetchAppDetail,
   disconnectSharedSsh,
   resetTailers,
-  DashboardState,
+  GlobalState,
+  AppDetail,
+  AppSummary,
 } from '../utils/dashboard-data.js';
 import { Logger } from '../utils/logger.js';
 import { pauseRepl, resumeRepl } from '../utils/repl-context.js';
 
 // ─── Polling cadences ─────────────────────────────────────────────────────────
-const PM2_POLL_MS = 2_000;          // PM2 metrics (fast)
-const LOG_POLL_TICKS = 5;           // every 5 PM2 ticks → ~10s
-const GIT_FETCH_TICKS = 30;         // every 30 ticks → ~60s
+const LIST_POLL_MS    = 2_000;   // sidebar: app list + PM2 status
+const DETAIL_POLL_MS  = 5_000;   // detail pane: port, drift, nginx logs
+const GIT_FETCH_EVERY = 12;      // every 12 detail ticks ≈ 60 s
+const LOG_POLL_EVERY  = 2;       // every 2 detail ticks ≈ 10 s
 
-function DashboardApp() {
+function DashboardApp(): React.ReactElement {
   const { exit } = useApp();
-  const [state, setState] = useState<DashboardState | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [logLines, setLogLines] = useState<string[]>([]);
 
-  const tickRef = useRef(0);
+  const [globalState, setGlobalState]   = useState<GlobalState | null>(null);
+  const [appDetail, setAppDetail]       = useState<AppDetail | null>(null);
+  const [loading, setLoading]           = useState(true);
+  const [logLines, setLogLines]         = useState<string[]>([]);
+
+  // Which app name the Dashboard is currently showing — set via onSelectApp callback
+  const selectedAppName = useRef<string | null>(null);
+  // Track the last app name we fetched detail for so we can invalidate immediately on switch
+  const lastDetailAppName = useRef<string | null>(null);
+
+  const detailTickRef = useRef(0);
 
   const addLog = useCallback((line: string) => {
     setLogLines((prev) => {
       const next = [...prev, line];
-      // Cap at 500 lines
       return next.length > 500 ? next.slice(-500) : next;
     });
   }, []);
 
-  // Load existing log file contents on mount
+  // Load existing PM2 log file on mount
   useEffect(() => {
     readRecentLogs(300).then((lines) => {
       if (lines.length > 0) setLogLines(lines);
     }).catch(() => {});
   }, []);
 
-  // Subscribe to PM2 bus for push-based log/event notifications
+  // PM2 bus — push-based log/event stream
   useEffect(() => {
     let cleanup: (() => void) | null = null;
     let cancelled = false;
 
-    subscribeBus(
-      (packet) => {
-        if (cancelled) return;
-        const name = packet.process?.name ?? '';
-        if (packet.event === 'log:out') {
-          addLog(`[${name}] ${String(packet.data).trim()}`);
-        } else if (packet.event === 'log:err') {
-          addLog(`[${name}][err] ${String(packet.data).trim()}`);
-        } else if (packet.event === 'process:event') {
-          addLog(`[${name}] ← PM2: ${packet.data ?? ''}`);
-        }
-      },
-    ).then((c) => {
+    subscribeBus((packet) => {
+      if (cancelled) return;
+      const name = packet.process?.name ?? '';
+      if (packet.event === 'log:out') addLog(`[${name}] ${String(packet.data).trim()}`);
+      else if (packet.event === 'log:err') addLog(`[${name}][err] ${String(packet.data).trim()}`);
+      else if (packet.event === 'process:event') addLog(`[${name}] ← PM2: ${packet.data ?? ''}`);
+    }).then((c) => {
       if (cancelled) { c(); return; }
       cleanup = c;
-    }).catch(() => { /* PM2 bus unavailable — polling covers status */ });
+    }).catch(() => {});
 
-    return () => {
-      cancelled = true;
-      cleanup?.();
-    };
+    return () => { cancelled = true; cleanup?.(); };
   }, []);
 
-  // Polling loop
+  // ── Fast loop: sidebar list (every 2 s) ───────────────────────────────────
   useEffect(() => {
     let alive = true;
     let timer: NodeJS.Timeout;
 
     const tick = async () => {
-      tickRef.current += 1;
-      const n = tickRef.current;
-      const doGitFetch = n % GIT_FETCH_TICKS === 1;
-      const doLogPoll = n % LOG_POLL_TICKS === 0;
-
       try {
-        const next = await refreshDashboard(
-          state,
-          doGitFetch,
-          doLogPoll,
-        );
+        const next = await listApps(globalState);
         if (alive) {
-          setState(next);
+          setGlobalState(next);
           setLoading(false);
         }
-      } catch {
-        // Don't crash the TUI on a refresh error; just wait for next tick
-      }
+      } catch { /* keep showing last state */ }
 
-      if (alive) {
-        timer = setTimeout(tick, PM2_POLL_MS);
-      }
+      if (alive) timer = setTimeout(tick, LIST_POLL_MS);
     };
 
     tick();
-
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-    };
+    return () => { alive = false; clearTimeout(timer); };
   }, []);
+
+  // ── Slow loop: per-selected-app detail (every 5 s) ────────────────────────
+  useEffect(() => {
+    let alive = true;
+    let timer: NodeJS.Timeout;
+
+    const tick = async () => {
+      const appName = selectedAppName.current;
+
+      if (!appName || !globalState) {
+        if (alive) timer = setTimeout(tick, DETAIL_POLL_MS);
+        return;
+      }
+
+      // Find the summary for this app from the latest global state
+      const summary: AppSummary | undefined = globalState.summaries.find(
+        (s) => s.app.name === appName
+      );
+
+      if (!summary) {
+        if (alive) timer = setTimeout(tick, DETAIL_POLL_MS);
+        return;
+      }
+
+      detailTickRef.current += 1;
+      const n = detailTickRef.current;
+      const doGitFetch = n % GIT_FETCH_EVERY === 1;
+      const doLogPoll  = n % LOG_POLL_EVERY  === 0;
+
+      try {
+        const detail = await fetchAppDetail(appName, summary, doGitFetch, doLogPoll);
+        if (alive) setAppDetail(detail);
+      } catch { /* keep last detail */ }
+
+      if (alive) timer = setTimeout(tick, DETAIL_POLL_MS);
+    };
+
+    tick();
+    return () => { alive = false; clearTimeout(timer); };
+  }, []);
+
+  const handleSelectApp = useCallback((appName: string | null) => {
+    if (appName !== lastDetailAppName.current) {
+      // Clear stale detail immediately when switching apps
+      setAppDetail(null);
+      lastDetailAppName.current = appName;
+      detailTickRef.current = 0; // reset so next tick does a git fetch + log seed
+    }
+    selectedAppName.current = appName;
+  }, []);
+
   const handleQuit = useCallback(() => {
     closeSharedPm2();
     disconnectSharedSsh();
     resetTailers();
   }, []);
 
-  const handleClearLogs = useCallback(() => {
-    setLogLines([]);
-  }, []);
+  const handleClearLogs = useCallback(() => setLogLines([]), []);
 
   const handleAction = useCallback((action: DashboardAction) => {
-    // Actions that exit the TUI and hand off to CLI commands
-    // The launcher (launchDashboard) will re-run the command after exit
     (globalThis as any).__pendingDashboardAction = action;
     exit();
   }, [exit]);
 
   return (
     <Dashboard
-      state={state}
+      globalState={globalState}
+      appDetail={appDetail}
       loading={loading}
       logLines={logLines}
+      onSelectApp={handleSelectApp}
       onAction={handleAction}
       onClearLogs={handleClearLogs}
       onQuit={handleQuit}
@@ -139,10 +173,8 @@ export async function launchDashboard(): Promise<void> {
   pauseRepl();
   Logger.isMuted = true;
 
-  // Open persistent PM2 connection — shared by bus subscription and polling
   try { await openSharedPm2(); } catch { /* dashboard will show pm2 unreachable */ }
 
-  // Clear any pending action from previous run
   (globalThis as any).__pendingDashboardAction = undefined;
 
   const { waitUntilExit } = render(<DashboardApp />);
@@ -150,14 +182,12 @@ export async function launchDashboard(): Promise<void> {
 
   closeSharedPm2();
   resumeRepl();
-
   Logger.isMuted = false;
 
-  // Handle any action the user triggered from the dashboard
   const action: DashboardAction | undefined = (globalThis as any).__pendingDashboardAction;
   if (!action) return;
 
-  console.log(); // spacing after TUI
+  console.log();
 
   switch (action.type) {
     case 'restart': {
@@ -182,7 +212,6 @@ export async function launchDashboard(): Promise<void> {
     case 'logs': {
       const { logs } = await import('../commands/logs.js');
       await logs({ name: action.appName });
-      // keep alive — logs streams until Ctrl+C
       await new Promise(() => {});
       break;
     }

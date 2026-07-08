@@ -1,7 +1,11 @@
 /**
  * dashboard-data.ts
- * Aggregates all data sources for the TUI dashboard.
- * Pure data layer — no Ink/React imports.
+ *
+ * Split into two fetch layers:
+ *   listApps()       — fast global poll (every 2 s): app list + PM2 status + OS metrics
+ *   fetchAppDetail() — per-selected-app (every 5 s): port, drift, domains, nginx logs
+ *
+ * This ensures nginx log polling and SSH only happen for the app you're looking at.
  */
 import net from 'net';
 import os from 'os';
@@ -28,7 +32,6 @@ import {
 export type Pm2Status =
   | 'online' | 'stopped' | 'errored' | 'launching' | 'stopping' | 'not-found' | string;
 
-/** Re-exported from pm2-helper so callers only need to import from dashboard-data */
 export type { ProcessMetrics as Pm2Metrics, VcsDriftInfo };
 
 export interface CertInfo {
@@ -50,23 +53,41 @@ export interface DomainInfo {
   lastPushedAt?: Date;
   lastCompiledAt?: Date;
   configPath?: string;
-  /** True when compiled but never pushed, or recompiled since last push */
   isStale: boolean;
 }
 
-export interface AppData {
+/** Lightweight summary shown in the sidebar — populated by listApps() */
+export interface AppSummary {
   app: App;
   pm2: ProcessMetrics | null;
   pm2Error?: string;
+  restartDelta: number;
+  isLocked: boolean;
+  health: 'healthy' | 'degraded' | 'down' | 'unknown';
+}
+
+/** Full detail for the selected app — populated by fetchAppDetail() */
+export interface AppDetail {
+  appName: string;
   portReachable?: boolean;
   drift: VcsDriftInfo | null;
   domains: DomainInfo[];
-  isLocked: boolean;
-  /** Restart delta since dashboard was opened */
-  restartDelta: number;
-  health: 'healthy' | 'degraded' | 'down' | 'unknown';
-  /** env file changed since last deploy */
   envChanged?: boolean;
+  /** health re-derived once nginx data is available */
+  health: 'healthy' | 'degraded' | 'down' | 'unknown';
+}
+
+/** Global state updated on every fast tick */
+export interface GlobalState {
+  summaries: AppSummary[];
+  pm2Reachable: boolean;
+  dbReachable: boolean;
+  sshReachable: boolean;
+  sshHost?: string;
+  loadavg: [number, number, number] | null;
+  totalMemBytes: number;
+  freeMemBytes: number;
+  tickCount: number;
 }
 
 // ─── Port reachability ────────────────────────────────────────────────────────
@@ -93,11 +114,7 @@ function checkPortReachable(port: number, host = '127.0.0.1', timeoutMs = 1000):
 function buildCertInfo(domain: Domain): CertInfo {
   const { ssl } = domain;
   if (ssl.mode === 'none') return { mode: 'none' };
-  if (ssl.mode === 'letsencrypt') {
-    // Metadata may be stored on the domain row if we ever parse it there
-    return { mode: 'letsencrypt', expiresAt: ssl.expiresAt };
-  }
-  // custom — cert metadata is stored on Domain.ssl by ssl-helper after upload
+  if (ssl.mode === 'letsencrypt') return { mode: 'letsencrypt', expiresAt: ssl.expiresAt };
   if (!ssl.certPath || !fs.existsSync(ssl.certPath)) {
     return { mode: 'custom', error: 'cert file missing' };
   }
@@ -122,12 +139,12 @@ function buildCertInfo(domain: Domain): CertInfo {
   }
 }
 
-// ─── Domain staleness (mirrors domain.ts domainList logic) ───────────────────
+// ─── Domain staleness ─────────────────────────────────────────────────────────
 
 function isDomainStale(domain: Domain): boolean {
-  if (!domain.lastPushedAt) return !!domain.lastCompiledAt; // compiled but never pushed
+  if (!domain.lastPushedAt) return !!domain.lastCompiledAt;
   if (domain.lastCompiledAt && new Date(domain.lastCompiledAt) > new Date(domain.lastPushedAt)) {
-    return true; // recompiled since last push
+    return true;
   }
   return false;
 }
@@ -145,7 +162,7 @@ function deriveHealth(
   portReachable: boolean | undefined,
   restartDelta: number,
   nginxWindows: LogWindow[],
-): AppData['health'] {
+): AppSummary['health'] {
   if (!pm2Data) return 'unknown';
   if (pm2Data.status === 'errored') return 'down';
   if (pm2Data.status === 'stopped' || pm2Data.status === 'not-found') return 'down';
@@ -167,9 +184,6 @@ let _sharedSsh: SshConnection | null = null;
 async function getSharedSsh(): Promise<SshConnection | null> {
   if (!NGINX_REMOTE_HOST) return null;
   if (_sharedSsh) {
-    // Only probe if a channel failure already marked the connection dead.
-    // Skip the exec('true') probe on every tick — it adds latency for no benefit
-    // when the connection is healthy.
     if (!_sharedSsh.isConnected) {
       _sharedSsh = null;
     } else {
@@ -202,21 +216,11 @@ export function disconnectSharedSsh(): void {
 
 const tailerCache = new Map<string, NginxLogTailer>();
 
-/**
- * Get or create a tailer for a domain that has been pushed to Nginx.
- * The log path is derived from the domain's configPath (same naming convention
- * as constructSitesAvailablePath in domain-push-utils.ts), replacing
- * sites-available with /var/log/nginx and .conf with .access.log.
- * Falls back to NginxLogTailer.accessLogPath() if configPath is unavailable.
- */
 function getTailer(domain: Domain, routePath: string, isRemote: boolean): NginxLogTailer {
   const safeRoute = routePath.replace(/[^a-z0-9]/gi, '_').replace(/^_+|_+$/g, '') || 'root';
   const key = `${domain.name}:${safeRoute}:${isRemote ? 'remote' : 'local'}`;
   if (tailerCache.has(key)) return tailerCache.get(key)!;
-
   const logPath = NginxLogTailer.accessLogPath(domain.name, routePath, isRemote);
-  // Pass a getter so the tailer always uses the current shared connection,
-  // even after a reconnect replaces the SshConnection instance.
   const sshProvider = isRemote ? () => _sharedSsh ?? undefined : undefined;
   const tailer = new NginxLogTailer(logPath, sshProvider);
   tailerCache.set(key, tailer);
@@ -246,32 +250,15 @@ function checkEnvChanged(app: App): boolean | undefined {
 
 const restartBaseline = new Map<string, number>();
 
-// ─── Main data types ──────────────────────────────────────────────────────────
-
-export interface DashboardState {
-  apps: AppData[];
-  pm2Reachable: boolean;
-  dbReachable: boolean;
-  sshReachable: boolean;
-  sshHost?: string;
-  /** null on Windows (os.loadavg returns [0,0,0] which is misleading) */
-  loadavg: [number, number, number] | null;
-  totalMemBytes: number;
-  freeMemBytes: number;
-  tickCount: number;
-}
+// ─── listApps — fast global poll ─────────────────────────────────────────────
 
 /**
- * Full dashboard refresh.
- * @param doGitFetch  run git fetch this tick (slow; every ~60 s)
- * @param doLogPoll   poll Nginx log files this tick (every ~10 s)
+ * Fast poll — runs every ~2 s.
+ * Fetches the app list from DB, PM2 metrics for all apps, and OS metrics.
+ * Does NOT touch SSH, nginx logs, git, or port checks.
  */
-export async function refreshDashboard(
-  prevState: DashboardState | null,
-  doGitFetch: boolean,
-  doLogPoll: boolean,
-): Promise<DashboardState> {
-  const tickCount = (prevState?.tickCount ?? 0) + 1;
+export async function listApps(prev: GlobalState | null): Promise<GlobalState> {
+  const tickCount = (prev?.tickCount ?? 0) + 1;
 
   // ── DB ────────────────────────────────────────────────────────────────────
   let apps: App[] = [];
@@ -281,14 +268,14 @@ export async function refreshDashboard(
   } catch {
     dbReachable = false;
     return {
-      apps: prevState?.apps ?? [],
-      pm2Reachable: prevState?.pm2Reachable ?? false,
+      summaries: prev?.summaries ?? [],
+      pm2Reachable: prev?.pm2Reachable ?? false,
       dbReachable: false,
-      sshReachable: prevState?.sshReachable ?? false,
+      sshReachable: prev?.sshReachable ?? false,
       sshHost: NGINX_REMOTE_HOST,
-      loadavg: prevState?.loadavg ?? null,
-      totalMemBytes: prevState?.totalMemBytes ?? 0,
-      freeMemBytes: prevState?.freeMemBytes ?? 0,
+      loadavg: prev?.loadavg ?? null,
+      totalMemBytes: prev?.totalMemBytes ?? 0,
+      freeMemBytes: prev?.freeMemBytes ?? 0,
       tickCount,
     };
   }
@@ -302,136 +289,48 @@ export async function refreshDashboard(
     pm2Reachable = false;
   }
 
-  // Index by name for O(1) lookup per app
   const pm2ByName = new Map<string, ProcessMetrics>();
-  for (const m of pm2Metrics) {
-    pm2ByName.set(m.name, m);
-  }
+  for (const m of pm2Metrics) pm2ByName.set(m.name, m);
 
-  // ── SSH (for remote Nginx log tailing) ────────────────────────────────────
-  // Always call getSharedSsh() before log polling so a dead connection is
-  // replaced before we attempt any channel opens this tick.
+  // ── SSH reachability (quick probe only — no log polling here) ─────────────
   const ssh = await getSharedSsh();
   const sshReachable = !!ssh;
 
   // ── OS metrics ────────────────────────────────────────────────────────────
-  // loadavg is Linux/macOS only — Windows always returns [0,0,0], which is
-  // meaningless, so we hide it there rather than showing misleading zeros.
   const loadavg = os.platform() === 'win32'
     ? null
     : (os.loadavg() as [number, number, number]);
   const totalMemBytes = os.totalmem();
   const freeMemBytes = os.freemem();
 
-  // ── Per-app data ───────────────────────────────────────────────────────────
-  // NOTE: We intentionally serialize per-app data collection (not Promise.all) to
-  // avoid opening dozens of SSH channels simultaneously when log polling is active.
-  // Port checks and git fetches within each app still run in parallel.
-  const appDataList: AppData[] = [];
-  for (const app of apps) {
+  // ── Build summaries ───────────────────────────────────────────────────────
+  const summaries: AppSummary[] = apps.map((app): AppSummary => {
+    const pm2Data: ProcessMetrics | null = pm2Reachable
+      ? (pm2ByName.get(app.name) ?? {
+          name: app.name, status: 'not-found', cpu: 0, memBytes: 0, uptimeMs: 0,
+          restarts: 0, unstableRestarts: 0, execMode: 'fork', instances: 1,
+        })
+      : null;
 
-      // PM2 — look up via listAllProcessMetrics result
-      const pm2Data: ProcessMetrics | null = pm2Reachable
-        ? (pm2ByName.get(app.name) ?? {
-            name: app.name,
-            status: 'not-found', cpu: 0, memBytes: 0, uptimeMs: 0,
-            restarts: 0, unstableRestarts: 0, execMode: 'fork', instances: 1,
-          })
-        : null;
-      const pm2Error = pm2Reachable ? undefined : 'PM2 unreachable';
+    const currentRestarts = pm2Data?.restarts ?? 0;
+    if (!restartBaseline.has(app.name)) restartBaseline.set(app.name, currentRestarts);
+    const restartDelta = Math.max(0, currentRestarts - restartBaseline.get(app.name)!);
 
-      // Restart delta
-      const currentRestarts = pm2Data?.restarts ?? 0;
-      if (!restartBaseline.has(app.name)) restartBaseline.set(app.name, currentRestarts);
-      const restartDelta = Math.max(0, currentRestarts - restartBaseline.get(app.name)!);
+    // Derive health without nginx data — the detail fetch will refine it
+    const health = deriveHealth(pm2Data, undefined, restartDelta, []);
 
-      // Port reachability, VCS drift, and routes — run in parallel
-      const [portReachableResult, driftResult, routesResult] = await Promise.all([
-        (pm2Data?.status === 'online' || !pm2Data)
-          ? checkPortReachable(app.port).catch(() => false)
-          : Promise.resolve(undefined),
-        getVcsDriftInfo(app, path.join(app.appDir, 'release'), doGitFetch).catch((): VcsDriftInfo => ({
-          branch: app.branch, behind: 0, ahead: 0, hasLocalChanges: false, fetched: false,
-        })),
-        RouteRepo.getAllByAppIdWithAppAndDomain(app.id).catch(() => [] as RouteWithAppAndDomain[]),
-      ]);
-
-      const portReachable = portReachableResult as boolean | undefined;
-      const drift = driftResult;
-      const routes = routesResult;
-
-      // Deduplicate domains and build DomainInfo list
-      const seenDomains = new Set<string>();
-      const domainInfoList: DomainInfo[] = [];
-
-      for (const route of routes) {
-        const domainName = route.domain.name;
-        if (seenDomains.has(domainName)) continue;
-        seenDomains.add(domainName);
-
-        // Re-fetch skipped — route join already includes domain with current timestamps
-        const domain: Domain = route.domain;
-
-        const cert = buildCertInfo(domain);
-        const isStale = isDomainStale(domain);
-
-        const domainRoutes = await Promise.all(
-          routes
-            .filter((r) => r.domain.name === domainName)
-            .map(async (r) => {
-              const routePath = r.path === '' ? '/' : r.path;
-              let nginxLog: LogWindow | undefined;
-              if (domain.lastPushedAt) {
-                const tailer = getTailer(domain, routePath, !!ssh);
-                if (doLogPoll) {
-                  await tailer.poll().catch(() => { /* tolerate read errors */ });
-                }
-                nginxLog = tailer.getWindow();
-              }
-              return { path: routePath, appName: r.app.name, nginxLog };
-            })
-        );
-
-        // Only attach a log tailer when the domain has actually been pushed to Nginx.
-        // If lastPushedAt is not set, there's no Nginx serving this domain — no log to read.
-
-        domainInfoList.push({
-          name: domainName,
-          cert,
-          routes: domainRoutes,
-          lastPushedAt: domain.lastPushedAt,
-          lastCompiledAt: domain.lastCompiledAt,
-          configPath: domain.configPath ?? undefined,
-          isStale,
-        });
-      }
-
-      // Env-changed detection (read-only, reuses calculateFileHash from file-utils)
-      const envChanged = checkEnvChanged(app);
-
-      const nginxWindows = domainInfoList
-        .flatMap((d) => d.routes)
-        .filter((r) => r.nginxLog?.hasData)
-        .map((r) => r.nginxLog!);
-
-      const health = deriveHealth(pm2Data, portReachable, restartDelta, nginxWindows);
-
-      appDataList.push({
-        app,
-        pm2: pm2Data,
-        pm2Error,
-        portReachable,
-        drift,
-        domains: domainInfoList,
-        isLocked: isLocked(app.name),
-        restartDelta,
-        health,
-        envChanged,
-      });
-  }
+    return {
+      app,
+      pm2: pm2Data,
+      pm2Error: pm2Reachable ? undefined : 'PM2 unreachable',
+      restartDelta,
+      isLocked: isLocked(app.name),
+      health,
+    };
+  });
 
   return {
-    apps: appDataList,
+    summaries,
     pm2Reachable,
     dbReachable,
     sshReachable,
@@ -440,5 +339,102 @@ export async function refreshDashboard(
     totalMemBytes,
     freeMemBytes,
     tickCount,
+  };
+}
+
+// ─── fetchAppDetail — per-selected-app poll ───────────────────────────────────
+
+/**
+ * Heavier poll — runs every ~5 s for the currently selected app only.
+ * Fetches port reachability, VCS drift, domain/cert info, and nginx logs.
+ *
+ * @param appName        name of the currently selected app
+ * @param summary        the AppSummary for that app (from listApps)
+ * @param doGitFetch     whether to run git fetch this tick
+ * @param doLogPoll      whether to poll nginx log files this tick
+ */
+export async function fetchAppDetail(
+  appName: string,
+  summary: AppSummary,
+  doGitFetch: boolean,
+  doLogPoll: boolean,
+): Promise<AppDetail> {
+  const { app, pm2, restartDelta } = summary;
+
+  // Reconnect SSH before log polling so a dead connection is replaced first
+  const ssh = doLogPoll ? await getSharedSsh() : (_sharedSsh ?? null);
+
+  // Port check, VCS drift, and routes — run in parallel
+  const [portReachableResult, driftResult, routesResult] = await Promise.all([
+    (pm2?.status === 'online' || !pm2)
+      ? checkPortReachable(app.port).catch(() => false)
+      : Promise.resolve(undefined),
+    getVcsDriftInfo(app, path.join(app.appDir, 'release'), doGitFetch).catch((): VcsDriftInfo => ({
+      branch: app.branch, behind: 0, ahead: 0, hasLocalChanges: false, fetched: false,
+    })),
+    RouteRepo.getAllByAppIdWithAppAndDomain(app.id).catch(() => [] as RouteWithAppAndDomain[]),
+  ]);
+
+  const portReachable = portReachableResult as boolean | undefined;
+  const drift = driftResult;
+  const routes = routesResult;
+
+  // Build DomainInfo list (deduplicated by domain name)
+  const seenDomains = new Set<string>();
+  const domainInfoList: DomainInfo[] = [];
+
+  for (const route of routes) {
+    const domainName = route.domain.name;
+    if (seenDomains.has(domainName)) continue;
+    seenDomains.add(domainName);
+
+    const domain: Domain = route.domain;
+    const cert = buildCertInfo(domain);
+    const isStale = isDomainStale(domain);
+
+    const domainRoutes = await Promise.all(
+      routes
+        .filter((r) => r.domain.name === domainName)
+        .map(async (r) => {
+          const routePath = r.path === '' ? '/' : r.path;
+          let nginxLog: LogWindow | undefined;
+          if (domain.lastPushedAt) {
+            const tailer = getTailer(domain, routePath, !!ssh);
+            if (doLogPoll) {
+              await tailer.poll().catch(() => {});
+            }
+            nginxLog = tailer.getWindow();
+          }
+          return { path: routePath, appName: r.app.name, nginxLog };
+        })
+    );
+
+    domainInfoList.push({
+      name: domainName,
+      cert,
+      routes: domainRoutes,
+      lastPushedAt: domain.lastPushedAt,
+      lastCompiledAt: domain.lastCompiledAt,
+      configPath: domain.configPath ?? undefined,
+      isStale,
+    });
+  }
+
+  const envChanged = checkEnvChanged(app);
+
+  const nginxWindows = domainInfoList
+    .flatMap((d) => d.routes)
+    .filter((r) => r.nginxLog?.hasData)
+    .map((r) => r.nginxLog!);
+
+  const health = deriveHealth(pm2, portReachable, restartDelta, nginxWindows);
+
+  return {
+    appName,
+    portReachable,
+    drift,
+    domains: domainInfoList,
+    envChanged,
+    health,
   };
 }
