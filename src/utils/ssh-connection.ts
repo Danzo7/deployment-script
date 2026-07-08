@@ -253,6 +253,41 @@ export class SshConnection {
   }
 
   /**
+   * Read a chunk of a remote file via SFTP starting at `offset`, up to `maxBytes`.
+   * Also returns the file's current total size.
+   * Returns null if the file does not exist.
+   */
+  async sftpReadChunk(remotePath: string, offset: number, maxBytes: number): Promise<{ size: number; chunk: Buffer } | null> {
+    return new Promise((resolve, reject) => {
+      this.client.sftp((err, sftp) => {
+        if (err) { reject(err); return; }
+        sftp.stat(remotePath, (statErr, stats) => {
+          if (statErr) {
+            if (statErr.message.includes('No such file')) { resolve(null); return; }
+            reject(statErr);
+            return;
+          }
+          const size = stats.size;
+          if (offset >= size) {
+            resolve({ size, chunk: Buffer.alloc(0) });
+            return;
+          }
+          const toRead = Math.min(size - offset, maxBytes);
+          const buf = Buffer.alloc(toRead);
+          sftp.open(remotePath, 'r', (openErr, handle) => {
+            if (openErr) { reject(openErr); return; }
+            sftp.read(handle, buf, 0, toRead, offset, (readErr, bytesRead) => {
+              sftp.close(handle, () => {});
+              if (readErr) { reject(readErr); return; }
+              resolve({ size, chunk: buf.subarray(0, bytesRead) });
+            });
+          });
+        });
+      });
+    });
+  }
+
+  /**
    * Strip the sudo password out of a string before it's allowed into an
    * Error message. A misbehaving remote shell could in principle echo
    * stdin back on stderr; this is a defense-in-depth measure so a secret

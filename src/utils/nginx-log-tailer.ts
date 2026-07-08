@@ -251,37 +251,64 @@ export class NginxLogTailer {
       return;
     }
     try {
-      let chunk: string;
       const MAX_READ = 256 * 1024;
 
-      if (this.localOffset === 0) {
-        // Initial seed: read last 2000 lines then get file size
-        chunk = await sshConn.execWithSudoFallback(`tail -n 2000 "${path}"`);
-        const sizeStr = await sshConn.execWithSudoFallback(`wc -c < "${path}"`);
-        this.localOffset = parseInt(sizeStr.trim(), 10) || 0;
-      } else {
-        // Get current file size
-        const sizeStr = await sshConn.execWithSudoFallback(`wc -c < "${path}"`);
-        const newSize = parseInt(sizeStr.trim(), 10) || 0;
-
-        if (newSize < this.localOffset) {
-          // Log rotated — reset and re-seed next tick
-          this.localOffset = 0;
-          return;
-        }
-        if (newSize <= this.localOffset) return; // no new bytes
-
-        // Read only the new bytes
-        chunk = await sshConn.execWithSudoFallback(
-          `tail -c +$((${this.localOffset} + 1)) "${path}" | head -c ${MAX_READ}`
-        );
-        this.localOffset = newSize;
+      const result = await this.remoteReadChunk(sshConn, path, this.localOffset, MAX_READ);
+      if (result === null) {
+        this.lastError = `Log file not found: ${path}`;
+        return;
       }
 
-      this.ingestText(chunk);
+      const { size, chunk } = result;
+
+      if (size < this.localOffset) {
+        // Log rotated — reset and re-seed next tick
+        this.localOffset = 0;
+        return;
+      }
+
+      if (this.localOffset === 0) {
+        // Initial seed — only ingest last MAX_READ bytes of the file
+        this.localOffset = size;
+      } else {
+        this.localOffset = size;
+      }
+
+      if (chunk.length > 0) {
+        this.ingestText(chunk.toString('utf8'));
+      }
+
       this.lastError = undefined;
     } catch (err: any) {
       this.lastError = `Remote log read failed: ${err.message}`;
+    }
+  }
+
+  /** Read a chunk of a remote file via SFTP, falling back to sudo cat if permission denied. */
+  private async remoteReadChunk(
+    sshConn: SshConnection,
+    path: string,
+    offset: number,
+    maxBytes: number,
+  ): Promise<{ size: number; chunk: Buffer } | null> {
+    try {
+      // For initial seed (offset=0), read last maxBytes of the file
+      if (offset === 0) {
+        const stat = await sshConn.sftpReadChunk(path, 0, 0);
+        if (stat === null) return null;
+        const seedOffset = Math.max(0, stat.size - maxBytes);
+        return await sshConn.sftpReadChunk(path, seedOffset, maxBytes);
+      }
+      return await sshConn.sftpReadChunk(path, offset, maxBytes);
+    } catch {
+      // SFTP failed (permission denied) — fall back to sudo cat and slice
+      const text = await sshConn.execWithSudo(`cat "${path}"`);
+      const buf = Buffer.from(text, 'utf8');
+      if (buf.length === 0) return null;
+      const chunk = offset === 0
+        ? buf.subarray(Math.max(0, buf.length - maxBytes))
+        : buf.subarray(Math.min(offset, buf.length), Math.min(offset + maxBytes, buf.length));
+      return { size: buf.length, chunk };
     }
   }
 
