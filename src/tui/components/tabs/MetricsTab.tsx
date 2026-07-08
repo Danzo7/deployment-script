@@ -43,12 +43,14 @@ function NginxLogLine({ entry, width }: { entry: LogEntry; width: number }): Rea
   const status = String(entry.status);
   const rt = entry.responseTime !== undefined ? `${(entry.responseTime * 1000).toFixed(0)}ms` : '';
   const bytes = fmtBytes(entry.bytes);
-  // Reserve space: ts(8) + method(5) + status(4) + rt(7) + bytes(6) + gaps = ~35
-  const uriWidth = Math.max(8, width - 35);
+  const addr = entry.remoteAddr || '';
+  // Reserve space: ts(8) + method(5) + status(4) + rt(7) + bytes(6) + addr(16) + gaps = ~50
+  const uriWidth = Math.max(8, width - 50);
   const uri = truncate(entry.uri, uriWidth);
   return (
     <Box flexDirection="row" gap={1}>
       <Text dimColor>{ts}</Text>
+      {addr ? <Text dimColor>{addr}</Text> : null}
       <Text dimColor>{method}</Text>
       <Text color={statusColor(entry.status)}>{status}</Text>
       <Text>{uri}</Text>
