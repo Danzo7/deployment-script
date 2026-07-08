@@ -256,12 +256,12 @@ export class NginxLogTailer {
 
       if (this.localOffset === 0) {
         // Initial seed: read last 2000 lines then get file size
-        chunk = await sshConn.execWithSudoFallback(`tail -n 2000 "${path}" 2>/dev/null || true`);
-        const sizeStr = await sshConn.execWithSudoFallback(`wc -c < "${path}" 2>/dev/null || echo 0`);
+        chunk = await sshConn.execWithSudoFallback(`tail -n 2000 "${path}"`);
+        const sizeStr = await sshConn.execWithSudoFallback(`wc -c < "${path}"`);
         this.localOffset = parseInt(sizeStr.trim(), 10) || 0;
       } else {
         // Get current file size
-        const sizeStr = await sshConn.execWithSudoFallback(`wc -c < "${path}" 2>/dev/null || echo 0`);
+        const sizeStr = await sshConn.execWithSudoFallback(`wc -c < "${path}"`);
         const newSize = parseInt(sizeStr.trim(), 10) || 0;
 
         if (newSize < this.localOffset) {
@@ -273,7 +273,7 @@ export class NginxLogTailer {
 
         // Read only the new bytes
         chunk = await sshConn.execWithSudoFallback(
-          `tail -c +$((${this.localOffset} + 1)) "${path}" 2>/dev/null | head -c ${MAX_READ} || true`
+          `tail -c +$((${this.localOffset} + 1)) "${path}" | head -c ${MAX_READ}`
         );
         this.localOffset = newSize;
       }
