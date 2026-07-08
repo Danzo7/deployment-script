@@ -147,8 +147,8 @@ export async function startRemoteServer(port: number): Promise<void> {
   process.on('SIGTERM', drainAndExit);
   process.on('SIGINT', drainAndExit);
 
-  const server = new Server({ hostKeys: [hostKey] }, (client) => {
-    const ip = (client as any)._sock?.remoteAddress ?? 'unknown';
+  const server = new Server({ hostKeys: [hostKey] }, (client, info) => {
+    const ip = info.ip ?? 'unknown';
     let authedAs: { method: string; identity: string; fingerprint: string } | undefined;
 
     Logger.info(`[remote] connection attempt from ${ip}`);
@@ -234,7 +234,6 @@ export async function startRemoteServer(port: number): Promise<void> {
           }
 
           auditLog({ event: 'shell-open', ip, ...authedAs });
-          Logger.info(`[remote] session opened — user: ${identity}  ip: ${ip}  active sessions: ${activeSessions.size}`);
 
           const child = spawnReplSession(ptyCols, ptyRows, ptyTerm, identity);
 
@@ -248,6 +247,7 @@ export async function startRemoteServer(port: number): Promise<void> {
           };
           registerSession(sess);
           resetIdleTimer(sess);
+          Logger.info(`[remote] session opened — user: ${identity}  ip: ${ip}  active sessions: ${activeSessions.size}`);
 
           child.onData((data: string) => {
             channel.write(data);
