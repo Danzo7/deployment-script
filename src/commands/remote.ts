@@ -2,7 +2,6 @@ import chalk from 'chalk';
 import Table from 'cli-table3';
 import readline from 'readline';
 import { Logger } from '../utils/logger.js';
-import { startRemoteServer } from '../utils/ssh-server.js';
 import { connectRemote } from '../utils/ssh-client.js';
 import {
   addAuthorizedKey,
@@ -10,6 +9,7 @@ import {
   listAuthorizedKeys,
 } from '../utils/remote-auth.js';
 import { REMOTE_PORT } from '../constants.js';
+import { launchRemoteServe } from '../tui/launch-remote-serve.js';
 
 /** Blocks key-management commands from running inside a remote session. */
 function assertNotRemoteSession(): void {
@@ -21,7 +21,7 @@ function assertNotRemoteSession(): void {
 }
 
 export async function remoteServe(port: number): Promise<void> {
-  await startRemoteServer(port);
+  await launchRemoteServe(port);
 }
 
 export async function remoteConnect(host: string, port?: number, identity?: string): Promise<void> {

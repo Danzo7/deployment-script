@@ -22,6 +22,7 @@ import ssh2 from 'ssh2';
 import type { ServerChannel } from 'ssh2';
 import { createRequire } from 'module';
 import { AddressInfo } from 'net';
+import { EventEmitter } from 'events';
 
 const { Server } = ssh2;
 import { resolve, dirname } from 'path';
@@ -50,6 +51,39 @@ import {
   auditLog,
 } from './remote-auth.js';
 
+// ── Public server event bus ───────────────────────────────────────────────────
+// Consumers (e.g. TUI) subscribe to get live updates without polling.
+
+export interface SessionSnapshot {
+  id: string;
+  identity: string;
+  ip: string;
+  keyFingerprint: string;
+  connectedAt: Date;
+  sessionType: 'shell' | 'exec';
+}
+
+export type ServerEventMap = {
+  log:             [level: 'info' | 'warn' | 'error' | 'success', message: string];
+  'session-open':  [session: SessionSnapshot];
+  'session-close': [sessionId: string];
+  listening:       [address: string, port: number, fingerprint: string];
+};
+
+class TypedEmitter extends EventEmitter {
+  emit<K extends keyof ServerEventMap>(event: K, ...args: ServerEventMap[K]): boolean {
+    return super.emit(event as string, ...args);
+  }
+  on<K extends keyof ServerEventMap>(event: K, listener: (...args: ServerEventMap[K]) => void): this {
+    return super.on(event as string, listener as (...args: unknown[]) => void);
+  }
+  off<K extends keyof ServerEventMap>(event: K, listener: (...args: ServerEventMap[K]) => void): this {
+    return super.off(event as string, listener as (...args: unknown[]) => void);
+  }
+}
+
+export const serverEvents = new TypedEmitter();
+
 // ── Config ───────────────────────────────────────────────────────────────────
 
 const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -69,12 +103,15 @@ const IDLE_TIMEOUT_MS = parseInt(process.env.REMOTE_IDLE_TIMEOUT_MS ?? String(30
 // ── Session tracking ─────────────────────────────────────────────────────────
 
 interface ActiveSession {
+  id: string;
   child: IPty;
   channel: ServerChannel;
   idleTimer: ReturnType<typeof setTimeout>;
   ip: string;
   identity: string;
   keyFingerprint: string;
+  connectedAt: Date;
+  sessionType: 'shell' | 'exec';
 }
 
 const activeSessions = new Set<ActiveSession>();
@@ -82,9 +119,45 @@ const activeSessions = new Set<ActiveSession>();
 /** Count of active sessions per key fingerprint. */
 const sessionsByKey = new Map<string, number>();
 
+let _sessionCounter = 0;
+export function generateSessionId(): string {
+  return `s${++_sessionCounter}`;
+}
+
+export function getActiveSessions(): SessionSnapshot[] {
+  return Array.from(activeSessions).map((s) => ({
+    id: s.id,
+    identity: s.identity,
+    ip: s.ip,
+    keyFingerprint: s.keyFingerprint,
+    connectedAt: s.connectedAt,
+    sessionType: s.sessionType,
+  }));
+}
+
+export function disconnectSession(sessionId: string): boolean {
+  for (const s of activeSessions) {
+    if (s.id === sessionId) {
+      auditLog({ event: 'session-force-disconnect', ip: s.ip, identity: s.identity });
+      s.child.kill();
+      try { s.channel.end(); } catch { /* ignore */ }
+      return true;
+    }
+  }
+  return false;
+}
+
 function registerSession(session: ActiveSession): void {
   activeSessions.add(session);
   sessionsByKey.set(session.keyFingerprint, (sessionsByKey.get(session.keyFingerprint) ?? 0) + 1);
+  serverEvents.emit('session-open', {
+    id: session.id,
+    identity: session.identity,
+    ip: session.ip,
+    keyFingerprint: session.keyFingerprint,
+    connectedAt: session.connectedAt,
+    sessionType: session.sessionType,
+  });
 }
 
 function unregisterSession(session: ActiveSession): void {
@@ -93,6 +166,7 @@ function unregisterSession(session: ActiveSession): void {
   const prev = sessionsByKey.get(session.keyFingerprint) ?? 1;
   if (prev <= 1) sessionsByKey.delete(session.keyFingerprint);
   else sessionsByKey.set(session.keyFingerprint, prev - 1);
+  serverEvents.emit('session-close', session.id);
 }
 
 function resetIdleTimer(session: ActiveSession): void {
@@ -108,6 +182,13 @@ function resetIdleTimer(session: ActiveSession): void {
 
 function resolveDmEntrypoint(): string {
   return resolve(ROOT_DIR, 'dist/cli.js');
+}
+
+// ── Logging helpers ───────────────────────────────────────────────────────────
+
+function slog(level: 'info' | 'warn' | 'error' | 'success', message: string): void {
+  serverEvents.emit('log', level, message);
+  Logger[level](message);
 }
 
 function spawnReplSession(cols: number, rows: number, term: string, identity: string): IPty {
@@ -157,7 +238,7 @@ export async function startRemoteServer(port: number): Promise<void> {
     const lockRemaining = isLockedOut(ip);
     if (lockRemaining > 0) {
       auditLog({ event: 'auth-throttled', ip, retryInMs: lockRemaining });
-      Logger.warn(`[remote] ${ip} is rate-limited — rejected`);
+      slog('warn', `[remote] ${ip} is rate-limited — rejected`);
       client.end();
       return;
     }
@@ -184,7 +265,7 @@ export async function startRemoteServer(port: number): Promise<void> {
           clearAttempts(ip);
           authedAs = { method: 'publickey', identity: match.comment || match.fingerprint, fingerprint: match.fingerprint };
           auditLog({ event: 'auth-ok', ip, method: 'publickey', fingerprint: match.fingerprint, user: match.comment || match.fingerprint });
-          Logger.success(`[remote] authenticated: ${authedAs.identity} from ${ip}`);
+          slog('success', `[remote] authenticated: ${authedAs.identity} from ${ip}`);
           return ctx.accept();
         }
         recordFailedAttempt(ip);
@@ -238,16 +319,19 @@ export async function startRemoteServer(port: number): Promise<void> {
           const child = spawnReplSession(ptyCols, ptyRows, ptyTerm, identity);
 
           const sess: ActiveSession = {
+            id: generateSessionId(),
             child,
             channel,
             ip,
             identity,
             keyFingerprint,
+            connectedAt: new Date(),
+            sessionType: 'shell',
             idleTimer: setTimeout(() => {}, 0), // placeholder; set properly below
           };
           registerSession(sess);
           resetIdleTimer(sess);
-          Logger.info(`[remote] session opened — user: ${identity}  ip: ${ip}  active sessions: ${activeSessions.size}`);
+          slog('info', `[remote] session opened — user: ${identity}  ip: ${ip}  active sessions: ${activeSessions.size}`);
 
           child.onData((data: string) => {
             channel.write(data);
@@ -264,7 +348,7 @@ export async function startRemoteServer(port: number): Promise<void> {
             channel.exit(exitCode);
             channel.end();
             auditLog({ event: 'shell-close', ip, ...authedAs, exitCode });
-            Logger.info(`[remote] session closed — user: ${identity}  ip: ${ip}  active sessions: ${activeSessions.size}`);
+            slog('info', `[remote] session closed — user: ${identity}  ip: ${ip}  active sessions: ${activeSessions.size}`);
           });
 
           channel.on('close', () => {
@@ -320,11 +404,14 @@ export async function startRemoteServer(port: number): Promise<void> {
           });
 
           const sess: ActiveSession = {
+            id: generateSessionId(),
             child,
             channel,
             ip,
             identity,
             keyFingerprint,
+            connectedAt: new Date(),
+            sessionType: 'exec',
             idleTimer: setTimeout(() => {}, 0),
           };
           registerSession(sess);
@@ -359,16 +446,16 @@ export async function startRemoteServer(port: number): Promise<void> {
     client.on('close', () => {
       if (authedAs) {
         auditLog({ event: 'disconnect', ip, ...authedAs });
-        Logger.info(`[remote] disconnected — user: ${authedAs.identity}  ip: ${ip}`);
+        slog('info', `[remote] disconnected — user: ${authedAs.identity}  ip: ${ip}`);
       } else {
-        Logger.info(`[remote] unauthenticated connection closed from ${ip}`);
+        slog('info', `[remote] unauthenticated connection closed from ${ip}`);
       }
     });
 
     // Kill the associated PTY on any client-level error so the process
     // doesn't linger after a network drop.
     client.on('error', (err) => {
-      Logger.error(`[remote] client error (${ip}): ${err.message}`);
+      slog('error', `[remote] client error (${ip}): ${err.message}`);
       for (const s of activeSessions) {
         if (s.ip === ip) {
           unregisterSession(s);
@@ -385,15 +472,17 @@ export async function startRemoteServer(port: number): Promise<void> {
   });
 
   const addr = server.address() as AddressInfo;
-  Logger.success(`dm remote server listening on ${BIND_ADDRESS}:${addr.port}`);
+  slog('success', `dm remote server listening on ${BIND_ADDRESS}:${addr.port}`);
 
   if (BIND_ADDRESS !== '127.0.0.1' && BIND_ADDRESS !== 'localhost') {
-    Logger.warn(`WARNING: server is bound to ${BIND_ADDRESS} — reachable beyond localhost. Ensure firewall rules restrict access.`);
+    slog('warn', `WARNING: server is bound to ${BIND_ADDRESS} — reachable beyond localhost. Ensure firewall rules restrict access.`);
   }
 
-  Logger.info(`Host key fingerprint: ${fingerprint}`);
-  Logger.info('Share this fingerprint with anyone connecting for the first time.');
-  Logger.info(`Max sessions: ${MAX_SESSIONS}  |  Idle timeout: ${IDLE_TIMEOUT_MS / 1000}s`);
+  slog('info', `Host key fingerprint: ${fingerprint}`);
+  slog('info', 'Share this fingerprint with anyone connecting for the first time.');
+  slog('info', `Max sessions: ${MAX_SESSIONS}  |  Idle timeout: ${IDLE_TIMEOUT_MS / 1000}s`);
+
+  serverEvents.emit('listening', BIND_ADDRESS, addr.port, fingerprint);
 
   // Keep alive — process is managed by PM2.
   await new Promise<void>(() => {});
