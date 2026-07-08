@@ -399,7 +399,7 @@ export async function fetchAppDetail(
           const routePath = r.path === '' ? '/' : r.path;
           let nginxLog: LogWindow | undefined;
           if (domain.lastPushedAt) {
-            const tailer = getTailer(domain, routePath, !!ssh);
+            const tailer = getTailer(domain, routePath, !!NGINX_REMOTE_HOST);
             if (doLogPoll) {
               await tailer.poll().catch(() => {});
             }

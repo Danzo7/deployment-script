@@ -28,6 +28,8 @@ export interface LogWindow {
   error?: string;
   /** True when the log exists but no $request_time field was found */
   noResponseTime?: boolean;
+  /** The log file path being tailed — useful for debugging */
+  logPath: string;
 }
 
 // ─── Log-format parsers ─────────────────────────────────────────────────────
@@ -103,7 +105,7 @@ function trimWindow(entries: LogEntry[]): LogEntry[] {
   return trimmed.length > MAX_ENTRIES ? trimmed.slice(-MAX_ENTRIES) : trimmed;
 }
 
-function computeWindow(entries: LogEntry[]): LogWindow {
+function computeWindow(entries: LogEntry[]): Omit<LogWindow, 'logPath'> {
   if (entries.length === 0) {
     return {
       entries: [],
@@ -292,7 +294,7 @@ export class NginxLogTailer {
   getWindow(): LogWindow {
     const w = computeWindow(this.entries);
     if (this.lastError) w.error = this.lastError;
-    return w;
+    return { ...w, logPath: this.logPath };
   }
 
   reset(): void {

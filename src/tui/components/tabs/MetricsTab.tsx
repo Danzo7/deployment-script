@@ -84,10 +84,13 @@ export function MetricsTab({ summary, detail, cpuHistory, memHistory, totalMemBy
                 )}
 
                 {domain.lastPushedAt && (!route.nginxLog || !route.nginxLog.hasData) && (
-                  <Box marginLeft={2}>
+                  <Box marginLeft={2} flexDirection="column">
                     {route.nginxLog?.error
-                      ? <Text dimColor>log unavailable — {truncate(route.nginxLog.error, DETAIL_W - 20)}</Text>
+                      ? <Text color="red">log error — {truncate(route.nginxLog.error, DETAIL_W - 14)}</Text>
                       : <Text dimColor>no requests recorded yet — metrics will appear once traffic flows</Text>}
+                    {route.nginxLog && (
+                      <Text dimColor>  path: {truncate(route.nginxLog.logPath, DETAIL_W - 10)}</Text>
+                    )}
                   </Box>
                 )}
 
