@@ -30,6 +30,7 @@ interface DashboardProps {
   /** PM2 bus log lines captured by launch-dashboard.tsx */
   logLines: string[];
   onAction: (action: DashboardAction) => void;
+  onClearLogs: () => void;
   onQuit: () => void;
 }
 
@@ -1057,8 +1058,9 @@ export function LogsTab({ logLines }: LogsTabProps): React.ReactElement {
 
   if (logLines.length === 0) {
     return (
-      <Box width={DETAIL_W}>
+      <Box width={DETAIL_W} flexDirection="column">
         <Text dimColor>No log output captured yet. Logs stream in as the app produces them.</Text>
+        <Text dimColor>Press X to clear logs.</Text>
       </Box>
     );
   }
@@ -1069,6 +1071,11 @@ export function LogsTab({ logLines }: LogsTabProps): React.ReactElement {
 
   return (
     <Box flexDirection="column" width={DETAIL_W}>
+      {/* Header showing total count */}
+      <Box flexDirection="row" justifyContent="space-between" width={DETAIL_W}>
+        <Text dimColor>{logLines.length} lines{logLines.length > maxVisible ? ` (showing last ${maxVisible})` : ''}</Text>
+        <Text dimColor>X clear</Text>
+      </Box>
       {parsed.map((entry, i) => {
         const tsText = entry.timestamp ? `${entry.timestamp} ` : '';
 
@@ -1414,6 +1421,7 @@ export function Keybar({ activeTab }: KeybarProps): React.ReactElement {
           <>
             <Hint label="f" desc="fullscreen" />
             <Hint label="/" desc="grep logs" />
+            <Hint label="X" desc="clear logs" />
             <Hint label="c" desc="copy line" />
           </>
         );
@@ -1867,6 +1875,8 @@ export function Dashboard(props: DashboardProps): React.ReactElement {
       if (selectedApp) props.onAction({ type: 'env', appName: selectedApp.app.name });
     } else if (input === 'L') {
       if (selectedApp) props.onAction({ type: 'logs', appName: selectedApp.app.name });
+    } else if (input === 'X' && tab === 'logs') {
+      props.onClearLogs();
     } else if (key.return && tab === 'deploys') {
       if (selectedApp) {
         const activeBuildIdx = selectedApp.app.builds?.findIndex(b => b === selectedApp.app.activeBuild) ?? -1;

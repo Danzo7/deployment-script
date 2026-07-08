@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { render, useApp } from 'ink';
-import { subscribeBus } from '../utils/pm2-helper.js';
+import { subscribeBus, readRecentLogs, openSharedPm2, closeSharedPm2 } from '../utils/pm2-helper.js';
 import { Dashboard, DashboardAction } from './Dashboard.js';
 import {
   refreshDashboard,
@@ -30,6 +30,13 @@ function DashboardApp() {
       // Cap at 500 lines
       return next.length > 500 ? next.slice(-500) : next;
     });
+  }, []);
+
+  // Load existing log file contents on mount
+  useEffect(() => {
+    readRecentLogs(300).then((lines) => {
+      if (lines.length > 0) setLogLines(lines);
+    }).catch(() => {});
   }, []);
 
   // Subscribe to PM2 bus for push-based log/event notifications
@@ -98,8 +105,13 @@ function DashboardApp() {
     };
   }, []);
   const handleQuit = useCallback(() => {
+    closeSharedPm2();
     disconnectSharedSsh();
     resetTailers();
+  }, []);
+
+  const handleClearLogs = useCallback(() => {
+    setLogLines([]);
   }, []);
 
   const handleAction = useCallback((action: DashboardAction) => {
@@ -115,6 +127,7 @@ function DashboardApp() {
       loading={loading}
       logLines={logLines}
       onAction={handleAction}
+      onClearLogs={handleClearLogs}
       onQuit={handleQuit}
     />
   );
@@ -126,11 +139,16 @@ export async function launchDashboard(): Promise<void> {
   pauseRepl();
   Logger.isMuted = true;
 
+  // Open persistent PM2 connection — shared by bus subscription and polling
+  try { await openSharedPm2(); } catch { /* dashboard will show pm2 unreachable */ }
+
   // Clear any pending action from previous run
   (globalThis as any).__pendingDashboardAction = undefined;
 
   const { waitUntilExit } = render(<DashboardApp />);
   await waitUntilExit();
+
+  closeSharedPm2();
   resumeRepl();
 
   Logger.isMuted = false;
