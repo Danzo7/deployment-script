@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { render, useApp } from 'ink';
-import { subscribeBus, readRecentLogs, openSharedPm2, closeSharedPm2 } from '../utils/pm2-helper.js';
+import { subscribeBus, readAppLogs, openSharedPm2, closeSharedPm2 } from '../utils/pm2-helper.js';
 import { Dashboard } from './Dashboard.js';
 import type { DashboardAction } from './Dashboard.js';
 import {
@@ -16,54 +16,52 @@ import { Logger } from '../utils/logger.js';
 import { pauseRepl, resumeRepl } from '../utils/repl-context.js';
 
 // ─── Polling cadences ─────────────────────────────────────────────────────────
-const LIST_POLL_MS    = 2_000;   // sidebar: app list + PM2 status
-const DETAIL_POLL_MS  = 5_000;   // detail pane: port, drift, nginx logs
-const GIT_FETCH_EVERY = 12;      // every 12 detail ticks ≈ 60 s
-const LOG_POLL_EVERY  = 2;       // every 2 detail ticks ≈ 10 s
+const LIST_POLL_MS    = 2_000;
+const DETAIL_POLL_MS  = 5_000;
+const GIT_FETCH_EVERY = 12;
+const LOG_POLL_EVERY  = 2;
+const MAX_LOG_LINES   = 500;
 
 function DashboardApp(): React.ReactElement {
   const { exit } = useApp();
 
-  const [globalState, setGlobalState]   = useState<GlobalState | null>(null);
-  const [appDetail, setAppDetail]       = useState<AppDetail | null>(null);
-  const [loading, setLoading]           = useState(true);
-  const [logLines, setLogLines]         = useState<string[]>([]);
+  const [globalState, setGlobalState] = useState<GlobalState | null>(null);
+  const [appDetail, setAppDetail]     = useState<AppDetail | null>(null);
+  const [loading, setLoading]         = useState(true);
+  const [logLines, setLogLines]       = useState<string[]>([]);
 
-  // Which app name the Dashboard is currently showing — set via onSelectApp callback
-  const selectedAppName = useRef<string | null>(null);
-  // Track the last app name we fetched detail for so we can invalidate immediately on switch
-  const lastDetailAppName = useRef<string | null>(null);
-  // Ref mirror of globalState so the detail loop always reads the latest value (avoids stale closure)
-  const globalStateRef = useRef<GlobalState | null>(null);
+  const selectedAppName    = useRef<string | null>(null);
+  const lastDetailAppName  = useRef<string | null>(null);
+  const globalStateRef     = useRef<GlobalState | null>(null);
+  const detailTickRef      = useRef(0);
 
-  const detailTickRef = useRef(0);
-
-  const addLog = useCallback((line: string) => {
-    setLogLines((prev) => {
-      const next = [...prev, line];
-      return next.length > 500 ? next.slice(-500) : next;
-    });
-  }, []);
-
-  // Load existing PM2 log file on mount
-  useEffect(() => {
-    readRecentLogs(300).then((lines) => {
-      if (lines.length > 0) setLogLines(lines);
-    }).catch(() => {});
-  }, []);
-
-  // PM2 bus — push-based log/event stream
+  // ── PM2 bus: realtime logs, filtered to selected app ─────────────────────
   useEffect(() => {
     let cleanup: (() => void) | null = null;
     let cancelled = false;
 
-    subscribeBus((packet) => {
+    subscribeBus((packet: any) => {
       if (cancelled) return;
-      const name = packet.process?.name ?? '';
-      if (packet.event === 'log:out') addLog(`[${name}] ${String(packet.data).trim()}`);
-      else if (packet.event === 'log:err') addLog(`[${name}][err] ${String(packet.data).trim()}`);
-      else if (packet.event === 'process:event') addLog(`[${name}] ← PM2: ${packet.data ?? ''}`);
-    }).then((c) => {
+      const name: string = packet.process?.name ?? '';
+      // Only keep lines for the currently selected app
+      if (name !== selectedAppName.current) return;
+
+      let line: string | null = null;
+      if (packet.event === 'log:out') {
+        line = `[${name}] ${String(packet.data).trim()}`;
+      } else if (packet.event === 'log:err') {
+        line = `[${name}][err] ${String(packet.data).trim()}`;
+      } else if (packet.event === 'process:event') {
+        line = `[${name}] ← PM2: ${packet.data ?? ''}`;
+      }
+
+      if (line) {
+        setLogLines((prev) => {
+          const next = [...prev, line!];
+          return next.length > MAX_LOG_LINES ? next.slice(-MAX_LOG_LINES) : next;
+        });
+      }
+    }).then((c: () => void) => {
       if (cancelled) { c(); return; }
       cleanup = c;
     }).catch(() => {});
@@ -85,7 +83,6 @@ function DashboardApp(): React.ReactElement {
           setLoading(false);
         }
       } catch { /* keep showing last state */ }
-
       if (alive) timer = setTimeout(tick, LIST_POLL_MS);
     };
 
@@ -100,18 +97,14 @@ function DashboardApp(): React.ReactElement {
 
     const tick = async () => {
       const appName = selectedAppName.current;
-      const currentGlobalState = globalStateRef.current;
+      const gs = globalStateRef.current;
 
-      if (!appName || !currentGlobalState) {
+      if (!appName || !gs) {
         if (alive) timer = setTimeout(tick, DETAIL_POLL_MS);
         return;
       }
 
-      // Find the summary for this app from the latest global state
-      const summary: AppSummary | undefined = currentGlobalState.summaries.find(
-        (s) => s.app.name === appName
-      );
-
+      const summary: AppSummary | undefined = gs.summaries.find((s) => s.app.name === appName);
       if (!summary) {
         if (alive) timer = setTimeout(tick, DETAIL_POLL_MS);
         return;
@@ -135,22 +128,46 @@ function DashboardApp(): React.ReactElement {
   }, []);
 
   const handleSelectApp = useCallback((appName: string | null) => {
-    if (appName !== lastDetailAppName.current) {
-      // Clear stale detail immediately when switching apps
-      setAppDetail(null);
-      lastDetailAppName.current = appName;
-      detailTickRef.current = 0; // reset so next tick does a git fetch + log seed
+    if (appName === lastDetailAppName.current) {
+      selectedAppName.current = appName;
+      return;
     }
+    // App changed — clear stale data and seed logs from file for instant content
+    setAppDetail(null);
+    setLogLines([]);
+    lastDetailAppName.current = appName;
+    detailTickRef.current = 0;
     selectedAppName.current = appName;
+
+    if (appName) {
+      readAppLogs(appName, 300).then((lines) => {
+        // Only apply if app hasn't changed again by the time this resolves
+        if (selectedAppName.current === appName) {
+          setLogLines(lines);
+        }
+      }).catch(() => {});
+    }
   }, []);
+
+  const handleLogsTabActive = useCallback((active: boolean) => {
+    // When switching to logs tab, seed from file immediately so there's something to see
+    if (active) {
+      const appName = selectedAppName.current;
+      if (appName) {
+        readAppLogs(appName, 300).then((lines) => {
+          if (selectedAppName.current === appName) setLogLines(lines);
+        }).catch(() => {});
+      }
+    }
+  }, []);
+
+  const handleClearLogs = useCallback(() => setLogLines([]), []);
 
   const handleQuit = useCallback(() => {
     closeSharedPm2();
     disconnectSharedSsh();
     resetTailers();
   }, []);
-
-  const handleClearLogs = useCallback(() => setLogLines([]), []);
 
   const handleAction = useCallback((action: DashboardAction) => {
     (globalThis as any).__pendingDashboardAction = action;
@@ -164,6 +181,7 @@ function DashboardApp(): React.ReactElement {
       loading={loading}
       logLines={logLines}
       onSelectApp={handleSelectApp}
+      onLogsTabActive={handleLogsTabActive}
       onAction={handleAction}
       onClearLogs={handleClearLogs}
       onQuit={handleQuit}

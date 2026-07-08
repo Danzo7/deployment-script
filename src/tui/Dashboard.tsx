@@ -42,6 +42,8 @@ interface DashboardProps {
   appDetail: AppDetail | null;
   loading: boolean;
   logLines: string[];
+  /** Called when logs tab becomes active or inactive */
+  onLogsTabActive: (active: boolean) => void;
   /** The name of the app the parent wants detail for (so it can fetch it) */
   onSelectApp: (appName: string | null) => void;
   onAction: (action: DashboardAction) => void;
@@ -120,6 +122,8 @@ export function Dashboard(props: DashboardProps): React.ReactElement {
     if (name !== prevSelectedName.current) {
       prevSelectedName.current = name;
       props.onSelectApp(name);
+      // If logs tab is open, notify so parent can reload logs for new app
+      if (tab === 'logs') props.onLogsTabActive(true);
     }
   }, [selectedSummary?.app.name]);
 
@@ -202,17 +206,37 @@ export function Dashboard(props: DashboardProps): React.ReactElement {
     } else if (key.downArrow || input === 'j') {
       if (tab === 'deploys') setDeployCursor((d) => Math.min((selectedSummary?.app.builds?.length ?? 1) - 1, d + 1));
       else setCursor((c) => Math.min(filteredSummaries.length - 1, c + 1));
-    } else if (key.tab || input === 'l') { setTab((t) => TABS[(TABS.indexOf(t) + 1) % TABS.length]); setTabScrollOffset(0); }
-    else if (input === 'h') { setTab((t) => TABS[(TABS.indexOf(t) - 1 + TABS.length) % TABS.length]); setTabScrollOffset(0); }
-    else if (key.pageUp) setTabScrollOffset((o) => o + Math.max(1, Math.floor(DETAIL_H / 2)));
-    else if (key.pageDown) setTabScrollOffset((o) => Math.max(0, o - Math.max(1, Math.floor(DETAIL_H / 2))));
-    else if (input === 'r') { if (selectedSummary) setActionMode('confirm-restart'); }
-    else if (input === 'S') { if (selectedSummary) setActionMode('confirm-stop'); }
-    else if (input === 'D') { if (selectedSummary) props.onAction({ type: 'deploy', appName: selectedSummary.app.name }); }
-    else if (input === 'E') { if (selectedSummary) props.onAction({ type: 'env', appName: selectedSummary.app.name }); }
-    else if (input === 'L') { if (selectedSummary) props.onAction({ type: 'logs', appName: selectedSummary.app.name }); }
-    else if (input === 'X' && tab === 'logs') props.onClearLogs();
-    else if (key.return && tab === 'deploys') {
+    } else if (key.tab || input === 'l') {
+      setTab((t) => {
+        const next = TABS[(TABS.indexOf(t) + 1) % TABS.length];
+        props.onLogsTabActive(next === 'logs');
+        return next;
+      });
+      setTabScrollOffset(0);
+    } else if (input === 'h') {
+      setTab((t) => {
+        const next = TABS[(TABS.indexOf(t) - 1 + TABS.length) % TABS.length];
+        props.onLogsTabActive(next === 'logs');
+        return next;
+      });
+      setTabScrollOffset(0);
+    } else if (key.pageUp) {
+      setTabScrollOffset((o) => o + Math.max(1, Math.floor(DETAIL_H / 2)));
+    } else if (key.pageDown) {
+      setTabScrollOffset((o) => Math.max(0, o - Math.max(1, Math.floor(DETAIL_H / 2))));
+    } else if (input === 'r') {
+      if (selectedSummary) setActionMode('confirm-restart');
+    } else if (input === 'S') {
+      if (selectedSummary) setActionMode('confirm-stop');
+    } else if (input === 'D') {
+      if (selectedSummary) props.onAction({ type: 'deploy', appName: selectedSummary.app.name });
+    } else if (input === 'E') {
+      if (selectedSummary) props.onAction({ type: 'env', appName: selectedSummary.app.name });
+    } else if (input === 'L') {
+      if (selectedSummary) props.onAction({ type: 'logs', appName: selectedSummary.app.name });
+    } else if (input === 'X' && tab === 'logs') {
+      props.onClearLogs();
+    } else if (key.return && tab === 'deploys') {
       if (selectedSummary) {
         const activeIdx = selectedSummary.app.builds?.findIndex((b) => b === selectedSummary.app.activeBuild) ?? -1;
         if (deployCursor !== activeIdx) setActionMode('confirm-rollback');
@@ -287,9 +311,7 @@ export function Dashboard(props: DashboardProps): React.ReactElement {
               )}
               {tab === 'logs' && (
                 <LogsTab
-                  logLines={props.logLines.filter((l) =>
-                    selectedSummary ? l.startsWith(`[${selectedSummary.app.name}]`) : true
-                  )}
+                  logLines={props.logLines}
                   scrollOffset={tabScrollOffset}
                   maxVisible={DETAIL_H}
                 />

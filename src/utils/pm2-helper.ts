@@ -325,3 +325,33 @@ export const readRecentLogs = (maxLines = 300): Promise<string[]> =>
       resolve(results);
     });
   }));
+
+/**
+ * Reads the last `maxLines` lines from a single app's PM2 log files.
+ * Returns formatted strings with `[appName]` and `[appName][err]` prefixes.
+ */
+export const readAppLogs = (appName: string, maxLines = 300): Promise<string[]> =>
+  withPm2(() => new Promise((resolve) => {
+    pm2.list((err, processList) => {
+      if (err || !processList) return resolve([]);
+      const proc = processList.find((p) => p.name === appName);
+      if (!proc) return resolve([]);
+      const env = proc.pm2_env as any;
+      const results: string[] = [];
+      for (const [logKey, tag] of [
+        ['pm_out_log_path', ''],
+        ['pm_err_log_path', '[err]'],
+      ] as const) {
+        const logPath: string | undefined = env?.[logKey];
+        if (!logPath) continue;
+        try {
+          if (!fs.existsSync(logPath)) continue;
+          const lines = fs.readFileSync(logPath, 'utf8').split('\n').filter(Boolean);
+          for (const line of lines.slice(-maxLines)) {
+            results.push(`[${appName}]${tag ? '[err]' : ''} ${line.trim()}`);
+          }
+        } catch { /* skip unreadable */ }
+      }
+      resolve(results);
+    });
+  }));
