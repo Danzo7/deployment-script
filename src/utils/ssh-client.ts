@@ -51,11 +51,10 @@ export function ensureClientKey(): string | undefined {
   fs.writeFileSync(pubPath, keys.public, { mode: 0o644 });
 
   Logger.success('SSH key generated successfully.');
-  Logger.info('Share the following public key with the server admin to get authorized:');
+  Logger.info('Share this public key with the server admin to get access:');
   console.log('');
   console.log(chalk.cyan(keys.public.trim()));
   console.log('');
-  Logger.info('Once authorized, run this command again to connect.');
   return undefined;
 }
 
@@ -167,10 +166,10 @@ export async function connectRemote(host: string, port?: number, identity?: stri
       })
       .on('error', (err: Error & { level?: string }) => {
         if (err.level === 'client-authentication') {
-          Logger.error('Authentication failed — your public key is not yet authorized on this server.');
-          Logger.info('Share your public key with the server admin and ask them to run: dm remote key-add');
+          Logger.error('Authentication failed — your public key has not been authorized on this server.');
           const pubPath = keyPath + '.pub';
           if (fs.existsSync(pubPath)) {
+            Logger.info('Share this public key with the server admin to get access:');
             console.log('');
             console.log(chalk.cyan(fs.readFileSync(pubPath, 'utf8').trim()));
             console.log('');
