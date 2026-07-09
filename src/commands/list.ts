@@ -4,11 +4,19 @@ import chalk from 'chalk';
 import { AppRepo } from '../db/repos.js';
 import { getAppStatus, openSharedPm2, closeSharedPm2 } from '../utils/pm2-helper.js';
 import { getAppRouteLines } from './domain.js';
+import { supportsUnicode } from '../utils/terminal-capabilities.js';
 
+/**
+ * Centralised display labels for project types.
+ * Emoji are gated behind supportsUnicode so legacy Windows consoles
+ * (conhost.exe, build < 17763) see clean plain-text fallbacks instead of
+ * blank boxes — emoji rendering is a hard OS-level limitation on those hosts
+ * and cannot be fixed via chcp or registry.
+ */
 const TYPE_MAP: Record<string, string> = {
-  nextjs: '⚡ Next.js',
-  nestjs: '🦁 NestJS',
-  dotnet: '🔷 .NET',
+  nextjs: supportsUnicode ? '⚡ Next.js' : 'Next.js',
+  nestjs: supportsUnicode ? '🦁 NestJS'  : 'NestJS',
+  dotnet: supportsUnicode ? '🔷 .NET'    : '.NET',
 };
 
 export const listApps = async (filterType?: string) => {

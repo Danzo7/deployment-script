@@ -1,13 +1,25 @@
 import chalk from 'chalk';
+import { supportsUnicode } from './terminal-capabilities.js';
+
+// Symbol fallbacks for legacy consoles that can't render Unicode/emoji.
+// On Windows Server 2016 / conhost build 14393, non-BMP glyphs render as
+// blank boxes — this is a hard OS limit, not fixable via chcp or registry.
+const SYM = {
+  info:    supportsUnicode ? 'ℹ' : 'i',
+  success: supportsUnicode ? '✔' : '+',
+  error:   supportsUnicode ? '✖' : 'x',
+  warn:    supportsUnicode ? '⚠' : '!',
+  advice:  supportsUnicode ? '💡' : '*',
+} as const;
 
 export class Logger {
   static isMuted = false;
   /**
-   * Logs an informational message in blue.
+   * Logs an informational message in gray.
    */
   static info(message?: any, ...optionalParams: any[]) {
     if (Logger.isMuted) return;
-    this.log(chalk.gray(`ℹ ${message}`), ...optionalParams);
+    this.log(chalk.gray(`${SYM.info} ${message}`), ...optionalParams);
     return this.nl();
   }
 
@@ -16,7 +28,7 @@ export class Logger {
    */
   static success(message?: any, ...optionalParams: any[]) {
     if (Logger.isMuted) return;
-    this.log(chalk.green(`✔ ${message}`), ...optionalParams);
+    this.log(chalk.green(`${SYM.success} ${message}`), ...optionalParams);
     return this.nl();
   }
 
@@ -25,7 +37,7 @@ export class Logger {
    */
   static error(message?: any, ...optionalParams: any[]) {
     if (Logger.isMuted) return;
-    this.log(chalk.red(`✖ ${message}`), ...optionalParams);
+    this.log(chalk.red(`${SYM.error} ${message}`), ...optionalParams);
     return this.nl();
   }
 
@@ -34,7 +46,7 @@ export class Logger {
    */
   static warn(message?: any, ...optionalParams: any[]) {
     if (Logger.isMuted) return;
-    this.log(chalk.yellow(`⚠ ${message}`), ...optionalParams);
+    this.log(chalk.yellow(`${SYM.warn} ${message}`), ...optionalParams);
     return this.nl();
   }
 
@@ -43,7 +55,7 @@ export class Logger {
    */
   static advice(message?: any, ...optionalParams: any[]) {
     if (Logger.isMuted) return;
-    this.log(chalk.italic.bold.whiteBright(`💡 ${message}`), ...optionalParams);
+    this.log(chalk.italic.bold.whiteBright(`${SYM.advice} ${message}`), ...optionalParams);
     return this.nl();
   }
 
@@ -92,7 +104,10 @@ export class Logger {
    * Returns the result of the operation.
    */
   static async spinner<T>(label: string, operation: () => Promise<T>): Promise<T> {
-    const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+    // Braille spinner frames require Unicode; fall back to ASCII on legacy consoles
+    const frames = supportsUnicode
+      ? ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+      : ['-', '\\', '|', '/'];
     let i = 0;
     const timestamp = chalk.gray(`[${new Date().toLocaleTimeString()}]`);
     const interval = setInterval(() => {
@@ -102,11 +117,11 @@ export class Logger {
     try {
       const result = await operation();
       clearInterval(interval);
-      process.stdout.write(`\r${timestamp} ${chalk.green('✔')} ${label}\n\n`);
+      process.stdout.write(`\r${timestamp} ${chalk.green(SYM.success)} ${label}\n\n`);
       return result;
     } catch (err) {
       clearInterval(interval);
-      process.stdout.write(`\r${timestamp} ${chalk.red('✖')} ${label}\n\n`);
+      process.stdout.write(`\r${timestamp} ${chalk.red(SYM.error)} ${label}\n\n`);
       throw err;
     }
   }

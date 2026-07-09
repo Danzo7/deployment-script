@@ -1,14 +1,15 @@
 import pm2 from 'pm2';
+import chalk from 'chalk';
 import { Logger } from '../utils/logger.js';
 
 const REFRESH_MS = 2000;
 
 const statusColor = (status: string) => {
   switch (status) {
-    case 'online': return `\x1b[32m${status}\x1b[0m`;     // green
-    case 'errored': return `\x1b[31m${status}\x1b[0m`;    // red
-    case 'stopped': return `\x1b[33m${status}\x1b[0m`;    // yellow
-    case 'stopping': return `\x1b[33m${status}\x1b[0m`;   // yellow
+    case 'online':   return chalk.green(status);
+    case 'errored':  return chalk.red(status);
+    case 'stopped':  return chalk.yellow(status);
+    case 'stopping': return chalk.yellow(status);
     default: return status;
   }
 };
@@ -29,7 +30,7 @@ const formatUptime = (pmUptime?: number) => {
 
 const renderTable = (list: pm2.ProcessDescription[]) => {
   process.stdout.write('\x1b[2J\x1b[H'); // clear screen
-  console.log('\x1b[1mPM2 Monitor\x1b[0m  (Ctrl+C to exit)\n');
+  console.log(`${chalk.bold('PM2 Monitor')}  (Ctrl+C to exit)\n`);
   console.log(
     'ID'.padEnd(5) +
     'Name'.padEnd(25) +
@@ -45,7 +46,8 @@ const renderTable = (list: pm2.ProcessDescription[]) => {
     const env = proc.pm2_env as any;
     const id = String(proc.pm_id ?? '').padEnd(5);
     const name = (proc.name ?? '').padEnd(25);
-    const status = statusColor(env?.status ?? 'unknown').padEnd(12 + 9); // +9 for ANSI escape chars
+    const rawStatus = (env?.status ?? 'unknown').padEnd(12);
+    const status = statusColor(rawStatus);
     const cpu = `${proc.monit?.cpu ?? 0}%`.padEnd(8);
     const mem = formatMem(proc.monit?.memory).padEnd(12);
     const uptime = formatUptime(env?.pm_uptime).padEnd(15);

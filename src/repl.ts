@@ -342,7 +342,12 @@ export async function startRepl(version: string): Promise<void> {
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
-      prompt: `\x01\x1b[36m\x02dm> \x01\x1b[39m\x02`,
+      // \x01 (SOH) and \x02 (STX) are readline zero-width markers used by
+      // bash/zsh to correctly compute cursor position around color sequences.
+      // Node.js readline does NOT use them — they print as literal garbage
+      // characters on legacy Windows conhost. Removed entirely; chalk handles
+      // color stripping automatically when the terminal doesn't support it.
+      prompt: `${chalk.cyan('dm>')} `,
       completer: (line: string) => {
         const hits = TOP_LEVEL_COMMANDS.filter((c) => c.startsWith(line));
         return [hits.length ? hits : TOP_LEVEL_COMMANDS, line];
