@@ -15,18 +15,18 @@ import chalk from 'chalk';
 import { Logger } from './logger.js';
 import { REMOTE_PORT } from '../constants.js';
 
-// Supported algorithm names → ~/.ssh key filenames.
-// Must stay in sync with ALGORITHM_KEY_MAP in dm-connect KeyManager.cs and dm-connect.ps1.
+// Allowed algorithm names → ~/.ssh key filenames.
+// Used only to validate an explicitly passed --identity algorithm.
+// Must stay in sync with ALGORITHM_KEY_MAP in dm-connect KeyManager.cs.
 const ALGORITHM_KEY_MAP: Record<string, string> = {
   ed25519:    'id_ed25519',
   ed25519_sk: 'id_ed25519_sk',  // FIDO2 ed25519 (e.g. YubiKey)
   ecdsa:      'id_ecdsa',
   ecdsa_sk:   'id_ecdsa_sk',    // FIDO2 ECDSA (e.g. YubiKey)
-  rsa:        'id_rsa',         // must be ≥ 4096 bits server-side
 };
 
-// Probe order when no algorithm is specified — strongest first.
-const FALLBACK_KEY_NAMES = Object.values(ALGORITHM_KEY_MAP);
+// Default key — always used when no algorithm is specified.
+const DEFAULT_KEY_NAME = 'id_ed25519';
 
 // ── SSH availability check ────────────────────────────────────────────────────
 
@@ -53,22 +53,23 @@ function assertSshAvailable(): void {
 // ── Client key resolution ─────────────────────────────────────────────────────
 
 /**
- * Resolves the private key path for the given algorithm, or probes common key
- * locations in order (ed25519 first). Offers to generate a new ed25519 key
- * pair via ssh-keygen if none is found.
+ * Resolves the private key path to use for connecting.
+ * - No algorithm → always uses ~/.ssh/id_ed25519, generates it if missing.
+ * - Algorithm provided → must be in the allowed list (ALGORITHM_KEY_MAP),
+ *   errors if the key file doesn't exist (no auto-generate for explicit keys).
  *
- * @param algorithm  Optional: ed25519 | ed25519_sk | ecdsa | ecdsa_sk | rsa
- * @returns Path to the private key to use, or undefined if the user declined
- *          key generation (caller should exit).
+ * @param algorithm  Optional: ed25519 | ed25519_sk | ecdsa | ecdsa_sk
+ * @returns Path to the private key, or undefined if the user declined generation.
  */
 export async function ensureClientKey(algorithm?: string): Promise<string | undefined> {
   const sshDir = join(homedir(), '.ssh');
 
   if (algorithm) {
+    // Validate the algorithm is in the allowed list.
     const filename = ALGORITHM_KEY_MAP[algorithm.toLowerCase()];
     if (!filename) {
       Logger.error(
-        `Unknown algorithm "${algorithm}". Supported: ${Object.keys(ALGORITHM_KEY_MAP).join(', ')}`
+        `Unknown algorithm "${algorithm}". Allowed: ${Object.keys(ALGORITHM_KEY_MAP).join(', ')}`
       );
       process.exit(1);
     }
@@ -80,22 +81,17 @@ export async function ensureClientKey(algorithm?: string): Promise<string | unde
     process.exit(1);
   }
 
-  // No algorithm — probe all supported locations in order.
-  for (const filename of FALLBACK_KEY_NAMES) {
-    const keyPath = join(sshDir, filename);
-    if (fs.existsSync(keyPath) && fs.existsSync(keyPath + '.pub')) {
-      Logger.info(`Using existing key: ${keyPath}`);
-      return keyPath;
-    }
+  // No algorithm — use the default key, generate if missing.
+  const defaultPath = join(sshDir, DEFAULT_KEY_NAME);
+
+  if (fs.existsSync(defaultPath)) {
+    Logger.info(`Using key: ${defaultPath}`);
+    return defaultPath;
   }
 
-  // Nothing found — offer to generate ed25519 via ssh-keygen.
-  const defaultPath = join(sshDir, 'id_ed25519');
+  // Default key not found — offer to generate it.
   console.log('');
-  Logger.warn('No SSH key found in ~/.ssh.');
-  console.log('');
-  console.log(chalk.white(`  Supported algorithms: ${Object.keys(ALGORITHM_KEY_MAP).join(', ')}`));
-  console.log(chalk.white('  No existing key was found for any of them.'));
+  Logger.warn(`No key found at ${defaultPath}.`);
   console.log('');
 
   const confirmed = await new Promise<boolean>((resolve) => {
