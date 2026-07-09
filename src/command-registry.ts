@@ -563,9 +563,9 @@ export const COMMANDS: Record<string, CommandNode> = {
         positionals: [{ name: 'name', demandOption: true, describe: 'The domain name' }],
         handler: async ({ name }) => { await domainRemoveCert(name); },
       },
-      'reload-certs': {
+      'reload-cert': {
         kind: 'leaf',
-        usage: 'reload-certs [name]',
+        usage: 'reload-cert [name]',
         describe: 'Reload certificates from disk for all domains or a specific domain',
         group: 'Domain',
         positionals: [{ name: 'name', describe: 'The domain name (omit to reload all domains)' }],
@@ -748,12 +748,12 @@ export const COMMANDS: Record<string, CommandNode> = {
         usage: 'remove <username>',
         describe: 'Revoke an authorized public key by username',
         group: 'Remote',
-        positionals: [{ name: 'username', demandOption: true, describe: 'The username whose key should be revoked (see "dm remote key-list")' }],
+        positionals: [{ name: 'username', demandOption: true, describe: 'The username whose key should be revoked (see "dm remote list")' }],
         handler: async ({ username }) => { await remoteKeyRemove(username); },
       },
-      'key-list': {
+      list: {
         kind: 'leaf',
-        usage: 'key-list',
+        usage: 'list',
         describe: 'List all authorized public keys',
         group: 'Remote',
         handler: async () => { await remoteKeyList(); },
