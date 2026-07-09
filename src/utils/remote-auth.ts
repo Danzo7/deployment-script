@@ -100,13 +100,35 @@ export function addAuthorizedKey(keyOrPath: string, username?: string): Authoriz
 
   // For RSA keys, enforce minimum bit length.
   if (keyType === 'ssh-rsa') {
-    // ssh2's ParsedKey exposes the modulus buffer at parsed.n (node-forge style).
-    const modulus: Buffer | undefined = (parsed as any).n;
-    if (!modulus) {
+    // Extract the modulus from the raw SSH wire format.
+    // OpenSSH RSA public key wire format: 4-byte length prefix + "ssh-rsa",
+    // then 4-byte length + public exponent, then 4-byte length + modulus.
+    let bitLength = 0;
+    try {
+      const buf = parsed.getPublicSSH();
+      let offset = 0;
+      const readUint32 = () => {
+        const v = buf.readUInt32BE(offset);
+        offset += 4;
+        return v;
+      };
+      // Skip key type string ("ssh-rsa")
+      const typeLen = readUint32();
+      offset += typeLen;
+      // Skip public exponent
+      const expLen = readUint32();
+      offset += expLen;
+      // Read modulus
+      const modLen = readUint32();
+      const modulus = buf.slice(offset, offset + modLen);
+      // First byte may be a leading 0x00 padding byte (sign bit), skip it
+      const effectiveStart = modulus[0] === 0 ? 1 : 0;
+      const effectiveLen = modLen - effectiveStart;
+      const firstByte = modulus[effectiveStart];
+      bitLength = effectiveLen * 8 - (firstByte === 0 ? 8 : Math.clz32(firstByte) - 24);
+    } catch {
       throw new Error('Could not determine RSA key size. Provide an ed25519 or ECDSA key instead.');
     }
-    // Bit length = byte length × 8, minus leading zero bits in the first byte.
-    const bitLength = (modulus.length - 1) * 8 + (8 - Math.clz32(modulus[0]));
     if (bitLength < RSA_MIN_BITS) {
       throw new Error(
         `RSA key is ${bitLength} bits. Minimum accepted size is ${RSA_MIN_BITS} bits. Use an ed25519 key for best security.`
