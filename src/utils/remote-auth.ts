@@ -173,11 +173,10 @@ export function removeAuthorizedKeyByUsername(username: string): boolean {
   return true;
 }
 
-/** Used during SSH publickey auth — matches on raw SSH wire bytes. */
+/** Used during SSH publickey auth — matches on SHA-256 fingerprint of the offered key. */
 export function findAuthorizedKeyByPublicSSH(publicSSH: Buffer): AuthorizedKey | undefined {
-  return parseAuthorizedKeysFile().find(
-    (k) => Buffer.compare(k.parsed.getPublicSSH(), publicSSH) === 0
-  );
+  const offeredFp = computeFingerprint(publicSSH);
+  return parseAuthorizedKeysFile().find((k) => k.fingerprint === offeredFp);
 }
 
 // ── Login throttling ─────────────────────────────────────────────────────────
