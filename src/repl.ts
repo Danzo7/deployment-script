@@ -326,7 +326,8 @@ function auditCommand(line: string): void {
 // ─── REPL entry point ─────────────────────────────────────────────────────────
 export async function startRepl(version: string): Promise<void> {
   await ensureAppDirectories();
-
+  
+  process.stdout.write('\x1b[2J\x1b[H');
   console.log(chalk.bold(`\nDeployment Manager v${version}`));
   console.log(chalk.gray('Type "help" for available commands.\n'));
 
