@@ -1,1046 +1,560 @@
-# Deployment Manager (dm)
+# dm — Deployment Manager
 
-A CLI tool for managing the full lifecycle of **Next.js**, **NestJS**, **.NET Core**, and **static site** applications — from initialization and deployment to process management, reverse proxy configuration, and SSL. Built on PM2 and supports Git, SVN, and local folder sources.
-
-**Version 2.0+**: Now powered by Drizzle ORM with SQLite/PostgreSQL support for better performance and reliability.
+A CLI + interactive shell for deploying and managing Next.js, NestJS, .NET, and static applications on a server using PM2. Includes an nginx reverse-proxy management layer, a full-featured TUI dashboard, and a built-in SSH remote access server.
 
 ---
 
 ## Table of Contents
 
+- [Requirements](#requirements)
 - [Installation](#installation)
-- [Database Migration](#database-migration)
-- [Configuration](#configuration)
-- [Core Concepts](#core-concepts)
-- [Application Lifecycle](#application-lifecycle)
-  - [init](#dm-init-name)
-  - [deploy](#dm-deploy-name)
-  - [update](#dm-update)
-  - [rollback](#dm-rollback-name)
-  - [delete](#dm-delete-name-secret)
-- [Process Management](#process-management)
-  - [start-all](#dm-start-all)
-  - [stop-all](#dm-stop-all)
-  - [stop](#dm-stop-name)
-  - [restart](#dm-restart-name)
-  - [list](#dm-list)
-  - [info](#dm-info-name)
-  - [logs](#dm-logs-name)
-  - [monit](#dm-monit)
-- [Environment Variables](#environment-variables)
-  - [set-env](#dm-set-env-name-varvalue)
-- [Storage Volumes](#storage-volumes)
-  - [storage new](#dm-storage-new-name-link-name)
-  - [storage attach](#dm-storage-attach-app-storage)
-  - [storage detach](#dm-storage-detach-app-storage)
-  - [storage rm](#dm-storage-rm-name)
-  - [storage ls](#dm-storage-ls)
-- [Domains and Reverse Proxy](#domains-and-reverse-proxy)
-  - [domain add](#dm-domain-add-name)
-  - [domain remove](#dm-domain-remove-name)
-  - [domain list](#dm-domain-list)
-  - [domain show](#dm-domain-show-name)
-  - [domain set-header](#dm-domain-set-header-name)
-  - [domain remove-header](#dm-domain-remove-header-name)
-  - [domain compile](#dm-domain-compile-name)
-  - [domain show-config](#dm-domain-show-config-name)
-  - [domain push](#dm-domain-push-name)
-- [SSL Certificates](#ssl-certificates)
-  - [domain set-cert](#dm-domain-set-cert-name)
-  - [domain cert-status](#dm-domain-cert-status-name)
-  - [domain remove-cert](#dm-domain-remove-cert-name)
-  - [domain reload-certs](#dm-domain-reload-certs-name)
-- [Routes](#routes)
-  - [route add](#dm-route-add-appname-domainname)
-  - [route remove](#dm-route-remove-domainname)
-  - [route list](#dm-route-list-domainname)
-  - [route set-header](#dm-route-set-header-domainname)
-  - [route remove-header](#dm-route-remove-header-domainname)
-- [Maintenance](#maintenance)
-  - [clean](#dm-clean-name)
-  - [clean-all](#dm-clean-all)
-  - [unlock](#dm-unlock-name)
-- [Remote Access](#remote-access)
-  - [dm --host](#dm---host-ip)
-  - [remote serve](#dm-remote-serve)
-  - [remote key-add](#dm-remote-key-add)
-  - [remote key-remove](#dm-remote-key-remove)
-  - [remote key-list](#dm-remote-key-list)
-  - [remote status](#dm-remote-status)
-- [Remote Access Security](#remote-access-security)
-- [Monorepo Support](#monorepo-support)
-- [How It Works](#how-it-works)
+- [Project types](#project-types)
+- [Interactive shell (REPL)](#interactive-shell-repl)
+- [App lifecycle](#app-lifecycle)
+- [Environment variables (app env)](#environment-variables-app-env)
+- [Persistent storage](#persistent-storage)
+- [Nginx & reverse proxy](#nginx--reverse-proxy)
+- [TUI Dashboard](#tui-dashboard)
+- [Remote access (dm remote)](#remote-access-dm-remote)
+- [dm-connect (Windows client)](#dm-connect-windows-client)
+- [Monitoring & logs](#monitoring--logs)
+- [Utilities](#utilities)
+- [Configuration reference](#configuration-reference)
+- [Database](#database)
+
+---
+
+## Requirements
+
+| Concern | Requirement |
+|---|---|
+| Runtime (server) | Node.js 18+ |
+| Process manager | PM2 (global) |
+| Version control | git, svn, or a local folder path |
+| Nginx (reverse proxy) | Linux machine with nginx installed and sudo access |
+| .NET apps | .NET 8 SDK on the build machine |
+| Remote SSH client | OpenSSH client (`ssh` on PATH) |
+| PFX cert extraction | `openssl` on PATH |
+
+Nginx operations require Linux. dm can be installed on any OS for app management (deploy, env, logs, etc.), but `domain push` only succeeds when nginx is reachable — either locally on Linux, or via a remote Linux host over SSH.
 
 ---
 
 ## Installation
 
 ```bash
-git clone <repository-url>
-cd deployment-manager
-npm install
-npm run build
-npm link
+npm install -g deployment-manager
 ```
 
-After linking, `dm` is available globally.
+Copy `.env.example` to `.env` in the dm root and edit as needed before use.
 
 ---
 
-## Database Migration
+## Project types
 
-**⚠️ Important for v1.x users**: Version 2.0 migrates from JSON-based storage to SQL databases (SQLite/PostgreSQL).
+| Type | Build tool | PM2 mode | Entry point |
+|---|---|---|---|
+| `nextjs` | npm run build | cluster | next start |
+| `nestjs` | npm run build | cluster | dist/main.js |
+| `dotnet` | dotnet publish | fork | dotnet \<app\>.dll |
+| `static` | none | fork | sirv (built-in static file server) |
 
-### First-Time Setup (New Users)
+Static apps must have pre-built files committed to the repo. A `package.json` with a build step is not supported for the static type.
 
-No action needed! The database will be created automatically on first use.
+---
 
-### Upgrading from v1.x
+## Interactive shell (REPL)
 
-If you have existing apps, run the migration command:
+Running `dm` with no arguments starts an interactive shell with tab-completion, command history, and inline help.
 
-```bash
-dm migrate-db
+```
+$ dm
+dm> help
+dm> deploy my-app
+dm> set-env my-app
+dm> logs my-app
 ```
 
-This will:
-- Automatically backup your `db.json` to `db.json.backup-<timestamp>`
-- Migrate all apps, storages, domains, and routes to the new database
-- Show migration statistics
+All commands are available in both the CLI (`dm <command>`) and the REPL, except commands marked `cliOnly` (delete, migrate-db, change-repo, install-service, update).
+
+Inside a remote SSH session the env var `DM_REMOTE_USER` is set, and these additional commands are blocked: `remote`, `update`, `install-service`, `migrate-db`. Every command typed in a remote session is written to the audit log.
+
+When a TUI takes over the terminal (dashboard, set-env editor, header editor), the REPL suspends its readline interface, waits for the TUI to exit, then resumes cleanly.
 
 ---
 
-## Configuration
+## App lifecycle
 
-`dm` reads a `.env` file from its own root directory. All settings have sensible defaults but can be overridden:
-
-| Variable | Default | Description |
-|---|---|---|
-| `APP_DIR` | `.applications` | Root directory for all app data |
-| `NEXT_DIR` | same as `APP_DIR` | Directory for Next.js apps |
-| `NEST_DIR` | same as `APP_DIR` | Directory for NestJS apps |
-| `DOTNET_DIR` | same as `APP_DIR` | Directory for .NET apps |
-| `STORAGE_DIR` | `APP_DIR/storages` | Persistent storage volumes root |
-| `DOMAINS_DIR` | `.domains` | Output directory for compiled Nginx configs |
-| `PROXY_TARGET_HOST` | `127.0.0.1` | Host used in nginx `proxy_pass` directives |
-| `NGINX_REMOTE_HOST` | — | Remote host for domain push (user@host format) |
-| `NGINX_REMOTE_KEY` | — | SSH private key path for remote pushes |
-| `NGINX_REMOTE_PASSWORD` | — | SSH password for remote pushes (takes priority over key) |
-| `PUSH_CERT_DIR` | `/etc/nginx/ssl` (remote) | Target directory for SSL certificates on push |
-| `SECRET_KEY` | — | Required for `dm delete` |
-
----
-
-## Core Concepts
-
-- **App** — A registered application with a name, repo, branch, port, and type.
-- **Build** — A timestamped snapshot of a compiled release. Multiple builds are kept for rollback.
-- **Active Build** — The build currently serving traffic. Rollback switches the active build.
-- **Storage** — A persistent named directory that lives outside builds and is symlinked into every new build automatically.
-- **Domain** — A hostname registered for reverse proxying with compiled Nginx configuration.
-- **Route** — A mapping from a domain path to an app (e.g., `example.com/api` → `my-api`).
-- **Push** — Deployment of a compiled domain config to a live Nginx installation (local or remote).
-- **Stale Config** — A domain that has been recompiled since its last push, indicating the live Nginx config may be out of date.
-- **Lock** — A per-app file lock that prevents concurrent operations on the same app.
-
----
-
-## Application Lifecycle
-
-### `dm init <name>`
-
-Register a new application. This does not deploy — it records the app configuration and prepares directories.
+### init
 
 ```bash
 dm init <name> --repo <url> [options]
 ```
 
-| Option | Alias | Default | Description |
-|---|---|---|---|
-| `--repo` | `-r` | required | Git/SVN repository URL or local folder path |
-| `--branch` | `-b` | `main` | Branch to deploy from (or SVN path like `trunk`, `branches/x`). Not used for local sources. |
-| `--instances` | `-i` | `1` | Number of PM2 cluster workers |
-| `--port` | `-p` | auto | Port number (auto-assigned from 50xxx range if omitted) |
-| `--type` | `-t` | `nextjs` | App type: `nextjs`, `nestjs`, `dotnet`, or `static` |
-| `--project-dir` | `-d` | — | Subdirectory within the repo (for monorepos) |
-| `--vcs` | — | `git` | Version control: `git`, `svn`, or `local` |
+Registers a new application and records it in the database. Does not deploy — run `dm deploy <name>` afterwards.
 
-```bash
-# Basic Next.js app
-dm init my-app --repo https://github.com/org/my-app --branch main
+| Option | Default | Description |
+|---|---|---|
+| `--repo, -r` | required | Repository URL (git/svn) or local folder path |
+| `--branch, -b` | main | Branch to track |
+| `--instances, -i` | 1 | PM2 cluster instances |
+| `--port, -p` | auto | Port; auto-discovered if omitted |
+| `--type, -t` | nextjs | nextjs, nestjs, dotnet, static |
+| `--project-dir, -d` | — | Subdirectory within repo (monorepo) |
+| `--vcs` | git | git, svn, or local |
 
-# NestJS with explicit port and instances
-dm init my-api --repo https://github.com/org/my-api --type nestjs --port 3001 --instances 2
-
-# .NET app
-dm init my-dotnet-api --repo https://github.com/org/dotnet-app --type dotnet
-
-# SVN repository
-dm init legacy-app --repo https://svn.example.com/repo --branch trunk --vcs svn
-
-# Local folder source
-dm init my-local-app --repo /path/to/local/folder --vcs local --type nextjs
-
-# Static site from a Git repo
-dm init my-static --repo https://github.com/org/static-site --type static
-
-# Static site from a local folder
-dm init my-static --repo /path/to/dist --vcs local --type static
-```
-
-After init, run `dm deploy <name>` to perform the first deployment.
-
----
-
-### `dm deploy <name>`
-
-Pull latest changes, install dependencies, build, and start or restart the app via PM2.
+### deploy
 
 ```bash
 dm deploy <name> [--force] [--lint]
 ```
 
-| Option | Alias | Default | Description |
-|---|---|---|---|
-| `--force` | `-f` | `false` | Force full redeploy even if nothing changed |
-| `--lint` | `-l` | `false` | Run ESLint and push any auto-fixes before deploying |
+The deploy pipeline runs these steps in order:
 
-**Smart change detection** — deploy exits early (no rebuild) if the git commit hash, environment variables, and app settings are all unchanged and the app is already running. Use `--force` to bypass this.
+1. Acquires a per-app file lock (blocks concurrent operations on the same app)
+2. Pulls latest code via git/svn or copies from local folder
+3. Detects whether anything changed — git commit hash, env file hash, .NET appsettings hash. If nothing changed and the app is running, exits early unless `--force` is set
+4. Copies env file from the app's persistent env directory into the release
+5. Runs the build: `npm install` + `npm run build` (Next.js/NestJS), `dotnet publish` (.NET), nothing (static)
+6. Creates a timestamped build snapshot directory (`builds/build-YYYYMMDD-HHmmss/`) and symlinks any attached storage volumes into it
+7. Starts or restarts the app in PM2 with the correct entry point, PORT env var, and exec mode
+8. Records the deployment metadata (commit hash, build path, timestamp) in the database
+9. Prunes all but the 3 most recent builds in the background
+10. Releases the lock
 
-**What deploy does:**
-
-1. Syncs source: clones/pulls for Git, `svn update` for SVN, or copies the local folder for `--vcs local`
-2. Detects changes (git hash / SVN revision / folder mtime, env vars, appsettings)
-3. For Next.js / NestJS: runs `npm install` and `npm run build`
-4. For .NET: runs `dotnet restore` and `dotnet publish -c Release`
-5. For static: no build step — files are served as-is
-6. Creates a timestamped build snapshot
-7. Symlinks attached storage volumes into the new build
-8. Starts or restarts the app via PM2
-9. Records the deployed revision and build path
+### restart / stop / rollback
 
 ```bash
-dm deploy my-app
-dm deploy my-app --force
-dm deploy my-app --lint
+dm restart <name>
+dm stop <name>
+dm rollback <name> [--to <build-index>]
 ```
 
----
+`rollback` re-points PM2 at a previous build directory without rebuilding. Use `--to <n>` to target a specific build index (visible in the Deploys tab). Defaults to the previous build.
 
-### `dm update`
-
-Update the `dm` tool itself. Pulls latest changes from its own git repo and rebuilds if source files or `package.json` changed.
-
-```bash
-dm update
-```
-
----
-
-### `dm rollback <name>`
-
-Roll back an application to a previous build.
-
-```bash
-dm rollback <name> [--to <index>]
-```
-
-Running without `--to` lists all available builds and rolls back to the previous one. Use `--to <index>` to target a specific build.
-
-```bash
-# Roll back to the previous build
-dm rollback my-app
-
-# Roll back to a specific build index shown in the list
-dm rollback my-app --to 2
-```
-
-The rollback switches the active build pointer, reapplies storage symlinks, and restarts the PM2 process.
-
----
-
-### `dm delete <name> <secret>`
-
-Permanently remove an application. Stops the PM2 process, deletes the app directory, and removes it from the database.
-
-```bash
-dm delete my-app <secret>
-```
-
-Requires the `SECRET_KEY` environment variable to be set. The `<secret>` argument must match it.
-
----
-
-## Process Management
-
-### `dm start-all`
-
-Start all registered applications that are not currently running, using their last known active build.
+### start-all / stop-all
 
 ```bash
 dm start-all
-```
-
----
-
-### `dm stop-all`
-
-Stop all running applications.
-
-```bash
 dm stop-all
 ```
 
----
+Iterates all registered applications and starts or stops each one.
 
-### `dm stop <name>`
-
-Stop a single running application without removing it.
+### delete
 
 ```bash
-dm stop my-app
+dm delete <name> <secret>
 ```
 
+CLI-only. Permanently removes an app and its files. Requires the `SECRET_KEY` value from your `.env` as confirmation.
+
 ---
 
-### `dm restart <name>`
+## Environment variables (app env)
 
-Restart an application using its current active build.
+Each app has a persistent env directory that survives across deployments. On every deploy, dm compares the hash of the env file against the one copied into the last build. If they differ, the env file is written into the new build and a rebuild is triggered even if no code changed.
 
 ```bash
-dm restart my-app
+dm set-env <name>
 ```
 
+Opens a full-screen interactive TUI editor:
+
+- `↑↓` to navigate rows
+- `enter` to edit a value inline
+- `n` to add a new variable (prompts for key, then value)
+- `d` to mark a row deleted
+- `u` to undo a pending change
+- `s` to review and save
+- `q` to quit (asks for confirmation if there are unsaved changes)
+
+Modified rows are highlighted yellow, new rows green, deleted rows strikethrough. After saving, dm reminds you to run `dm deploy <name>` to apply changes.
+
+The env file is stored at `<APP_DIR>/<name>/env/.env.local` (Next.js) or `.env` (NestJS/.NET).
+
 ---
 
-### `dm list`
+## Persistent storage
 
-Display all registered apps in a table: name, port, status, type, branch, and last deploy time.
+Storage volumes are directories that survive deployments. On each deploy, dm symlinks them into the new build directory.
 
 ```bash
-dm list
+dm storage new <name> [link-name]   # create a storage volume
+dm storage attach <app> <storage>   # link storage to an app
+dm storage detach <app> <storage>   # unlink (data is kept)
+dm storage rm <name>                # delete the storage directory
+dm storage ls                       # list all storages
 ```
 
+`link-name` is the symlink name inside the build directory. Defaults to `name`.
+
 ---
 
-### `dm info <name>`
+## Nginx & reverse proxy
 
-Show comprehensive details about an application:
+dm manages nginx configuration as code. You define domains and routes, dm compiles the nginx config, and you push it to nginx (local or remote). All header configuration, SSL, and routing is stored in the database.
 
-- Port, status, type, branch, directory
-- PM2 details: memory usage, uptime, restart count, script path
-- Last deployed commit: hash, message, author, date
-- Build history with the active build highlighted
-- Attached storage volumes with disk usage
-- Configured routes (domain + path + SSL status)
+### Domains
 
 ```bash
-dm info my-app
+dm domain add <name>           # register a domain (e.g. example.com)
+dm domain remove <name>        # remove domain (--force cascades to all routes)
+dm domain list
+dm domain show <name>
 ```
 
----
+### Routes
 
-### `dm logs <name>`
-
-Stream live PM2 logs (stdout and stderr) for an application. Press `Ctrl+C` to stop.
+A route maps a domain + path to an application.
 
 ```bash
-dm logs my-app
+dm route add <appName> <domainName> [--location <path>]
+dm route remove <domainName> [--location <path>]
+dm route list <domainName>
 ```
 
----
+`--location` is the URL path without a leading slash (e.g. `api`, `admin/panel`). Omit for root `/`. Use `--force` to route an app that is already routed elsewhere.
 
-### `dm monit`
+### HTTP response headers
 
-Open the PM2 monitoring dashboard showing CPU, memory, status, and restart count for all apps.
+dm uses a three-layer merge for `add_header` directives in every location block:
+
+| Layer | Source | Priority |
+|---|---|---|
+| 1 | Built-in defaults: `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` (+ HSTS when SSL enabled) | lowest |
+| 2 | Domain-level headers — `dm domain set-header` | middle |
+| 3 | Route-level headers — `dm route set-header` | highest |
+
+Route headers override domain headers which override the defaults. Collision resolution is case-insensitive (per HTTP spec); the winning layer's original key casing is preserved.
+
+The proxy headers (`Host`, `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Host`) are always emitted as `proxy_set_header` directives and are not user-modifiable.
 
 ```bash
+dm domain set-header <name>                              # interactive TUI editor
+dm domain remove-header <name> --key <header>
+
+dm route set-header <domainName> [--location <path>]     # interactive TUI editor
+dm route remove-header <domainName> [--location <path>] --key <header>
+```
+
+`set-header` opens the same interactive TUI editor as `set-env`: navigate with arrow keys, edit with enter, add with `n`, delete with `d`, undo with `u`, save with `s`. After editing, run `dm domain push <name>` to apply.
+
+### SSL certificates
+
+```bash
+dm domain set-cert <name> --cert <cert.pem> --key <key.pem>
+dm domain set-cert <name> --pfx <bundle.pfx> --password <pass>
+dm domain cert-status <name>
+dm domain remove-cert <name>
+dm domain reload-cert [name]
+```
+
+Two certificate formats are accepted:
+
+**PEM:** provide `--cert` and `--key` as paths (any file extension).
+
+**PFX/PKCS#12:** provide `--pfx` and `--password`. dm extracts the certificate and key by shelling out to the system `openssl` binary. The PFX password is written to a temp file (never passed as a CLI argument) to avoid exposure in process listings. Both modern (AES-256) and legacy-encrypted (RC2/3DES) PFX bundles are supported via automatic provider fallback.
+
+On upload, dm validates:
+- Certificate is not expired
+- Private key matches the certificate public key
+- Certificate covers the domain (exact DNS SAN or single-level wildcard `*.parent`)
+
+Use `--force` to skip the domain coverage check.
+
+Certs are stored under `<DOMAINS_DIR>/<domain>/ssl/` with the private key chmod `0600`. `reload-cert` synchronizes certificate metadata in the database from disk without deleting any files.
+
+### Pushing config to nginx
+
+```bash
+dm domain compile <name>       # compile config to disk, no push
+dm domain show-config <name>   # preview compiled config without writing
+dm domain push <name>          # compile, write, validate, reload nginx
+```
+
+The compiled config includes:
+- HTTP → HTTPS redirect when SSL is configured
+- HTTPS server block with TLS directives
+- One `location` block per registered route with `proxy_pass` to `localhost:<port>` (or `PROXY_TARGET_HOST:<port>`)
+- Structured JSON access logging (`dm_json` log format) per route
+- WebSocket headers for Next.js routes
+- `www` → apex redirect block if `www.<domain>` is not separately registered
+
+The push is atomic: dm snapshots the current nginx config and certs before writing anything. If `sudo nginx -t` or `sudo nginx -s reload` fails, the snapshot is restored.
+
+The `dm_json` log format snippet is written once to `/etc/nginx/conf.d/dm_log_format.conf` and reused by all domain configs. It produces JSON access logs with: `ts`, `method`, `uri`, `status`, `bytes`, `rt` (response time ms), `addr`.
+
+### Remote nginx push
+
+If `NGINX_REMOTE_HOST` is set, `dm domain push` connects to a remote Linux machine via SSH and performs all operations there instead of locally:
+
+1. Compiles config and rewrites cert paths to the target directory on the remote (default `/etc/nginx/ssl` or `PUSH_CERT_DIR`)
+2. Transfers config via SFTP to `/tmp/`, then `sudo mv` to `/etc/nginx/sites-available/`
+3. Transfers cert + key via SFTP, then `sudo mv` to target cert dir
+4. Creates symlink in `/etc/nginx/sites-enabled/`
+5. Writes the `dm_json` log format snippet
+6. Runs `sudo nginx -t` and `sudo nginx -s reload` over SSH
+7. On failure: restores the pre-operation snapshot on the remote machine
+
+| Env var | Description |
+|---|---|
+| `NGINX_REMOTE_HOST` | `user@host` for the remote nginx machine. If not set, pushes locally. |
+| `NGINX_REMOTE_KEY` | Path to SSH private key for the remote connection |
+| `NGINX_REMOTE_PASSWORD` | SSH password (only if `NGINX_REMOTE_KEY` is not set) |
+| `NGINX_SUDO_PASSWORD` | sudo password on the remote machine (defaults to `NGINX_REMOTE_PASSWORD`) |
+| `PUSH_CERT_DIR` | Target cert directory on the nginx machine |
+| `PROXY_TARGET_HOST` | Host to proxy to in nginx config (default: `localhost`) |
+
+### Linux-only constraint
+
+- **Local push:** Linux only. Requires nginx installed locally with sudo access.
+- **Remote push:** dm can run on any OS. The remote machine must be Linux with nginx and sudo access.
+
+All other dm features work on any OS.
+
+---
+
+## TUI Dashboard
+
+```bash
+dm dashboard
+# alias:
 dm monit
 ```
 
----
+A full-screen terminal dashboard with a two-column layout: app list on the left, detail pane with five tabs on the right.
 
-## Environment Variables
+The dashboard uses two polling layers:
+- **Fast poll (~2s):** app list, PM2 status for all apps, OS load average and memory
+- **Detail poll (~5s, selected app only):** port reachability, git drift, domain info, nginx access logs, cert validity
 
-### `dm set-env <name> <VAR=VALUE>`
+### Overview tab
 
-Set or update an environment variable for an application. Written to the app's env file and picked up on the next deploy.
+- Port, project type, instances, branch, last commit info
+- PM2 uptime and restart count
+- VCS drift (up-to-date / behind / ahead / diverged) color-coded
+- SSL cert status — issuer, expiry date, days remaining (green/yellow/red)
+- Port reachability check (attempts a TCP connection to the app's port)
+- All configured routes with full URLs and SSL status
 
-```bash
-dm set-env my-app DATABASE_URL=postgres://localhost/mydb
-dm set-env my-app API_KEY=abc123
-```
+### Metrics tab
 
-- **Next.js**: written to `.env.local`
-- **NestJS**: written to `.env`
-- **.NET**: written to `.env` in the app's env directory (injected into the publish output on deploy)
+Toggle between two views with `v`:
 
-A change in env vars triggers a rebuild on the next `dm deploy`.
+**Stats view:**
+- CPU and memory sparklines + gauges
+- Restart count warnings
+- Per-domain request metrics: total requests, status class distribution (2xx/3xx/4xx/5xx), p50/p95 latency
 
----
+**Access log view:**
+- Recent nginx access log entries from all routes on the selected app
+- Columns: timestamp, method, status (color-coded by class), response time, bytes sent
+- Falls back gracefully when the domain has not been pushed or the `dm_json` log format is not installed
 
-## Storage Volumes
+Nginx logs are read from `/var/log/nginx/` locally, or via SSH/SFTP when `NGINX_REMOTE_HOST` is set.
 
-Persistent named directories that live outside any build directory. They survive deployments and rollbacks. A symlink is automatically created in every new build directory when a storage is attached.
+### Logs tab
 
-### `dm storage new <name> <link-name>`
+Scrollable tail of PM2 combined logs (stdout + stderr). stderr lines are tagged with `[err]`. Use PgUp/PgDn to scroll.
 
-Create a new storage volume.
+### Deploys tab
 
-- `<name>` — The storage's directory name on disk (e.g., `uploads`)
-- `<link-name>` — The symlink name that appears inside each build directory (e.g., `Storage`)
+Full build history for the selected app. The active build is highlighted. Select a previous build and press `enter` to trigger a rollback (with confirmation dialog).
 
-```bash
-dm storage new uploads Storage
-```
+### Domains tab
 
----
+All domains and routes for the selected app. SSL status is color-coded: green (valid), yellow (expiring within 30 days), red (expired/missing). A staleness indicator is shown when the config has been recompiled but not yet pushed to nginx.
 
-### `dm storage attach <app> <storage>`
-
-Attach a storage to an app. The symlink is immediately created in the active build and in all future builds.
-
-```bash
-dm storage attach my-app uploads
-```
-
----
-
-### `dm storage detach <app> <storage>`
-
-Remove a storage association from an app. The symlink is removed from the active build, but the storage directory and its contents are preserved.
-
-```bash
-dm storage detach my-app uploads
-```
+**Keyboard actions:**
+- `r` restart, `s` stop, `d` deploy, `b` rollback — all with confirmation dialogs
+- `e` open interactive env editor for the selected app
+- `l` jump to the logs tab
+- `f` filter the app list
+- `:` open command palette
 
 ---
 
-### `dm storage rm <name>`
+## Remote access (dm remote)
 
-Delete a storage entirely. Refuses if the storage is still attached to any app — detach it first.
+dm includes a built-in SSH server that exposes the dm REPL — and nothing else — over the network. No shell access, no SFTP, no port forwarding.
 
-```bash
-dm storage rm uploads
-```
-
----
-
-### `dm storage ls`
-
-List all storages with their path, creation date, disk usage, and which apps they are attached to.
+### Starting the server
 
 ```bash
-dm storage ls
+dm remote serve [--port 2022]
 ```
 
----
+Starts the SSH server as a PM2 process named `dm-remote`. Default port is `2022` (override with `--port` or `REMOTE_PORT` env var).
 
-## Domains and Reverse Proxy
+The server binds to `127.0.0.1` by default. Set `REMOTE_BIND` to expose it on another interface (a warning is printed).
 
-Domains define the hostnames your apps are accessible on. Routes map paths on a domain to specific apps. `dm` generates Nginx configuration files that you include in your Nginx setup.
+Each session spawns a real PTY via node-pty — readline, chalk, Ink TUIs, tab-completion, and Ctrl+C all behave exactly as they do locally. Sessions are completely isolated: separate Node.js processes, separate PM2 connections, separate database connections.
 
-### `dm domain add <name>`
+On first run, an ed25519 host key is generated and saved to `.remote/host_ed25519_key` (mode `0600`). The host key fingerprint (`SHA256:...`) is printed on startup. Share it with users out-of-band for TOFU verification.
 
-Register a new domain.
-
-```bash
-dm domain add example.com
-```
-
----
-
-### `dm domain remove <name>`
-
-Remove a domain. Fails if routes still exist unless `--force` is used.
-
-```bash
-dm domain remove example.com
-dm domain remove example.com --force   # also removes all routes
-```
-
----
-
-### `dm domain list`
-
-List all domains with route count, SSL status, and push status.
-
-```bash
-dm domain list
-```
-
----
-
-### `dm domain show <name>`
-
-Show detailed information for a domain: SSL mode, certificate expiry, creation date, push status, and all configured routes.
-
-```bash
-dm domain show example.com
-```
-
----
-
-### `dm domain set-header <name>`
-
-Set or update an HTTP response header applied to all routes under this domain.
-
-```bash
-dm domain set-header example.com --key X-Frame-Options --value DENY
-dm domain set-header example.com --key Cache-Control --value "no-store"
-```
-
----
-
-### `dm domain remove-header <name>`
-
-Remove an HTTP response header from a domain.
-
-```bash
-dm domain remove-header example.com --key X-Frame-Options
-```
-
----
-
-### `dm domain compile <name>`
-
-Compile and write the Nginx configuration file for a domain to disk (into `DOMAINS_DIR`). Shows a diff if the file already exists. Re-run after any domain, route, SSL, or header change.
-
-```bash
-dm domain compile example.com
-```
-
-After compiling, push the config to Nginx with `dm domain push <name>` to make it live.
-
----
-
-### `dm domain show-config <name>`
-
-Preview the Nginx configuration that would be generated, without writing to disk.
-
-```bash
-dm domain show-config example.com
-```
-
----
-
-### `dm domain push <name>`
-
-Deploy the compiled Nginx configuration to a live Nginx installation. Pushes the config to `/etc/nginx/sites-available/`, creates symlinks, copies SSL certificates (if configured), validates the configuration, and reloads Nginx.
-
-```bash
-dm domain push example.com
-```
-
-**Local vs Remote Push:**
-
-- **Local**: Pushes directly to Nginx on the same machine using filesystem operations
-- **Remote**: Pushes to a remote Nginx server via SCP and SSH
-
-The target is determined by the `NGINX_REMOTE_HOST` environment variable. If set, pushes go to that remote host. Otherwise, the push is local.
-
-**Push Workflow:**
-
-1. Compiles the domain config fresh with actual cert paths from DB
-2. If PUSH_CERT_DIR is set (or defaults to /etc/nginx/ssl for remote), rewrites cert paths in config
-3. Transfers the config file to `/etc/nginx/sites-available/<domainName>.conf`
-4. Copies SSL certificates to target directory (if SSL is enabled)
-5. Creates a symlink in `/etc/nginx/sites-enabled/`
-6. Validates the complete Nginx config with `nginx -t`
-7. Reloads Nginx to apply changes
-8. Updates domain metadata (lastPushedAt, configPath)
-9. Rolls back on any failure to keep Nginx in a known-good state
-
-**Environment Variables:**
-
-| Variable | Default | Description |
-|---|---|---|
-| `NGINX_REMOTE_HOST` | — | Remote host for push (user@host format). If not set, pushes locally |
-| `NGINX_REMOTE_PASSWORD` | — | SSH password for remote pushes. If set, password auth is used |
-| `NGINX_REMOTE_KEY` | — | SSH private key path for remote pushes. Used if no password is set |
-| `PUSH_CERT_DIR` | `/etc/nginx/ssl` (remote only) | Target directory for SSL certificates. Local: optional, Remote: defaults to /etc/nginx/ssl |
-
-```bash
-# Push locally (uses cert paths from DB as-is)
-dm domain push example.com
-
-# Push locally with cert copying
-export PUSH_CERT_DIR=/etc/nginx/ssl
-dm domain push example.com
-
-# Push to remote with password authentication
-export NGINX_REMOTE_HOST=user@nginx-server.com
-export NGINX_REMOTE_PASSWORD=your-password
-# PUSH_CERT_DIR defaults to /etc/nginx/ssl for remote
-dm domain push example.com
-
-# Push to remote with custom cert directory
-export NGINX_REMOTE_HOST=user@nginx-server.com
-export NGINX_REMOTE_KEY=/path/to/key.pem
-export PUSH_CERT_DIR=/opt/ssl/certs
-dm domain push example.com
-```
-
-**Rollback:** If any step fails after files are written (validation fails, reload fails, etc.), the push automatically rolls back by removing the newly written config and symlink, restoring the previous state.
-
-**Note:** Push always compiles the config fresh before deploying, so you don't need to run `dm domain compile` separately. The standalone compile command is still useful for inspecting the generated config before deployment.
-
----
-
-## SSL Certificates
-
-### `dm domain set-cert <name>`
-
-Attach an SSL certificate to a domain. Supports two formats:
-
-**PEM format** (separate certificate and key files):
-
-```bash
-dm domain set-cert example.com --cert /path/to/cert.pem --key /path/to/key.pem
-```
-
-**PFX/PKCS#12 format** (single bundle, common from Windows/IIS exports):
-
-```bash
-dm domain set-cert example.com --pfx /path/to/cert.pfx --password "your-password"
-dm domain set-cert example.com --pfx /path/to/cert.pfx --password ""   # empty password
-```
-
-| Option | Description |
-|---|---|
-| `--cert` | Path to certificate file |
-| `--key` | Path to private key file |
-| `--pfx` | Path to PFX/PKCS#12 bundle |
-| `--password` | Password for PFX bundle |
-| `--force` | Attach even if the cert does not cover the domain name |
-
-The tool validates that:
-- The certificate is not expired
-- The private key matches the certificate
-- The certificate covers the domain name or its SANs (bypass with `--force`)
-
-After attaching a cert, recompile the domain config:
-
-```bash
-dm domain compile example.com
-```
-
----
-
-### `dm domain cert-status <name>`
-
-Show SSL certificate status: validity dates, expiry, issued-to, and issuer.
-
-```bash
-dm domain cert-status example.com
-```
-
----
-
-### `dm domain remove-cert <name>`
-
-Remove the SSL certificate from a domain. The domain reverts to HTTP-only mode.
-
-```bash
-dm domain remove-cert example.com
-```
-
----
-
-### `dm domain reload-certs [name]`
-
-Reload certificates from disk and synchronize with the database. This command scans the certificate storage folder for each domain and updates the database accordingly.
-
-**Behavior:**
-- If cert and key files exist on disk but not in DB → adds certificate to DB
-- If cert and key files exist on disk and in DB → updates certificate metadata in DB
-- If certificate exists in DB but files missing on disk → warns and removes SSL from domain
-
-**Use cases:**
-- Easy way to load certificates after manual file placement in the certificate folder
-- Refresh certificate metadata after manual certificate replacement
-- Detect and fix mismatches between filesystem and database state
-
-```bash
-# Reload certificates for a specific domain
-dm domain reload-certs example.com
-
-# Reload certificates for all domains
-dm domain reload-certs
-```
-
-**Certificate Storage Location:**  
-Certificates are stored in: `<DOMAINS_DIR>/<domain-name>/ssl/`
-- `cert.pem` - SSL certificate
-- `key.pem` - Private key
-
----
-
-## Routes
-
-Routes map a path on a domain to a specific application. The app must be registered with `dm init` before adding a route.
-
-Paths are stored **without** a leading `/`. The slash is prepended automatically when displaying routes and generating Nginx config. Pass `api`, not `/api`.
-
-### `dm route add <appName> <domainName>`
-
-Add a route for an app on a domain.
-
-```bash
-# Route the root (/) to my-app -- omit --location
-dm route add my-app example.com
-
-# Route /api to my-api
-dm route add my-api example.com --location api
-
-# Route /admin/dashboard to my-admin
-dm route add my-admin example.com --location admin/dashboard
-```
-
-| Option | Alias | Default | Description |
-|---|---|---|---|
-| `--location` | `-l` | `""` (root) | Path without leading slash -- e.g. `api`, `admin/dashboard` |
-| `--force` | `-f` | `false` | Allow routing even if the app is already routed elsewhere |
-
-More specific paths take priority over less specific ones in the generated Nginx config.
-
----
-
-### `dm route remove <domainName>`
-
-Remove a route from a domain by location.
-
-```bash
-dm route remove example.com --location api
-dm route remove example.com   # removes the root route
-```
-
----
-
-### `dm route list <domainName>`
-
-List all routes configured for a domain.
-
-```bash
-dm route list example.com
-```
-
----
-
-### `dm route set-header <domainName>`
-
-Set or update an HTTP response header for a specific route. Route headers override domain-level headers for the same key.
-
-```bash
-dm route set-header example.com --location api --key X-API-Version --value "2"
-```
-
----
-
-### `dm route remove-header <domainName>`
-
-Remove an HTTP response header from a specific route.
-
-```bash
-dm route remove-header example.com --location api --key X-API-Version
-```
-
----
-
-## Maintenance
-
-### `dm clean <name>`
-
-Discard uncommitted local git changes in the app's working directory and remove all old builds, keeping only the active one.
-
-```bash
-dm clean my-app
-```
-
----
-
-### `dm clean-all`
-
-Run `clean` for every registered application.
-
-```bash
-dm clean-all
-```
-
----
-
-### `dm unlock <name>`
-
-Force-release a stuck per-app lock by killing the associated process. Use this if a `dm` command was interrupted and left an app locked.
-
-```bash
-dm unlock my-app
-```
-
----
-
-## Monorepo Support
-
-Use `--project-dir` to point `dm` at a subdirectory within the repo. The repo is always cloned at its root; `--project-dir` only affects where builds run and where artifacts are expected.
-
-```bash
-dm init public-api --repo https://github.com/org/monorepo --type dotnet --project-dir PublicApi
-dm init admin-api  --repo https://github.com/org/monorepo --type dotnet --project-dir AdminApi
-dm init frontend   --repo https://github.com/org/monorepo --type nextjs --project-dir apps/web
-```
-
----
-
-## How It Works
-
-### Deployment pipeline
-
-```
-dm init       → register app, create directories
-dm deploy     → clone/pull → detect changes → build → snapshot → link storages → PM2 start/restart
-dm rollback   → switch active build → reapply storage symlinks → PM2 restart
-```
-
-### Build versioning
-
-Each deployment creates a timestamped build directory (`builds/build-<timestamp>/`). The database tracks all builds and the currently active one. Old builds are pruned asynchronously after a successful deploy.
-
-### Process management
-
-Apps run under PM2:
-- **Next.js / NestJS** — cluster mode, scaled by `--instances`
-- **.NET** — fork mode (single process), `dotnet <appName>.dll`
-- **Static** — fork mode, sirv file server serving the release directory directly (no build step)
-
-Log files land in `<APP_DIR>/<name>/logs/`.
-
-### Nginx integration
-
-`dm` generates Nginx server block configurations and can deploy them automatically to local or remote Nginx installations.
-
-**Configuration workflow:**
-
-```
-dm domain add      → register domain
-dm route add       → map paths to apps
-dm domain compile  → generate Nginx config
-dm domain push     → deploy to live Nginx
-```
-
-**Push deployment:**
-
-The push command handles the complete deployment lifecycle:
-- Transfers compiled config to `/etc/nginx/sites-available/`
-- Copies SSL certificates to the target (if configured)
-- Creates symlinks in `/etc/nginx/sites-enabled/`
-- Validates with `nginx -t` before committing
-- Reloads Nginx to apply changes
-- Tracks deployment metadata (timestamps, paths, staleness)
-- Automatically rolls back on any failure
-
-**Local vs remote:**
-
-- **Local push**: Direct filesystem operations on the same machine
-- **Remote push**: Uses SCP for file transfer and SSH for command execution
-
-Configure remote targets via environment variables (`NGINX_REMOTE_HOST`, `NGINX_REMOTE_KEY`). For password-based SSH to the Nginx host, set `NGINX_REMOTE_PASSWORD` instead.
-
-**Config compilation:**
-
-Push always compiles the config fresh before deployment using actual cert paths from the database. The standalone `dm domain compile` command is useful for inspecting the generated config without deploying it.
-
-**Generated config features:**
-
-- HTTP to HTTPS redirects
-- `www` to apex redirects for apex domains
-- TLSv1.2 / TLSv1.3 with session caching
-- gzip for common content types
-- Per-route and per-domain custom headers
-- Project-type-specific proxy settings (WebSocket upgrade for Next.js, etc.)
-
-### Locking
-
-Each app has a file-based lock preventing concurrent `dm` operations on the same app. The lock is released automatically on exit or SIGINT. Use `dm unlock <name>` if a lock gets stuck.
-
-### VCS support
-
-| Feature | Git | SVN | Local |
-|---|---|---|---|
-| First deploy | `git clone` | `svn checkout` | folder copy |
-| Update | `git fetch` + `git pull` | `svn update` | mtime diff + re-copy |
-| Change detection | commit hash | revision number | folder mtime |
-| Lint auto-push | supported (`--lint`) | not supported | not supported |
-| Branch syntax | branch name | `trunk`, `branches/x`, `tags/x` | n/a |
-
-Use `--vcs local` with a path to a local directory instead of a repository URL. On each deploy `dm` compares the folder's latest mtime against the previous run — unchanged folders are skipped. `--branch` and `--lint` are not applicable for local sources.
-
----
-
----
-
-## Remote Access
-
-`dm` includes a built-in SSH server that exposes the `dm` REPL over the network. Authentication is public-key only — no passwords.
-
-### `dm --host <ip>`
-
-Connect to a remote `dm` server. This is the only command remote users need.
-
-```bash
-dm --host 10.10.10.10
-dm --host 10.10.10.10 --port 3022   # custom port
-dm --host 10.10.10.10 --identity ~/.ssh/my_key   # specific key
-```
-
-**First time — no SSH key yet?** `dm` detects this automatically, generates an ed25519 key pair using pure Node.js (no `ssh-keygen` required, works on all platforms), and prints your public key:
-
-```
-No SSH key found. Generating a new ed25519 key pair…
-✔ SSH key generated successfully.
-Share the following public key with the server admin to get authorized:
-
-ssh-ed25519 AAAAC3Nz...
-```
-
-Send that line to the server admin. They run `dm remote key-add` to authorize you.
-
-**First connection to a new server** — you'll be shown the host key fingerprint for verification (TOFU, like SSH):
-
-```
-The authenticity of host '10.10.10.10:2022' can't be established.
-Host key fingerprint: SHA256:...
-Trust this host and continue? (yes/no)
-```
-
-Confirm it matches what the admin sees in `pm2 logs dm-remote`. The fingerprint is saved locally and never asked again for the same server.
-
-**Key not authorized yet?** Instead of a raw error you get a clear message with your public key reprinted for easy copying.
-
----
-
-### `dm remote serve`
-
-Start the SSH server as a PM2-managed background process.
-
-```bash
-dm remote serve              # start on default port (2022 or REMOTE_PORT env var)
-dm remote serve --port 3022  # custom port
-dm remote serve --stop       # stop and remove from PM2
-```
-
-The host key fingerprint is printed in the startup logs — share it with users connecting for the first time:
-
-```bash
-pm2 logs dm-remote
-```
-
----
-
-### `dm remote key-add`
-
-Authorize a new user's public key. Runs interactively:
-
-```bash
-dm remote key-add
-```
-
-```
-Paste the public key: ssh-ed25519 AAAAC3Nz... alice-laptop
-Name / username for this key: alice
-✔ Authorized key added (SHA256:...) — user: alice
-```
-
-The name is used in audit logs and as the remote session identity (`DM_REMOTE_USER`).
-
----
-
-### `dm remote key-remove <fingerprint>`
-
-Revoke an authorized key by its fingerprint (shown in `dm remote key-list`).
-
-```bash
-dm remote key-remove SHA256:abc123...
-```
-
----
-
-### `dm remote key-list`
-
-List all authorized keys and their associated usernames.
-
-```bash
-dm remote key-list
-```
-
----
-
-### `dm remote status`
-
-Show server health: authorized key count, port, auth mode, and PM2 process status.
-
-```bash
-dm remote status
-```
-
----
-
-## Remote Access Security
-
-`dm remote serve` starts an SSH server that exposes the `dm` REPL over the network. Authentication is **public key only** — password auth is not supported. Keep the following in mind when deploying it.
-
-### Run as a non-root, least-privilege user
-
-Do not run `dm remote serve` as root. If it runs as root, every remote session inherits root privileges with no sandboxing. Use a dedicated low-privilege OS user instead:
-
-```bash
-# Create a dedicated user (Linux)
-useradd -r -s /sbin/nologin dmuser
-# Run the server as that user via PM2
-pm2 start "dm remote serve" --name dm-remote --user dmuser
-```
-
-Avoid binding to privileged ports (< 1024) as root. Use a high port (e.g. the default `2022`) and front it with a firewall port-forward or reverse proxy if you need a standard port number.
-
-### Bind address
-
-By default the server binds to `127.0.0.1` (loopback only). To expose it on a specific interface, set `REMOTE_BIND`:
-
-```bash
-REMOTE_BIND=10.0.0.5 dm remote serve
-```
-
-If `REMOTE_BIND` is set to anything other than `127.0.0.1`/`localhost`, the server prints a startup warning. Never bind to `0.0.0.0` on a public-facing machine without firewall rules in place.
-
-### Session limits
+Session limits:
 
 | Env var | Default | Description |
 |---|---|---|
-| `REMOTE_MAX_SESSIONS` | `10` | Max simultaneous sessions across all keys |
-| `REMOTE_MAX_SESSIONS_PER_KEY` | `3` | Max simultaneous sessions per authenticated key |
-| `REMOTE_IDLE_TIMEOUT_MS` | `1800000` | Idle session kill timeout in ms (default 30 min) |
+| `REMOTE_MAX_SESSIONS` | 10 | Max concurrent sessions total |
+| `REMOTE_MAX_SESSIONS_PER_KEY` | 3 | Max concurrent sessions per authorized key |
+| `REMOTE_IDLE_TIMEOUT_MS` | 1800000 | Idle session auto-terminate (ms) |
 
-### IP allowlisting
+### Key management
 
-There is no built-in IP allowlist — public-key authentication is the primary control. For additional defense-in-depth, pair `dm remote serve` with an OS-level firewall rule or `fail2ban` to restrict which source IPs can reach the SSH port at all. Application-layer rate limiting (built in) cannot stop a raw TCP SYN flood; that requires firewall-level protection.
-
-### Crash-loop alerting
-
-`dm remote serve` runs under PM2 (`autorestart: true`). To get alerted on crash loops, configure PM2 monitoring:
+Public key authentication only — no passwords accepted.
 
 ```bash
-# Example: use pm2-logrotate + an external alerting hook, or set up a systemd
-# OnFailure= unit that calls your alerting endpoint if PM2 itself crashes.
-pm2 install pm2-logrotate
+dm remote add                # interactive: enter username, then paste public key
+dm remote remove <username>  # remove key by username
+dm remote list               # list authorized keys with fingerprints
 ```
 
-Alternatively, wrap the PM2 process under a systemd unit with `OnFailure=` pointing to a notification service.
+Keys are stored in OpenSSH `authorized_keys` format at `.remote/authorized_keys`.
 
-### Accepted SSH key types
+Accepted key types:
 
-`dm remote key-add` (interactive) enforces a minimum key-strength policy. Accepted types:
+| Type | Notes |
+|---|---|
+| `ssh-ed25519` | Recommended |
+| `sk-ssh-ed25519` | FIDO2 hardware key (e.g. YubiKey) |
+| `ecdsa-sha2-nistp256/384/521` | ECDSA |
+| `sk-ecdsa-sha2-nistp256` | FIDO2 ECDSA |
+| `ssh-rsa` | Accepted at **≥ 4096 bits only** |
 
-- `ssh-ed25519` (recommended)
-- `ecdsa-sha2-nistp256`, `ecdsa-sha2-nistp384`, `ecdsa-sha2-nistp521`
-- `ssh-rsa` — accepted only at **≥ 4096 bits**; shorter RSA keys are rejected
+RSA < 4096 bits and DSA keys are rejected. `remote add` validates the key type, computes a SHA256 fingerprint, and rejects duplicates by both fingerprint and username.
 
-DSA keys and RSA keys below 4096 bits are refused with an error naming the rejected algorithm.
+These commands are blocked inside a remote session.
+
+### Connecting from a client
+
+```bash
+dm remote connect <host> [--port 2022] [--identity ed25519]
+```
+
+Shells out to the system `ssh` binary. Key resolution order (strongest first): `id_ed25519` → `id_ed25519_sk` → `id_ecdsa` → `id_ecdsa_sk` → `id_rsa` in `~/.ssh/`. If no key is found, dm offers to generate one via `ssh-keygen` and prints the public key to be authorized on the server.
+
+Effective ssh invocation:
+```
+ssh -p <port> -i <keyPath>
+    -o StrictHostKeyChecking=ask
+    -o BatchMode=no
+    -o IdentitiesOnly=yes
+    -o ServerAliveInterval=30
+    -o ServerAliveCountMax=3
+    dm@<host>
+```
+
+### Security model
+
+- **Authentication:** public key only. Client sends key for probing first; server verifies it's in `authorized_keys` before requesting the signature.
+- **Brute-force protection:** failed attempts tracked per IP. Lockout = `2^fails` seconds, capped at 10 minutes.
+- **Audit log:** every connection event, auth result, and REPL command is appended to `.remote/audit.log` with timestamp, IP, key fingerprint, and username.
+- **Command blocking:** `remote`, `update`, `install-service`, `migrate-db` cannot be run from within a remote session.
+- **Session cap:** connections above `REMOTE_MAX_SESSIONS` are rejected immediately.
+- **Idle timeout:** inactive sessions are terminated after `REMOTE_IDLE_TIMEOUT_MS`.
+- **Graceful drain:** on SIGTERM, the server stops accepting new connections and waits for active sessions to finish.
+
+### Remote serve dashboard
+
+While the server is running, a TUI is shown:
+
+- Top bar: bind address, port, truncated host key fingerprint, live clock
+- Active sessions table: ID, username, IP, session type (shell/exec), uptime
+- Select a session with `↑↓` and press `D` to disconnect (confirmation required)
+- Scrollable event log at the bottom (PgUp/PgDn)
+- `Q` to stop the server
+
+---
+
+## dm-connect (Windows client)
+
+`dm-connect` is a standalone .NET 8 executable for Windows. It connects to a `dm remote serve` server without requiring a Node.js installation on the client.
+
+```
+dm-connect <host> [--port 2022] [--identity ed25519]
+```
+
+It provides colored console output and mirrors the exact key resolution and SSH connection logic of the TypeScript `dm remote connect` command:
+
+1. Probes `~/.ssh/` for a private key in the same order as the TypeScript client
+2. If no key is found, prompts to generate ed25519 via `ssh-keygen` and displays the public key
+3. Shells out to `ssh.exe` with identical arguments (`StrictHostKeyChecking=ask`, `IdentitiesOnly=yes`, `ServerAliveInterval=30`, `ServerAliveCountMax=3`)
+4. Returns `ssh.exe`'s exit code (255 = connection or auth failure)
+
+Supported `--identity` values: `ed25519` (default), `ed25519_sk`, `ecdsa`, `ecdsa_sk`, `rsa`.
+
+The algorithm list is kept in sync between dm-connect, the TypeScript client, and the server.
+
+Windows OpenSSH client is required. Install it via:
+```
+Settings → Apps → Optional Features → OpenSSH Client
+# or PowerShell (Admin):
+Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0
+```
+
+---
+
+## Monitoring & logs
+
+```bash
+dm logs <name>          # stream live PM2 logs (Ctrl+C to stop)
+dm log-clear [name]     # clear log files for one app, or --all for all
+dm info <name>          # show app metadata from the database
+dm list [--type <t>]    # list all apps with PM2 status
+```
+
+---
+
+## Utilities
+
+```bash
+dm unlock <name>                        # force-release a stuck lock
+dm clean <name>                         # discard uncommitted local changes
+dm clean-all                            # clean all apps and prune old builds
+dm update                               # update dm itself  (CLI only)
+dm change-repo <name> --repo <url>      # change the repo URL for an app  (CLI only)
+dm install-service                      # install a boot service to run dm start-all  (CLI only)
+dm migrate-db                           # migrate from legacy db.json to SQL  (CLI only)
+```
+
+---
+
+## Configuration reference
+
+All settings are read from `.env` in the dm installation root.
+
+| Variable | Default | Description |
+|---|---|---|
+| `APP_DIR` | `.applications/` | Root directory for all managed apps |
+| `NEXT_DIR` | `APP_DIR` | Override root for Next.js apps |
+| `NEST_DIR` | `APP_DIR` | Override root for NestJS apps |
+| `DOTNET_DIR` | `APP_DIR` | Override root for .NET apps |
+| `STATIC_DIR` | `APP_DIR` | Override root for static apps |
+| `STORAGE_DIR` | `APP_DIR/storages/` | Root for storage volumes |
+| `DOMAINS_DIR` | `.domains/` | Root for domain configs and certs |
+| `DATABASE_TYPE` | `sqlite` | `sqlite` or `postgres` |
+| `DATABASE_URL` | — | PostgreSQL connection string |
+| `SECRET_KEY` | — | Confirmation token required by `dm delete` |
+| `PROXY_TARGET_HOST` | `localhost` | Proxy target host in nginx config |
+| `NGINX_REMOTE_HOST` | — | `user@host` for remote nginx push |
+| `NGINX_REMOTE_KEY` | — | SSH key path for remote nginx push |
+| `NGINX_REMOTE_PASSWORD` | — | SSH password for remote nginx push |
+| `NGINX_SUDO_PASSWORD` | — | sudo password on the remote nginx machine |
+| `PUSH_CERT_DIR` | — | Target cert directory on the nginx machine |
+| `REMOTE_PORT` | `2022` | SSH server port for `dm remote serve` |
+| `REMOTE_BIND` | `127.0.0.1` | Interface for the SSH server to bind on |
+| `REMOTE_MAX_SESSIONS` | `10` | Max concurrent SSH sessions |
+| `REMOTE_MAX_SESSIONS_PER_KEY` | `3` | Max sessions per authorized key |
+| `REMOTE_IDLE_TIMEOUT_MS` | `1800000` | Idle session timeout in milliseconds |
+
+---
+
+## Database
+
+dm v2.0 uses SQLite by default (better-sqlite3 + Drizzle ORM). PostgreSQL is supported by setting `DATABASE_TYPE=postgres` and `DATABASE_URL`.
+
+The database stores: apps, build history, storage volumes, domains, routes, SSL certificate metadata.
+
+Upgrading from v1.x: run `dm migrate-db` once to import from the legacy `db.json` format.
