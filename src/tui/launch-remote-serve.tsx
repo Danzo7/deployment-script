@@ -135,8 +135,10 @@ export async function launchRemoteServe(port: number): Promise<void> {
   // Stop buffering — hand off to the TUI
   serverEvents.off('log', bufferLog);
 
+  process.stdout.write('\x1b[?1049h'); // enter alternate screen
   const { waitUntilExit } = render(<App serverInfo={serverInfo} initialLogs={pendingLogs} />);
   await waitUntilExit();
+  process.stdout.write('\x1b[?1049l'); // leave alternate screen
 
   Logger.isMuted = false;
   await serverPromise.catch(() => { /* already exiting */ });

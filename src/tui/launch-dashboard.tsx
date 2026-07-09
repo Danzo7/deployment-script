@@ -213,8 +213,10 @@ export async function launchDashboard(): Promise<void> {
 
   (globalThis as any).__pendingDashboardAction = undefined;
 
+  process.stdout.write('\x1b[?1049h'); // enter alternate screen
   const { waitUntilExit } = render(<DashboardApp />);
   await waitUntilExit();
+  process.stdout.write('\x1b[?1049l'); // leave alternate screen
 
   closeSharedPm2();
   resumeRepl();
