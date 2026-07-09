@@ -102,8 +102,6 @@ export async function migrateFromJSON() {
           if (!app.name) missingFields.push('name');
           if (!app.appDir) missingFields.push('appDir');
           if (!app.repo) missingFields.push('repo');
-          if (!app.branch) missingFields.push('branch');
-          if (!app.projectType) missingFields.push('projectType');
           if (app.port === undefined || app.port === null) missingFields.push('port');
           
           if (missingFields.length > 0) {
@@ -118,11 +116,11 @@ export async function migrateFromJSON() {
             port: app.port,
             instances: app.instances ?? 1,
             repo: app.repo,
-            branch: app.branch,
+            branch: app.branch??"main",
             vcsType: app.vcsType || 'git',
             builds: app.builds || [],
             activeBuild: app.activeBuild,
-            projectType: app.projectType,
+            projectType: app.projectType??"nextjs",
             projectDir: app.projectDir,
             lastDeployedCommit: app.lastDeployedCommit,
           } as any);
