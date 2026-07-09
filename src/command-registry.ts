@@ -16,7 +16,7 @@ import { APP_DIR, NEXT_DIR, NEST_DIR, DOTNET_DIR, STATIC_DIR, SECRET_KEY, REMOTE
 import { listApps } from './commands/list.js';
 import { unlock } from './commands/unlock.js';
 import { clean } from './commands/clean.js';
-import { setEnvForApp, launchEnvEditorForApp } from './commands/set-env.js';
+import { launchEnvEditorForApp } from './commands/set-env.js';
 import { Delete } from './commands/delete.js';
 import { startAllApplications } from './commands/start-all.js';
 import { stopAllApplications } from './commands/stop-all.js';
@@ -34,19 +34,16 @@ import { domainCertStatus } from './commands/domain-cert-status.js';
 import { domainRemoveCert } from './commands/domain-remove-cert.js';
 import { domainReloadCerts } from './commands/domain-reload-certs.js';
 import { routeAdd, routeRemove, routeList } from './commands/route.js';
-import { domainSetHeader } from './commands/domain-set-header.js';
 import { domainRemoveHeader } from './commands/domain-remove-header.js';
 import { domainCompile } from './commands/domain-compile.js';
 import { domainShowConfig } from './commands/domain-show-config.js';
 import { domainPush } from './commands/domain-push.js';
-import { routeSetHeader } from './commands/route-set-header.js';
 import { routeRemoveHeader } from './commands/route-remove-header.js';
 import { migrateFromJSON } from './commands/migrate-db.js';
 import { changeRepo } from './commands/change-repo.js';
 import { installService } from './commands/install-service.js';
 import {
   remoteServe,
-  remoteConnect,
   remoteKeyAdd,
   remoteKeyRemove,
   remoteKeyList,
@@ -379,27 +376,16 @@ export const COMMANDS: Record<string, CommandNode> = {
   // ── Environment ────────────────────────────────────────────────────────────
   'set-env': {
     kind: 'leaf',
-    usage: 'set-env <name> [env]',
-    describe: 'Set an env var (KEY=VALUE), or launch interactive editor when no KEY=VALUE is given',
+    usage: 'set-env <name>',
+    describe: 'Launch the interactive env editor for an application',
     group: 'Environment',
     positionals: [
       { name: 'name', demandOption: true, describe: 'The name of the application' },
-      { name: 'env', describe: 'Environment variable in the format VAR_NAME=VALUE (omit to open the interactive editor)' },
     ],
-    // Intentionally NOT locked: this can hand off to a long-lived interactive
-    // TUI editor session, and holding the app lock for the duration of an
-    // idle interactive edit would needlessly block deploys/restarts elsewhere.
-    handler: async ({ name, env }) => {
-      if (!env) {
-        await launchEnvEditorForApp(name);
-        return;
-      }
-      const [envName, ...valParts] = String(env).split('=');
-      const envValue = valParts.join('=');
-      if (!envName || envValue === undefined || envValue === '') {
-        throw new Error('Invalid format. Expected: KEY=VALUE');
-      }
-      await setEnvForApp({ name, envName, envValue });
+    // Intentionally NOT locked: this hands off to a long-lived interactive
+    // TUI editor session; holding the lock would block deploys/restarts.
+    handler: async ({ name }) => {
+      await launchEnvEditorForApp(name);
     },
   },
 
@@ -588,14 +574,13 @@ export const COMMANDS: Record<string, CommandNode> = {
       'set-header': {
         kind: 'leaf',
         usage: 'set-header <name>',
-        describe: 'Set or update an HTTP response header on a domain',
+        describe: 'Launch the interactive header editor for a domain',
         group: 'Domain',
         positionals: [{ name: 'name', demandOption: true, describe: 'The domain name' }],
-        options: {
-          key: { type: 'string', demandOption: true, describe: 'Header name' },
-          value: { type: 'string', demandOption: true, describe: 'Header value' },
+        handler: async ({ name }) => {
+          const { launchDomainHeaderEditor } = await import('./tui/launch-header-editor.js');
+          await launchDomainHeaderEditor(name);
         },
-        handler: async ({ name, key, value }) => { await domainSetHeader(name, key, value); },
       },
       'remove-header': {
         kind: 'leaf',
@@ -674,15 +659,16 @@ export const COMMANDS: Record<string, CommandNode> = {
       'set-header': {
         kind: 'leaf',
         usage: 'set-header <domainName>',
-        describe: 'Set or update an HTTP response header on a route',
+        describe: 'Launch the interactive header editor for a route',
         group: 'Route',
         positionals: [{ name: 'domainName', demandOption: true, describe: 'The domain name' }],
         options: {
           location: { alias: 'l', type: 'string', default: '', describe: 'Route path without leading slash (e.g. "api"). Root = omit or leave empty.' },
-          key: { type: 'string', demandOption: true, describe: 'Header name' },
-          value: { type: 'string', demandOption: true, describe: 'Header value' },
         },
-        handler: async ({ domainName, location, key, value }) => { await routeSetHeader(domainName, location, key, value); },
+        handler: async ({ domainName, location }) => {
+          const { launchRouteHeaderEditor } = await import('./tui/launch-header-editor.js');
+          await launchRouteHeaderEditor(domainName, location ?? '');
+        },
       },
       'remove-header': {
         kind: 'leaf',
@@ -750,18 +736,6 @@ export const COMMANDS: Record<string, CommandNode> = {
         handler: async ({ port }) => { await remoteServe(port); },
       },
 
-      connect: {
-        kind: 'leaf',
-        usage: 'connect --host <ip>',
-        describe: 'Connect to a remote dm shell. Generates an SSH key if you don\'t have one yet.',
-        group: 'Remote',
-        options: {
-          host: { alias: 'H', type: 'string', demandOption: true, describe: 'Server IP or hostname' },
-          port: { alias: 'p', type: 'number', describe: `Port (default: ${REMOTE_PORT})` },
-          identity: { alias: 'i', type: 'string', describe: 'Key algorithm to use: ed25519 (default), ed25519_sk (FIDO2), ecdsa, ecdsa_sk (FIDO2), rsa (≥4096 bits)' },
-        },
-        handler: async ({ host, port, identity }) => { await remoteConnect(host, port, identity); },
-      },
       add: {
         kind: 'leaf',
         usage: 'add',
