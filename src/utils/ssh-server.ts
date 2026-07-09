@@ -343,7 +343,10 @@ export async function startRemoteServer(port: number): Promise<void> {
             resetIdleTimer(sess);
           });
 
+          let childExited = false;
+
           child.onExit(({ exitCode }: { exitCode: number }) => {
+            childExited = true;
             unregisterSession(sess);
             channel.exit(exitCode);
             channel.end();
@@ -353,7 +356,9 @@ export async function startRemoteServer(port: number): Promise<void> {
 
           channel.on('close', () => {
             unregisterSession(sess);
-            child.kill();
+            if (!childExited) {
+              try { child.kill(); } catch { /* already gone */ }
+            }
           });
 
           activeSession = sess;
@@ -427,7 +432,10 @@ export async function startRemoteServer(port: number): Promise<void> {
             resetIdleTimer(sess);
           });
 
+          let execChildExited = false;
+
           child.onExit(({ exitCode }: { exitCode: number }) => {
+            execChildExited = true;
             unregisterSession(sess);
             channel.exit(exitCode);
             channel.end();
@@ -435,7 +443,9 @@ export async function startRemoteServer(port: number): Promise<void> {
 
           channel.on('close', () => {
             unregisterSession(sess);
-            child.kill();
+            if (!execChildExited) {
+              try { child.kill(); } catch { /* already gone */ }
+            }
           });
 
           activeSession = sess;
