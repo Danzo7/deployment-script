@@ -21,42 +21,82 @@ type Status =
 // ─── Connection management ────────────────────────────────────────────────────
 //
 // withPm2(op) is the single entry point for all PM2 operations.
-//   - When the dashboard is running (shared connection open): runs op() directly.
-//   - Otherwise: opens a transient connection, runs op(), then disconnects.
 //
-// This guarantees nothing disconnects PM2 while the dashboard is live.
+// Uses a reference-counted connection:
+//   - First caller connects; subsequent concurrent callers reuse the live connection.
+//   - Disconnect only fires when the last in-flight operation finishes.
+//   - openSharedPm2/closeSharedPm2 pin the connection open (e.g. for the dashboard).
+//
+// This prevents rapid connect/disconnect races that cause PM2 client null crashes.
 
+let _refCount = 0;
+let _connected = false;
+let _connecting: Promise<void> | null = null;
 let _sharedConnected = false;
+let _disconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** Open a persistent PM2 connection. Call once before the dashboard renders. */
-export function openSharedPm2(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (_sharedConnected) return resolve();
+function _connect(): Promise<void> {
+  // Cancel any pending deferred disconnect — we're back in use
+  if (_disconnectTimer) { clearTimeout(_disconnectTimer); _disconnectTimer = null; }
+  if (_connected) return Promise.resolve();
+  if (_connecting) return _connecting;
+  _connecting = new Promise<void>((resolve, reject) => {
     pm2.connect((err) => {
+      _connecting = null;
       if (err) return reject(err);
-      _sharedConnected = true;
+      _connected = true;
       resolve();
     });
   });
+  return _connecting;
+}
+
+function _release(): void {
+  _refCount--;
+  if (_refCount <= 0 && !_sharedConnected) {
+    _refCount = 0;
+    // Debounce the disconnect so sequential bursts reuse the live connection
+    // instead of thrashing connect/disconnect between each call
+    if (_disconnectTimer) clearTimeout(_disconnectTimer);
+    _disconnectTimer = setTimeout(() => {
+      _disconnectTimer = null;
+      if (_refCount <= 0 && !_sharedConnected) {
+        _connected = false;
+        try { pm2.disconnect(); } catch { /* ignore */ }
+      }
+    }, 75);
+  }
+}
+
+/** Open a persistent PM2 connection. Call once before the dashboard renders. */
+export async function openSharedPm2(): Promise<void> {
+  _sharedConnected = true;
+  // Cancel any pending deferred disconnect before we reconnect
+  if (_disconnectTimer) { clearTimeout(_disconnectTimer); _disconnectTimer = null; }
+  await _connect();
 }
 
 /** Close the persistent PM2 connection. Call after the dashboard has fully exited. */
 export function closeSharedPm2(): void {
   if (!_sharedConnected) return;
   _sharedConnected = false;
-  try { pm2.disconnect(); } catch { /* ignore */ }
+  if (_refCount <= 0) {
+    if (_disconnectTimer) { clearTimeout(_disconnectTimer); _disconnectTimer = null; }
+    _connected = false;
+    try { pm2.disconnect(); } catch { /* ignore */ }
+  }
 }
 
 async function withPm2<T>(op: () => Promise<T>): Promise<T> {
-  if (_sharedConnected) return op();
-  return new Promise<T>((resolve, reject) => {
-    pm2.connect((err) => {
-      if (err) return reject(err);
-      op().then(resolve, reject).finally(() => {
-        try { pm2.disconnect(); } catch { /* ignore */ }
-      });
-    });
-  });
+  // Increment BEFORE the await so no concurrent _release() can drop
+  // _refCount to 0 and disconnect while this call is still pending connect.
+  _refCount++;
+  try {
+    await _connect();
+    return await op();
+  } finally {
+    _release();
+  }
 }
 
 // ─── Low-level wrappers ───────────────────────────────────────────────────────

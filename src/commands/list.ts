@@ -2,7 +2,7 @@ import { AppWithStorages } from '../db/model.js';
 import Table from 'cli-table3';
 import chalk from 'chalk';
 import { AppRepo } from '../db/repos.js';
-import { getAppStatus } from '../utils/pm2-helper.js';
+import { getAppStatus, openSharedPm2, closeSharedPm2 } from '../utils/pm2-helper.js';
 import { getAppRouteLines } from './domain.js';
 
 const TYPE_MAP: Record<string, string> = {
@@ -24,9 +24,14 @@ export const listApps = async (filterType?: string) => {
     }
   }
 
-  for (const app of apps) {
-    app.status = await getAppStatus(app.name);
-    app.routes = await getAppRouteLines(app.name);
+  await openSharedPm2();
+  try {
+    for (const app of apps) {
+      app.status = await getAppStatus(app.name);
+      app.routes = await getAppRouteLines(app.name);
+    }
+  } finally {
+    closeSharedPm2();
   }
 
   // Compute dynamic widths based on terminal width
