@@ -6,6 +6,26 @@ import { openSharedPm2, closeSharedPm2, readAppLogs } from '../utils/pm2-helper.
 export const logs = async ({ name }: { name: string }) => {
   await AppRepo.findByName(name);
 
+  let bus: any = null;
+  let sigintHandler: (() => void) | null = null;
+  let sigtermHandler: (() => void) | null = null;
+
+  const cleanup = () => {
+    if (sigintHandler) {
+      process.removeListener('SIGINT', sigintHandler);
+      sigintHandler = null;
+    }
+    if (sigtermHandler) {
+      process.removeListener('SIGTERM', sigtermHandler);
+      sigtermHandler = null;
+    }
+    if (bus) {
+      try { bus.close(); } catch { /* ignore */ }
+      bus = null;
+    }
+    closeSharedPm2();
+  };
+
   try {
     // Open persistent connection
     await openSharedPm2();
@@ -22,10 +42,12 @@ export const logs = async ({ name }: { name: string }) => {
 
     // Stream live logs via PM2 bus
     await new Promise<void>((resolve, reject) => {
-      pm2.launchBus((busErr, bus) => {
+      pm2.launchBus((busErr, busInstance) => {
         if (busErr) {
           return reject(busErr);
         }
+
+        bus = busInstance;
 
         Logger.info(`Streaming logs for "${Logger.highlight(name)}" (Ctrl+C to stop)...\n`);
 
@@ -47,18 +69,24 @@ export const logs = async ({ name }: { name: string }) => {
           }
         });
 
-        const cleanup = () => {
-          try { bus.close(); } catch { /* ignore */ }
-          closeSharedPm2();
-          resolve();
+        sigintHandler = () => {
+          cleanup();
+          process.exit(0);
         };
 
-        process.on('SIGINT', cleanup);
-        process.on('SIGTERM', cleanup);
+        sigtermHandler = () => {
+          cleanup();
+          process.exit(0);
+        };
+
+        process.on('SIGINT', sigintHandler);
+        process.on('SIGTERM', sigtermHandler);
+
+        // Never resolve - keep streaming until interrupted
       });
     });
   } catch (err) {
-    closeSharedPm2();
+    cleanup();
     Logger.error('Failed to stream logs:', err);
     process.exit(1);
   }
