@@ -129,8 +129,16 @@ export const listApps = async (filterType?: string, showStorages?: boolean, show
     headers.push(chalk.cyan('Routes'));
   } else {
     // Name, Port, Status, Type (minimal view)
-    const fixedWidth = 8 + 12 + 12 + 18; // Port + Status + Type + borders
-    const nameW = Math.max(20, termWidth - fixedWidth);
+    
+    const longestName = Math.max(
+  ...apps.map(a => a.name.length),
+  "Name".length
+);
+
+      const nameW = Math.min(
+  Math.max(longestName + 2, 20), // at least 20
+  35                            // never exceed 35
+          );
     
     colWidths.push(nameW, 8, 12, 12);
   }
