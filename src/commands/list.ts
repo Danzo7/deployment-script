@@ -1,10 +1,11 @@
-import { AppWithStorages } from '../db/model.js';
+import { AppWithStoragesAndRoutes } from '../db/model.js';
 import Table from 'cli-table3';
 import chalk from 'chalk';
 import { AppRepo } from '../db/repos.js';
 import { getAppStatus, openSharedPm2, closeSharedPm2 } from '../utils/pm2-helper.js';
-import { getAppRouteLines } from './domain.js';
 import { supportsUnicode } from '../utils/terminal-capabilities.js';
+import { formatRelative } from '../utils/date-helper.js';
+import { CERT_EXPIRY_WARNING_DAYS } from '../utils/ssl-helper.js';
 
 /**
  * Centralised display labels for project types.
@@ -19,8 +20,48 @@ const TYPE_MAP: Record<string, string> = {
   dotnet: supportsUnicode ? '🔷 .NET'    : '.NET',
 };
 
+/**
+ * Format routes for display (extracted from domain.ts getAppRouteLines logic)
+ */
+function formatAppRoutes(app: AppWithStoragesAndRoutes): string[] {
+  if (!app.routes || app.routes.length === 0) return [];
+
+  const lines: string[] = [];
+
+  for (const route of app.routes) {
+    const domain = route.domain;
+    const pathPart = route.path === '' ? '/' : `/${route.path}`;
+    const ssl = domain.ssl;
+    const protocol = ssl.mode === 'none' ? 'http' : 'https';
+    const url = `${protocol}://${domain.name}${pathPart}`;
+
+    let sslLabel: string;
+    if (ssl.mode === 'none') {
+      sslLabel = chalk.gray('no SSL');
+    } else if (ssl.mode === 'custom' && ssl.expiresAt) {
+      const expiry = new Date(ssl.expiresAt);
+      const now = new Date();
+      const warning = new Date(now.getTime() + CERT_EXPIRY_WARNING_DAYS * 24 * 60 * 60 * 1000);
+      const distance = formatRelative(ssl.expiresAt);
+      if (expiry < now) sslLabel = chalk.red(`SSL expired ${distance}`);
+      else if (expiry < warning) sslLabel = chalk.yellow(`SSL expires ${distance}`);
+      else sslLabel = chalk.green(`SSL valid · expires ${distance}`);
+    } else if (ssl.mode === 'custom') {
+      sslLabel = chalk.yellow('custom SSL (no cert)');
+    } else {
+      sslLabel = chalk.cyan(ssl.mode);
+    }
+
+    lines.push(`${chalk.magenta(url)}  ${sslLabel}`);
+  }
+
+  return lines;
+}
+
 export const listApps = async (filterType?: string) => {
-  let apps: (AppWithStorages & { status?: string; routes?: string[] })[] = await AppRepo.getAllWithStorages();
+  // Fetch all apps with storages and routes (with domains) in a single query
+  let apps: (AppWithStoragesAndRoutes & { status?: string; routeDisplay?: string[] })[] = 
+    await AppRepo.getAllWithStoragesAndRoutes();
 
   // Filter by project type if requested
   if (filterType) {
@@ -36,7 +77,7 @@ export const listApps = async (filterType?: string) => {
   try {
     for (const app of apps) {
       app.status = await getAppStatus(app.name);
-      app.routes = await getAppRouteLines(app.name);
+      app.routeDisplay = formatAppRoutes(app);
     }
   } finally {
     closeSharedPm2();
@@ -85,8 +126,8 @@ export const listApps = async (filterType?: string) => {
         : chalk.gray('None');
 
     const routesDisplay =
-      app.routes && app.routes.length > 0
-        ? app.routes.join('\n')
+      app.routeDisplay && app.routeDisplay.length > 0
+        ? app.routeDisplay.join('\n')
         : chalk.gray('None');
 
     table.push([

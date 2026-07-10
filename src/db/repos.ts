@@ -1,5 +1,5 @@
 import { getDB } from './db.js';
-import { App, Domain, Route, Storage, DomainSsl, RouteWithApp, DomainWithRoutesAndApps, RouteWithAppAndDomain, AppWithStorages, StorageWithApps } from './model.js';
+import { App, Domain, Route, Storage, DomainSsl, RouteWithApp, DomainWithRoutesAndApps, RouteWithAppAndDomain, AppWithStorages, AppWithStoragesAndRoutes, StorageWithApps } from './model.js';
 import { eq, and } from 'drizzle-orm';
 import { appsTable, storagesTable, domainsTable, routesTable, appStorageTable, dbType } from './schema.js';
 
@@ -122,6 +122,39 @@ export const AppRepo = {
       const app = mapToApp(row);
       const storages = (row.appStorages || []).map((as: any) => mapToStorage(as.storage));
       return { ...app, storages };
+    });
+  },
+
+  /**
+   * Get all apps with their storages AND routes (with domains) eagerly loaded via database joins
+   * This is optimized for list operations that need complete app data in a single query
+   */
+  getAllWithStoragesAndRoutes: async (): Promise<AppWithStoragesAndRoutes[]> => {
+    const db: any = getDB();
+    const rows = await db.query[dbType === 'postgres' ? 'appsTablePostgres' : 'appsTableSqlite'].findMany({
+      with: {
+        appStorages: {
+          with: {
+            storage: true,
+          },
+        },
+        routes: {
+          with: {
+            domain: true,
+          },
+        },
+      },
+    });
+    
+    return rows.map((row: any) => {
+      const app = mapToApp(row);
+      const storages = (row.appStorages || []).map((as: any) => mapToStorage(as.storage));
+      const routes = (row.routes || []).map((r: any) => {
+        const route = mapToRoute(r);
+        const domain = mapToDomain(r.domain);
+        return { ...route, app, domain };
+      });
+      return { ...app, storages, routes };
     });
   },
 

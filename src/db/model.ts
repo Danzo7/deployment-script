@@ -27,6 +27,12 @@ export interface AppWithStorages extends App {
   storages: Storage[];
 }
 
+// Extended app with storages and routes (with domains) eagerly loaded
+export interface AppWithStoragesAndRoutes extends App {
+  storages: Storage[];
+  routes: RouteWithAppAndDomain[];
+}
+
 export interface Storage {
   id: string | number; // UUID (PostgreSQL) or auto-increment integer (SQLite)
   name: string; // Unique human-readable identifier (used as the storage directory name)
