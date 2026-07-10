@@ -316,8 +316,12 @@ export const COMMANDS: Record<string, CommandNode> = {
     usage: 'list',
     describe: 'List all applications',
     group: 'Info & monitoring',
-    options: { type: { alias: 't', type: 'string', describe: 'Filter by project type (e.g. nextjs, nestjs, dotnet)' } },
-    handler: async ({ type }) => { await listApps(type); },
+    options: { 
+      type: { alias: 't', type: 'string', describe: 'Filter by project type (e.g. nextjs, nestjs, dotnet)' },
+      storages: { alias: 's', type: 'boolean', describe: 'Show storages column' },
+      routes: { alias: 'r', type: 'boolean', describe: 'Show routes column' },
+    },
+    handler: async ({ type, storages, routes }) => { await listApps(type, storages, routes); },
   },
 
   info: {

@@ -58,7 +58,7 @@ function formatAppRoutes(app: AppWithStoragesAndRoutes): string[] {
   return lines;
 }
 
-export const listApps = async (filterType?: string) => {
+export const listApps = async (filterType?: string, showStorages?: boolean, showRoutes?: boolean) => {
   // Fetch all apps with storages and routes (with domains) in a single query
   let apps: (AppWithStoragesAndRoutes & { status?: string; routeDisplay?: string[] })[] = 
     await AppRepo.getAllWithStoragesAndRoutes();
@@ -80,33 +80,64 @@ export const listApps = async (filterType?: string) => {
     
     for (const app of apps) {
       app.status = statusMap.get(app.name) || 'not-found';
-      app.routeDisplay = formatAppRoutes(app);
+      if (showRoutes) {
+        app.routeDisplay = formatAppRoutes(app);
+      }
     }
   } finally {
     closeSharedPm2();
   }
 
-  // Compute dynamic widths based on terminal width
+  // Build table headers and column widths dynamically based on flags
+  const headers: string[] = [
+    chalk.cyan('Name'),
+    chalk.cyan('Port'),
+    chalk.cyan('Status'),
+    chalk.cyan('Type'),
+  ];
+
   const termWidth = process.stdout.columns || 120;
-  // Fixed columns: Port(8), Status(12), Instances(11), Type(12) + borders/padding (6 cols * 3 = ~18)
-  const fixedWidth = 8 + 12 + 11 + 12 + 18;
-  const remaining = Math.max(termWidth - fixedWidth, 60);
-  // Distribute remaining space: name 25%, storages 30%, routes 45%
-  const nameW = Math.max(15, Math.floor(remaining * 0.25));
-  const storageW = Math.max(18, Math.floor(remaining * 0.30));
-  const routesW = Math.max(24, remaining - nameW - storageW);
+  const colWidths: number[] = [];
+
+  if (showStorages && showRoutes) {
+    // Name, Port, Status, Type, Storages, Routes
+    const fixedWidth = 8 + 12 + 12 + 18; // Port + Status + Type + borders
+    const remaining = Math.max(termWidth - fixedWidth, 60);
+    const nameW = Math.max(15, Math.floor(remaining * 0.25));
+    const storageW = Math.max(18, Math.floor(remaining * 0.30));
+    const routesW = Math.max(24, remaining - nameW - storageW);
+    
+    colWidths.push(nameW, 8, 12, 12, storageW, routesW);
+    headers.push(chalk.cyan('Storages'), chalk.cyan('Routes'));
+  } else if (showStorages) {
+    // Name, Port, Status, Type, Storages
+    const fixedWidth = 8 + 12 + 12 + 18; // Port + Status + Type + borders
+    const remaining = Math.max(termWidth - fixedWidth, 40);
+    const nameW = Math.max(15, Math.floor(remaining * 0.4));
+    const storageW = Math.max(18, remaining - nameW);
+    
+    colWidths.push(nameW, 8, 12, 12, storageW);
+    headers.push(chalk.cyan('Storages'));
+  } else if (showRoutes) {
+    // Name, Port, Status, Type, Routes
+    const fixedWidth = 8 + 12 + 12 + 18; // Port + Status + Type + borders
+    const remaining = Math.max(termWidth - fixedWidth, 40);
+    const nameW = Math.max(15, Math.floor(remaining * 0.4));
+    const routesW = Math.max(24, remaining - nameW);
+    
+    colWidths.push(nameW, 8, 12, 12, routesW);
+    headers.push(chalk.cyan('Routes'));
+  } else {
+    // Name, Port, Status, Type (minimal view)
+    const fixedWidth = 8 + 12 + 12 + 18; // Port + Status + Type + borders
+    const nameW = Math.max(20, termWidth - fixedWidth);
+    
+    colWidths.push(nameW, 8, 12, 12);
+  }
 
   const table = new Table({
-    head: [
-      chalk.cyan('Name'),
-      chalk.cyan('Port'),
-      chalk.cyan('Status'),
-      chalk.cyan('Inst'),
-      chalk.cyan('Type'),
-      chalk.cyan('Storages'),
-      chalk.cyan('Routes'),
-    ],
-    colWidths: [nameW, 8, 12, 11, 12, storageW, routesW],
+    head: headers,
+    colWidths: colWidths,
     wordWrap: true,
     style: { 'padding-left': 1, 'padding-right': 1 },
   });
@@ -123,25 +154,30 @@ export const listApps = async (filterType?: string) => {
 
     const typeDisplay = TYPE_MAP[app.projectType] ?? app.projectType ?? 'N/A';
 
-    const storageDisplay =
-      app.storages && app.storages.length > 0
-        ? app.storages.map((s) => s.name).join('\n')
-        : chalk.gray('None');
-
-    const routesDisplay =
-      app.routeDisplay && app.routeDisplay.length > 0
-        ? app.routeDisplay.join('\n')
-        : chalk.gray('None');
-
-    table.push([
+    const row: any[] = [
       chalk.white(app.name),
       chalk.white(app.port.toString()),
       statusColor(app.status || 'unknown'),
-      chalk.white(app.instances?.toString() || '1'),
       chalk.white(typeDisplay),
-      storageDisplay,
-      routesDisplay,
-    ]);
+    ];
+
+    if (showStorages) {
+      const storageDisplay =
+        app.storages && app.storages.length > 0
+          ? app.storages.map((s) => s.name).join('\n')
+          : chalk.gray('None');
+      row.push(storageDisplay);
+    }
+
+    if (showRoutes) {
+      const routesDisplay =
+        app.routeDisplay && app.routeDisplay.length > 0
+          ? app.routeDisplay.join('\n')
+          : chalk.gray('None');
+      row.push(routesDisplay);
+    }
+
+    table.push(row);
   }
 
   console.log(table.toString());
