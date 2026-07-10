@@ -2,7 +2,7 @@ import { AppWithStoragesAndRoutes } from '../db/model.js';
 import Table from 'cli-table3';
 import chalk from 'chalk';
 import { AppRepo } from '../db/repos.js';
-import { getAppStatus, openSharedPm2, closeSharedPm2 } from '../utils/pm2-helper.js';
+import { getAllAppStatuses, openSharedPm2, closeSharedPm2 } from '../utils/pm2-helper.js';
 import { supportsUnicode } from '../utils/terminal-capabilities.js';
 import { formatRelative } from '../utils/date-helper.js';
 import { CERT_EXPIRY_WARNING_DAYS } from '../utils/ssl-helper.js';
@@ -75,8 +75,11 @@ export const listApps = async (filterType?: string) => {
 
   await openSharedPm2();
   try {
+    // Fetch all PM2 statuses in a single query instead of one per app
+    const statusMap = await getAllAppStatuses();
+    
     for (const app of apps) {
-      app.status = await getAppStatus(app.name);
+      app.status = statusMap.get(app.name) || 'not-found';
       app.routeDisplay = formatAppRoutes(app);
     }
   } finally {

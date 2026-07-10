@@ -227,6 +227,24 @@ export const getAppStatus = (name: string): Promise<Status> =>
     });
   }));
 
+/**
+ * Get status for multiple apps in a single PM2 query
+ * Returns a Map of app name -> status for efficient lookup
+ */
+export const getAllAppStatuses = (): Promise<Map<string, Status>> =>
+  withPm2(() => new Promise<Map<string, Status>>((resolve, reject) => {
+    pm2.list((err, list) => {
+      if (err) return reject(err);
+      const statusMap = new Map<string, Status>();
+      for (const proc of list) {
+        if (proc.name) {
+          statusMap.set(proc.name, (proc.pm2_env?.status as Status) ?? 'not-found');
+        }
+      }
+      resolve(statusMap);
+    });
+  }));
+
 export const getProcessId = (name: string): Promise<number | undefined> =>
   withPm2(() => new Promise<number | undefined>((resolve, reject) => {
     pm2.list((err, list) => {
