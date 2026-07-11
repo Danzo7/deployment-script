@@ -7,11 +7,19 @@ interface FilterBarProps {
   query: string;
 }
 
-export function FilterBar({ active, query }: FilterBarProps): React.ReactElement {
+export function FilterBar({
+  active,
+  query,
+}: FilterBarProps): React.ReactElement {
   return (
     <Box flexDirection="row" justifyContent="space-between" width={TERM_W}>
       {active ? (
-        <Text>{query}<Text bold color="yellow">█</Text></Text>
+        <Text>
+          {query}
+          <Text bold color="yellow">
+            █
+          </Text>
+        </Text>
       ) : (
         <Text dimColor>filter apps…</Text>
       )}

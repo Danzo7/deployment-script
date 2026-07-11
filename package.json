@@ -1,18 +1,20 @@
 {
-  "name": "deployment-manager",
+  "name": "@malopan/deployment-manager",
   "version": "2.0.0",
-  "description": "A command-line tool designed to manage the deployment and status of Next.js, NestJS, and .NET applications using PM2. Now with SQL database support via Drizzle ORM.",
+  "description": "A command-line tool for managing application deployments.",
   "type": "module",
-  "main": "dist/cli.js",
+  "main": "./dist/cli.js",
   "bin": {
     "dm": "./dist/cli.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
     "prepare": "npm run build",
+    "prepublishOnly": "npm run build",
     "deploy": "node dist/cli.js",
-    "pkg": "pkg .",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write ."
@@ -34,7 +36,6 @@
     "ink-text-input": "6.0.0",
     "lowdb": "^7.0.1",
     "pg": "^8.22.0",
-    "pkg": "^5.8.1",
     "pm2": "^7.0.1",
     "portfinder": "^1.0.32",
     "react": "18.3.1",
@@ -62,12 +63,7 @@
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.17.0"
   },
-  "pkg": {
-    "scripts": "dist/cli.js",
-    "targets": [
-      "node16-linux-x64",
-      "node16-win-x64"
-    ],
-    "outputPath": "./build"
+  "engines": {
+    "node": ">=22"
   }
 }

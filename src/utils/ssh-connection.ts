@@ -34,12 +34,16 @@ export class SshConnection {
 
   constructor(private readonly creds: SshCredentials) {
     const { remoteHost } = creds;
-    
+
     // Validate SSH credentials for security
     validateSshCredentials(remoteHost);
-    
-    this.username = remoteHost.includes('@') ? remoteHost.split('@')[0] : 'root';
-    this.host = remoteHost.includes('@') ? remoteHost.split('@')[1] : remoteHost;
+
+    this.username = remoteHost.includes('@')
+      ? remoteHost.split('@')[0]
+      : 'root';
+    this.host = remoteHost.includes('@')
+      ? remoteHost.split('@')[1]
+      : remoteHost;
 
     // Default sudo password to the SSH password if not explicitly set.
     if (!this.creds.sudoPassword && this.creds.sshPassword) {
@@ -70,10 +74,14 @@ export class SshConnection {
       try {
         config.privateKey = fs.readFileSync(this.creds.sshKeyPath);
       } catch (err: any) {
-        throw new Error(`Failed to read SSH key at ${this.creds.sshKeyPath}: ${err.message}`);
+        throw new Error(
+          `Failed to read SSH key at ${this.creds.sshKeyPath}: ${err.message}`
+        );
       }
     } else {
-      throw new Error('No SSH authentication method provided. Set NGINX_REMOTE_KEY or NGINX_REMOTE_PASSWORD.');
+      throw new Error(
+        'No SSH authentication method provided. Set NGINX_REMOTE_KEY or NGINX_REMOTE_PASSWORD.'
+      );
     }
 
     await new Promise<void>((resolve, reject) => {
@@ -91,7 +99,11 @@ export class SshConnection {
             // getSharedSsh() reconnects on the next poll.
             this.connected = false;
           } else {
-            reject(new Error(`Failed to connect to ${this.creds.remoteHost}: ${err.message}`));
+            reject(
+              new Error(
+                `Failed to connect to ${this.creds.remoteHost}: ${err.message}`
+              )
+            );
           }
         })
         .on('close', () => {
@@ -100,7 +112,7 @@ export class SshConnection {
         .connect({
           ...config,
           keepaliveInterval: 10000, // send keepalive every 10s
-          keepaliveCountMax: 3,     // 3 missed keepalives → connection dead
+          keepaliveCountMax: 3, // 3 missed keepalives → connection dead
         });
     });
   }
@@ -122,7 +134,10 @@ export class SshConnection {
     return this.connected;
   }
 
-  private async run(command: string, stdin?: string): Promise<{ code: number; result: ExecResult }> {
+  private async run(
+    command: string,
+    stdin?: string
+  ): Promise<{ code: number; result: ExecResult }> {
     if (!this.connected) {
       throw new Error('(SSH) Not connected');
     }
@@ -144,7 +159,9 @@ export class SshConnection {
         }
 
         stream
-          .on('close', (code: number) => resolve({ code, result: { stdout, stderr } }))
+          .on('close', (code: number) =>
+            resolve({ code, result: { stdout, stderr } })
+          )
           .on('data', (data: Buffer) => {
             stdout += data.toString();
           })
@@ -163,7 +180,11 @@ export class SshConnection {
   async exec(command: string, stdin?: string): Promise<string> {
     const { code, result } = await this.run(command, stdin);
     if (code !== 0) {
-      throw new Error(this.redact(result.stderr || result.stdout || `Command exited with code ${code}`));
+      throw new Error(
+        this.redact(
+          result.stderr || result.stdout || `Command exited with code ${code}`
+        )
+      );
     }
     return result.stdout;
   }
@@ -189,7 +210,10 @@ export class SshConnection {
     } catch (plainErr: any) {
       try {
         if (this.creds.sudoPassword) {
-          return await this.exec(`sudo -S ${command}`, this.creds.sudoPassword + '\n');
+          return await this.exec(
+            `sudo -S ${command}`,
+            this.creds.sudoPassword + '\n'
+          );
         }
         return await this.exec(`sudo -n ${command}`);
       } catch {
@@ -207,7 +231,10 @@ export class SshConnection {
    */
   async execWithSudo(command: string): Promise<string> {
     if (this.creds.sudoPassword) {
-      return await this.exec(`sudo -S ${command}`, this.creds.sudoPassword + '\n');
+      return await this.exec(
+        `sudo -S ${command}`,
+        this.creds.sudoPassword + '\n'
+      );
     }
     return await this.exec(`sudo -n ${command}`);
   }
@@ -221,7 +248,11 @@ export class SshConnection {
         }
         sftp.fastPut(localPath, remotePath, (err) => {
           if (err) {
-            reject(new Error(`Failed to transfer ${localPath} to ${this.creds.remoteHost}: ${err.message}`));
+            reject(
+              new Error(
+                `Failed to transfer ${localPath} to ${this.creds.remoteHost}: ${err.message}`
+              )
+            );
           } else {
             resolve();
           }
@@ -257,13 +288,23 @@ export class SshConnection {
    * Also returns the file's current total size.
    * Returns null if the file does not exist.
    */
-  async sftpReadChunk(remotePath: string, offset: number, maxBytes: number): Promise<{ size: number; chunk: Buffer } | null> {
+  async sftpReadChunk(
+    remotePath: string,
+    offset: number,
+    maxBytes: number
+  ): Promise<{ size: number; chunk: Buffer } | null> {
     return new Promise((resolve, reject) => {
       this.client.sftp((err, sftp) => {
-        if (err) { reject(err); return; }
+        if (err) {
+          reject(err);
+          return;
+        }
         sftp.stat(remotePath, (statErr, stats) => {
           if (statErr) {
-            if (statErr.message.includes('No such file')) { resolve(null); return; }
+            if (statErr.message.includes('No such file')) {
+              resolve(null);
+              return;
+            }
             reject(statErr);
             return;
           }
@@ -275,10 +316,16 @@ export class SshConnection {
           const toRead = Math.min(size - offset, maxBytes);
           const buf = Buffer.alloc(toRead);
           sftp.open(remotePath, 'r', (openErr, handle) => {
-            if (openErr) { reject(openErr); return; }
+            if (openErr) {
+              reject(openErr);
+              return;
+            }
             sftp.read(handle, buf, 0, toRead, offset, (readErr, bytesRead) => {
               sftp.close(handle, () => {});
-              if (readErr) { reject(readErr); return; }
+              if (readErr) {
+                reject(readErr);
+                return;
+              }
               resolve({ size, chunk: buf.subarray(0, bytesRead) });
             });
           });

@@ -76,13 +76,17 @@ export function validateHostname(s: string): boolean {
  */
 export function assertPathUnique(
   routes: Route[],
-  domainId: string|number,
+  domainId: string | number,
   normalizedPath: string,
   domainName: string
 ): void {
-  const existing = routes.find((r) => r.domainId === domainId && r.path === normalizedPath);
+  const existing = routes.find(
+    (r) => r.domainId === domainId && r.path === normalizedPath
+  );
   if (existing) {
-    throw new Error(`Path "/${normalizedPath}" is already registered on domain "${domainName}"`);
+    throw new Error(
+      `Path "/${normalizedPath}" is already registered on domain "${domainName}"`
+    );
   }
 }
 
@@ -91,13 +95,17 @@ export function assertPathUnique(
  */
 export function assertAppUniqueOnDomain(
   routes: Route[],
-  domainId: string|number,
+  domainId: string | number,
   app: App,
   domainName: string
 ): void {
-  const existing = routes.find((r) => r.domainId === domainId && r.appId === app.id);
+  const existing = routes.find(
+    (r) => r.domainId === domainId && r.appId === app.id
+  );
   if (existing) {
-    throw new Error(`App "${app.name}" is already routed under domain "${domainName}"`);
+    throw new Error(
+      `App "${app.name}" is already routed under domain "${domainName}"`
+    );
   }
 }
 

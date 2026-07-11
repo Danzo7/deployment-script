@@ -11,15 +11,15 @@ import {
 
 /**
  * Reloads certificates from disk for all domains or a specific domain.
- * 
+ *
  * This command scans the certificate storage folder (Cert_Store) for each domain
  * and synchronizes the database with the actual certificate files on disk.
- * 
+ *
  * Behavior:
  * - If cert and key files exist on disk but not in DB → adds certificate to DB
  * - If cert and key files exist on disk and in DB → updates certificate metadata in DB
  * - If certificate exists in DB but files missing on disk → warns and removes SSL from domain
- * 
+ *
  * Use cases:
  * - Easy way to load certificates after manual file placement
  * - Refresh certificate metadata after manual certificate replacement
@@ -61,7 +61,11 @@ export async function domainReloadCerts(name?: string): Promise<void> {
 
     console.log();
     Logger.success(`Certificate reload complete.`);
-    console.log(chalk.gray(`  Added: ${added}, Updated: ${updated}, Removed: ${removed}, Skipped: ${skipped}`));
+    console.log(
+      chalk.gray(
+        `  Added: ${added}, Updated: ${updated}, Removed: ${removed}, Skipped: ${skipped}`
+      )
+    );
     console.log();
   }
 }
@@ -94,31 +98,43 @@ async function reloadDomainCert(
       const { certPath, keyPath, metadata } = loadCertFromStore(domainName);
 
       // Update or add certificate to database
-      await DomainRepo.update(domainName, buildSSLConfig({
-        certPath,
-        keyPath,
-        uploadedAt: dbHasCert ? domain.ssl.uploadedAt : undefined,
-        metadata,
-      }));
-      DomainRepo.update(domainName, buildSSLConfig({
-        certPath,
-        keyPath,
-        uploadedAt: dbHasCert ? domain.ssl.uploadedAt : undefined,
-        metadata,
-      }));
+      await DomainRepo.update(
+        domainName,
+        buildSSLConfig({
+          certPath,
+          keyPath,
+          uploadedAt: dbHasCert ? domain.ssl.uploadedAt : undefined,
+          metadata,
+        })
+      );
+      DomainRepo.update(
+        domainName,
+        buildSSLConfig({
+          certPath,
+          keyPath,
+          uploadedAt: dbHasCert ? domain.ssl.uploadedAt : undefined,
+          metadata,
+        })
+      );
 
       if (!quiet) {
         if (dbHasCert) {
-          Logger.success(`Certificate refreshed for "${domainName}". Expires: ${metadata.expiresAt}`);
+          Logger.success(
+            `Certificate refreshed for "${domainName}". Expires: ${metadata.expiresAt}`
+          );
         } else {
-          Logger.success(`Certificate loaded for "${domainName}". Expires: ${metadata.expiresAt}`);
+          Logger.success(
+            `Certificate loaded for "${domainName}". Expires: ${metadata.expiresAt}`
+          );
         }
       }
 
       return dbHasCert ? 'updated' : 'added';
     } catch (err: any) {
       if (!quiet) {
-        Logger.error(`Failed to load certificate for "${domainName}": ${err.message}`);
+        Logger.error(
+          `Failed to load certificate for "${domainName}": ${err.message}`
+        );
       }
       return 'skipped';
     }

@@ -6,11 +6,16 @@ const REFRESH_MS = 2000;
 
 const statusColor = (status: string) => {
   switch (status) {
-    case 'online':   return chalk.green(status);
-    case 'errored':  return chalk.red(status);
-    case 'stopped':  return chalk.yellow(status);
-    case 'stopping': return chalk.yellow(status);
-    default: return status;
+    case 'online':
+      return chalk.green(status);
+    case 'errored':
+      return chalk.red(status);
+    case 'stopped':
+      return chalk.yellow(status);
+    case 'stopping':
+      return chalk.yellow(status);
+    default:
+      return status;
   }
 };
 
@@ -33,12 +38,12 @@ const renderTable = (list: pm2.ProcessDescription[]) => {
   console.log(`${chalk.bold('PM2 Monitor')}  (Ctrl+C to exit)\n`);
   console.log(
     'ID'.padEnd(5) +
-    'Name'.padEnd(25) +
-    'Status'.padEnd(12) +
-    'CPU'.padEnd(8) +
-    'Memory'.padEnd(12) +
-    'Uptime'.padEnd(15) +
-    'Restarts'
+      'Name'.padEnd(25) +
+      'Status'.padEnd(12) +
+      'CPU'.padEnd(8) +
+      'Memory'.padEnd(12) +
+      'Uptime'.padEnd(15) +
+      'Restarts'
   );
   console.log('-'.repeat(85));
 

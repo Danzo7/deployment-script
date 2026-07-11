@@ -56,7 +56,8 @@ function parseJsonLine(raw: string): LogEntry | null {
       uri: o.uri ?? '/',
       status: Number(o.status),
       bytes: Number(o.bytes ?? 0),
-      responseTime: o.rt !== undefined && o.rt !== '-' ? Number(o.rt) : undefined,
+      responseTime:
+        o.rt !== undefined && o.rt !== '-' ? Number(o.rt) : undefined,
       remoteAddr: o.addr ?? '',
     };
   } catch {
@@ -76,10 +77,12 @@ function parseCombinedLine(raw: string): LogEntry | null {
   if (!m) return null;
   const [, addr, timeStr, method, uri, status, bytes] = m;
   // parse "01/Jan/2025:12:00:00 +0000"
-  const ts = new Date(timeStr.replace(
-    /(\d+)\/(\w+)\/(\d+):(\d+:\d+:\d+)\s+([+-]\d{4})/,
-    '$2 $1 $3 $4 $5'
-  ));
+  const ts = new Date(
+    timeStr.replace(
+      /(\d+)\/(\w+)\/(\d+):(\d+:\d+:\d+)\s+([+-]\d{4})/,
+      '$2 $1 $3 $4 $5'
+    )
+  );
   return {
     ts: isNaN(ts.getTime()) ? new Date() : ts,
     method,
@@ -125,9 +128,10 @@ function computeWindow(entries: LogEntry[]): Omit<LogWindow, 'logPath'> {
   const now = Date.now();
   const lastMinEntries = entries.filter((e) => now - e.ts.getTime() < 60_000);
 
-  const reqPerSec = lastMinEntries.length > 0
-    ? Math.round((lastMinEntries.length / 60) * 10) / 10
-    : 0;
+  const reqPerSec =
+    lastMinEntries.length > 0
+      ? Math.round((lastMinEntries.length / 60) * 10) / 10
+      : 0;
 
   const dist = { s2xx: 0, s3xx: 0, s4xx: 0, s5xx: 0 };
   for (const e of entries) {
@@ -141,9 +145,15 @@ function computeWindow(entries: LogEntry[]): Omit<LogWindow, 'logPath'> {
   let p50ms: number | undefined;
   let p95ms: number | undefined;
   if (withRt.length > 0) {
-    const sorted = [...withRt].sort((a, b) => (a.responseTime! - b.responseTime!));
-    p50ms = Math.round(sorted[Math.floor(sorted.length * 0.5)]!.responseTime! * 1000);
-    p95ms = Math.round(sorted[Math.floor(sorted.length * 0.95)]!.responseTime! * 1000);
+    const sorted = [...withRt].sort(
+      (a, b) => a.responseTime! - b.responseTime!
+    );
+    p50ms = Math.round(
+      sorted[Math.floor(sorted.length * 0.5)]!.responseTime! * 1000
+    );
+    p95ms = Math.round(
+      sorted[Math.floor(sorted.length * 0.95)]!.responseTime! * 1000
+    );
   }
 
   const noResponseTime = withRt.length === 0;
@@ -174,7 +184,7 @@ function computeWindow(entries: LogEntry[]): Omit<LogWindow, 'logPath'> {
  */
 export class NginxLogTailer {
   private entries: LogEntry[] = [];
-  private localOffset = 0;       // bytes consumed on last local read
+  private localOffset = 0; // bytes consumed on last local read
   private lastError: string | undefined;
   /** True once the file has been successfully accessed at least once (no "not found" error) */
   private hasPolled = false;
@@ -184,7 +194,7 @@ export class NginxLogTailer {
     private readonly logPath: string,
     ssh?: SshConnection | (() => SshConnection | undefined),
     /** Optional: override the default log path derivation for a custom location */
-    private readonly remoteLogPath?: string,
+    private readonly remoteLogPath?: string
   ) {
     if (typeof ssh === 'function') {
       this.sshProvider = ssh;
@@ -201,10 +211,15 @@ export class NginxLogTailer {
    *  e.g. domain="api.example.com", routePath="/v1" → "/var/log/nginx/api_example_com_v1.access.log"
    *       domain="api.example.com", routePath="/"   → "/var/log/nginx/api_example_com_root.access.log"
    */
-  static accessLogPath(domainName: string, routePath: string, isRemote = false): string {
+  static accessLogPath(
+    domainName: string,
+    routePath: string,
+    isRemote = false
+  ): string {
     const safeDomain = domainName.toLowerCase().replace(/[^a-z0-9]/g, '_');
     // Normalise route: strip leading/trailing slashes, replace separators with _
-    const safeRoute = routePath.replace(/^\/+|\/+$/g, '').replace(/[^a-z0-9]/gi, '_') || 'root';
+    const safeRoute =
+      routePath.replace(/^\/+|\/+$/g, '').replace(/[^a-z0-9]/gi, '_') || 'root';
     const dir = '/var/log/nginx';
     void isRemote; // path is the same whether local or remote SSH
     return `${dir}/${safeDomain}_${safeRoute}.access.log`;
@@ -266,7 +281,12 @@ export class NginxLogTailer {
     try {
       const MAX_READ = 256 * 1024;
 
-      const result = await this.remoteReadChunk(sshConn, path, this.localOffset, MAX_READ);
+      const result = await this.remoteReadChunk(
+        sshConn,
+        path,
+        this.localOffset,
+        MAX_READ
+      );
       if (result === null) {
         this.lastError = `Log file not found: ${path}`;
         return;
@@ -304,7 +324,7 @@ export class NginxLogTailer {
     sshConn: SshConnection,
     path: string,
     offset: number,
-    maxBytes: number,
+    maxBytes: number
   ): Promise<{ size: number; chunk: Buffer } | null> {
     try {
       // For initial seed (offset=0), read last maxBytes of the file
@@ -320,9 +340,13 @@ export class NginxLogTailer {
       const text = await sshConn.execWithSudo(`cat "${path}"`);
       const buf = Buffer.from(text, 'utf8');
       if (buf.length === 0) return null;
-      const chunk = offset === 0
-        ? buf.subarray(Math.max(0, buf.length - maxBytes))
-        : buf.subarray(Math.min(offset, buf.length), Math.min(offset + maxBytes, buf.length));
+      const chunk =
+        offset === 0
+          ? buf.subarray(Math.max(0, buf.length - maxBytes))
+          : buf.subarray(
+              Math.min(offset, buf.length),
+              Math.min(offset + maxBytes, buf.length)
+            );
       return { size: buf.length, chunk };
     }
   }

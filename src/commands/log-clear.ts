@@ -28,10 +28,17 @@ async function clearLogsForProcess(name: string): Promise<void> {
   });
 }
 
-export const logClear = async ({ name, all }: { name?: string; all?: boolean }) => {
+export const logClear = async ({
+  name,
+  all,
+}: {
+  name?: string;
+  all?: boolean;
+}) => {
   await new Promise<void>((resolve, reject) => {
     pm2.connect((connectErr) => {
-      if (connectErr) return reject(new Error(`Failed to connect to pm2: ${connectErr}`));
+      if (connectErr)
+        return reject(new Error(`Failed to connect to pm2: ${connectErr}`));
       resolve();
     });
   });
@@ -45,7 +52,10 @@ export const logClear = async ({ name, all }: { name?: string; all?: boolean }) 
       }
       Logger.info('All app logs cleared.');
     } else {
-      if (!name) throw new Error('Provide an app <name> or use --all to clear all logs.');
+      if (!name)
+        throw new Error(
+          'Provide an app <name> or use --all to clear all logs.'
+        );
       await AppRepo.findByName(name);
       await clearLogsForProcess(name);
       Logger.info(`Logs cleared for "${Logger.highlight(name)}".`);

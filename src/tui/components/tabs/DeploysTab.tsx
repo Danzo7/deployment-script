@@ -12,15 +12,26 @@ interface DeploysTabProps {
   maxVisible: number;
 }
 
-export function DeploysTab({ summary, deployCursor, scrollOffset, maxVisible }: DeploysTabProps): React.ReactElement {
+export function DeploysTab({
+  summary,
+  deployCursor,
+  scrollOffset,
+  maxVisible,
+}: DeploysTabProps): React.ReactElement {
   const { app } = summary;
   const builds = app.builds ?? [];
 
   if (builds.length === 0) {
-    return <Box width={DETAIL_W}><Text dimColor>No builds found.</Text></Box>;
+    return (
+      <Box width={DETAIL_W}>
+        <Text dimColor>No builds found.</Text>
+      </Box>
+    );
   }
 
-  const activeBuildIndex = app.activeBuild ? builds.findIndex((b) => b === app.activeBuild) : -1;
+  const activeBuildIndex = app.activeBuild
+    ? builds.findIndex((b) => b === app.activeBuild)
+    : -1;
   const activeCommit = app.lastDeployedCommit;
   const activeDeployDate = app.lastDeploy;
   const visibleBuilds = builds.slice(scrollOffset, scrollOffset + maxVisible);
@@ -38,7 +49,11 @@ export function DeploysTab({ summary, deployCursor, scrollOffset, maxVisible }: 
           commitMsg = activeCommit.message;
           ageStr = fmtDate(activeDeployDate);
         } else {
-          const base = buildPath.replace(/[/\\]+$/, '').split(/[/\\]/).pop() ?? buildPath;
+          const base =
+            buildPath
+              .replace(/[/\\]+$/, '')
+              .split(/[/\\]/)
+              .pop() ?? buildPath;
           shortHash = base.slice(0, 7);
           commitMsg = base;
           ageStr = '—';
@@ -48,17 +63,35 @@ export function DeploysTab({ summary, deployCursor, scrollOffset, maxVisible }: 
 
         return (
           <Box key={idx} flexDirection="row" width={DETAIL_W}>
-            {isCursor ? <Text bold color="yellow">▌▌</Text> : <Text>{'  '}</Text>}
-            {isActive ? <Text bold color="yellow">● </Text> : <Text dimColor>○ </Text>}
-            <Text bold color="yellow">{shortHash}</Text>
+            {isCursor ? (
+              <Text bold color="yellow">
+                ▌▌
+              </Text>
+            ) : (
+              <Text>{'  '}</Text>
+            )}
+            {isActive ? (
+              <Text bold color="yellow">
+                ●{' '}
+              </Text>
+            ) : (
+              <Text dimColor>○ </Text>
+            )}
+            <Text bold color="yellow">
+              {shortHash}
+            </Text>
             <Text> </Text>
-            {isCursor
-              ? <Text bold color="yellow">{truncate(commitMsg, msgMaxLen)}</Text>
-              : isActive
-                ? <Text>{truncate(commitMsg, msgMaxLen)}</Text>
-                : <Text dimColor>{truncate(commitMsg, msgMaxLen)}</Text>}
+            {isCursor ? (
+              <Text bold color="yellow">
+                {truncate(commitMsg, msgMaxLen)}
+              </Text>
+            ) : isActive ? (
+              <Text>{truncate(commitMsg, msgMaxLen)}</Text>
+            ) : (
+              <Text dimColor>{truncate(commitMsg, msgMaxLen)}</Text>
+            )}
             {isActive && <Text dimColor> [active]</Text>}
-            <Text dimColor>  {ageStr}</Text>
+            <Text dimColor> {ageStr}</Text>
           </Box>
         );
       })}

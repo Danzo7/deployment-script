@@ -1,7 +1,11 @@
 import pm2 from 'pm2';
 import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
-import { openSharedPm2, closeSharedPm2, readAppLogs } from '../utils/pm2-helper.js';
+import {
+  openSharedPm2,
+  closeSharedPm2,
+  readAppLogs,
+} from '../utils/pm2-helper.js';
 
 export const logs = async ({ name }: { name: string }) => {
   await AppRepo.findByName(name);
@@ -20,7 +24,11 @@ export const logs = async ({ name }: { name: string }) => {
       sigtermHandler = null;
     }
     if (bus) {
-      try { bus.close(); } catch { /* ignore */ }
+      try {
+        bus.close();
+      } catch {
+        /* ignore */
+      }
       bus = null;
     }
     closeSharedPm2();
@@ -49,7 +57,9 @@ export const logs = async ({ name }: { name: string }) => {
 
         bus = busInstance;
 
-        Logger.info(`Streaming logs for "${Logger.highlight(name)}" (Ctrl+C to stop)...\n`);
+        Logger.info(
+          `Streaming logs for "${Logger.highlight(name)}" (Ctrl+C to stop)...\n`
+        );
 
         bus.on('log:out', (packet: any) => {
           if (packet.process?.name === name) {
@@ -59,13 +69,17 @@ export const logs = async ({ name }: { name: string }) => {
 
         bus.on('log:err', (packet: any) => {
           if (packet.process?.name === name) {
-            process.stderr.write(`[${packet.process.name}][err] ${packet.data}\n`);
+            process.stderr.write(
+              `[${packet.process.name}][err] ${packet.data}\n`
+            );
           }
         });
 
         bus.on('process:exception', (packet: any) => {
           if (packet.process?.name === name) {
-            process.stderr.write(`[${packet.process.name}][exception] ${JSON.stringify(packet.data)}\n`);
+            process.stderr.write(
+              `[${packet.process.name}][exception] ${JSON.stringify(packet.data)}\n`
+            );
           }
         });
 

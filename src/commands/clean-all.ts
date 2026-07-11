@@ -14,7 +14,8 @@ export const cleanAll = async () => {
 
   Logger.info(`Cleaning ${apps.length} app(s)...`);
 
-  const results: { name: string; status: 'ok' | 'failed'; error?: unknown }[] = [];
+  const results: { name: string; status: 'ok' | 'failed'; error?: unknown }[] =
+    [];
 
   for (const app of apps) {
     Logger.info(`\n--- Cleaning: ${app.name} ---`);
@@ -40,7 +41,9 @@ export const cleanAll = async () => {
   }
 
   const failed = results.filter((r) => r.status === 'failed');
-  Logger.info(`\nDone. ${results.length - failed.length}/${results.length} app(s) cleaned successfully.`);
+  Logger.info(
+    `\nDone. ${results.length - failed.length}/${results.length} app(s) cleaned successfully.`
+  );
   if (failed.length > 0) {
     Logger.warn(`Failed: ${failed.map((r) => r.name).join(', ')}`);
   }

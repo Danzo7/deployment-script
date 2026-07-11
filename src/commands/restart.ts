@@ -8,14 +8,16 @@ export const restart = async ({ name }: { name: string }) => {
   const app = await AppRepo.findByName(name);
 
   if (!app.builds?.length || !app.activeBuild) {
-    throw new Error(`No build found for "${Logger.highlight(name)}". Run ${Logger.command(`dm deploy ${name}`)} first.`);
+    throw new Error(
+      `No build found for "${Logger.highlight(name)}". Run ${Logger.command(`dm deploy ${name}`)} first.`
+    );
   }
 
   const buildDir = await AppRepo.resolveActiveBuild(name);
   if (!buildDir) {
     throw new Error(`No active build found for "${Logger.highlight(name)}".`);
   }
-  
+
   const { logDir } = ensureDirectories(app.appDir);
   const status = await getAppStatus(name);
 

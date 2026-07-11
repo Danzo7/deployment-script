@@ -6,7 +6,10 @@ const DATE_TIME_FORMAT = 'yyyy-MM-dd HH:mm:ss';
  * Formats a date to 'yyyy-MM-dd HH:mm:ss'.
  * Accepts an ISO string, Date, or number. Returns `fallback` if no value given.
  */
-export function formatDate(date?: string | Date | number, fallback = '—'): string {
+export function formatDate(
+  date?: string | Date | number,
+  fallback = '—'
+): string {
   if (!date) return fallback;
   return format(new Date(date), DATE_TIME_FORMAT);
 }

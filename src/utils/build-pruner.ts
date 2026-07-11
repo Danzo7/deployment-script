@@ -41,7 +41,9 @@ const removeBuildDir = async (buildPath: string): Promise<void> => {
             fs.unlinkSync(entryPath);
           }
         } catch (err) {
-          Logger.warn(`Could not remove storage symlink "${entry.name}" in build "${path.basename(buildPath)}": ${err}`);
+          Logger.warn(
+            `Could not remove storage symlink "${entry.name}" in build "${path.basename(buildPath)}": ${err}`
+          );
         }
       }
     }
@@ -58,7 +60,10 @@ const removeBuildDir = async (buildPath: string): Promise<void> => {
 /**
  * Shared removal logic: iterates builds, shows spinner, updates DB.
  */
-const removeBuilds = async (appName: string, buildPaths: string[]): Promise<void> => {
+const removeBuilds = async (
+  appName: string,
+  buildPaths: string[]
+): Promise<void> => {
   if (buildPaths.length === 0) return;
   Logger.info(`Removing ${buildPaths.length} old build(s) for "${appName}"...`);
 
@@ -90,7 +95,10 @@ export const pruneOldBuilds = async (appName: string): Promise<void> => {
     .filter(({ buildPath }) => buildPath !== app.activeBuild)
     .slice(0, app.builds.length - MAX_BUILDS);
 
-  await removeBuilds(appName, buildsToRemove.map((b) => b.buildPath));
+  await removeBuilds(
+    appName,
+    buildsToRemove.map((b) => b.buildPath)
+  );
 };
 
 /**
@@ -99,7 +107,7 @@ export const pruneOldBuilds = async (appName: string): Promise<void> => {
 export const pruneAllBuilds = async (appName: string): Promise<void> => {
   const app = await AppRepo.findByName(appName);
   if (!app?.builds || app.builds.length === 0) {
-    Logger.info("No old builds to clean.");
+    Logger.info('No old builds to clean.');
     return;
   }
 
@@ -109,7 +117,7 @@ export const pruneAllBuilds = async (appName: string): Promise<void> => {
     .map((b) => b.buildPath);
 
   if (buildsToRemove.length === 0) {
-    Logger.info("No old builds to clean.");
+    Logger.info('No old builds to clean.');
     return;
   }
 

@@ -37,28 +37,28 @@ export function captureFileSnapshot(filePath: string): FileSnapshot {
   try {
     const stats = fs.lstatSync(filePath);
     const isSymlink = stats.isSymbolicLink();
-    
+
     if (isSymlink) {
       const target = fs.readlinkSync(filePath);
       return {
         path: filePath,
         existed: true,
         isSymlink: true,
-        target
+        target,
       };
     } else {
       const content = fs.readFileSync(filePath);
       return {
         path: filePath,
         existed: true,
-        content
+        content,
       };
     }
   } catch (err: any) {
     if (err.code === 'ENOENT') {
       return {
         path: filePath,
-        existed: false
+        existed: false,
       };
     }
     throw err;
@@ -143,13 +143,25 @@ export function buildRollbackTargets(
 ): RollbackTarget[] {
   const targets: RollbackTarget[] = [
     { label: 'symlink', path: paths.symlinkPath, snapshot: snapshot.symlink },
-    { label: 'config file', path: paths.configPath, snapshot: snapshot.configFile },
+    {
+      label: 'config file',
+      path: paths.configPath,
+      snapshot: snapshot.configFile,
+    },
   ];
 
   if (snapshot.certs && paths.certPath && paths.keyPath) {
     targets.push(
-      { label: 'certificate', path: paths.certPath, snapshot: snapshot.certs.cert },
-      { label: 'private key', path: paths.keyPath, snapshot: snapshot.certs.key }
+      {
+        label: 'certificate',
+        path: paths.certPath,
+        snapshot: snapshot.certs.cert,
+      },
+      {
+        label: 'private key',
+        path: paths.keyPath,
+        snapshot: snapshot.certs.key,
+      }
     );
   }
 

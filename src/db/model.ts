@@ -15,10 +15,10 @@ export interface App {
   projectType: 'nextjs' | 'nestjs' | 'dotnet' | 'static'; // Project framework type
   projectDir?: string; // Optional subdirectory within the repo that contains the project (for monorepos)
   lastDeployedCommit?: {
-    hash: string;    // Short commit hash (7 chars) or SVN revision
+    hash: string; // Short commit hash (7 chars) or SVN revision
     message: string; // Commit message
-    author: string;  // Commit author
-    date: string;    // ISO date string
+    author: string; // Commit author
+    date: string; // ISO date string
   };
 }
 
@@ -48,13 +48,13 @@ export interface StorageWithApps extends Storage {
 
 export interface DomainSsl {
   mode: 'none' | 'letsencrypt' | 'custom';
-  certPath?: string;      // Absolute path to cert.pem in the Cert_Store
-  keyPath?: string;       // Absolute path to key.pem in the Cert_Store
-  uploadedAt?: string;    // ISO 8601 timestamp when cert was attached
-  expiresAt?: string;     // ISO 8601, parsed from cert via crypto.X509Certificate
-  issuedTo?: string;      // CN from cert subject
-  issuer?: string;        // Issuer CN
-  sanDomains?: string[];  // Subject Alternative Names
+  certPath?: string; // Absolute path to cert.pem in the Cert_Store
+  keyPath?: string; // Absolute path to key.pem in the Cert_Store
+  uploadedAt?: string; // ISO 8601 timestamp when cert was attached
+  expiresAt?: string; // ISO 8601, parsed from cert via crypto.X509Certificate
+  issuedTo?: string; // CN from cert subject
+  issuer?: string; // Issuer CN
+  sanDomains?: string[]; // Subject Alternative Names
 }
 
 export interface Domain {

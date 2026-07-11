@@ -13,7 +13,10 @@ const MIN_SVN_MINOR = 9;
 export const checkSvn = (throwOnMissing = false): boolean => {
   let out: string | null = null;
   try {
-    out = execSync('svn --version --quiet', { stdio: 'pipe', encoding: 'utf8' }).trim();
+    out = execSync('svn --version --quiet', {
+      stdio: 'pipe',
+      encoding: 'utf8',
+    }).trim();
   } catch {
     // not installed
   }
@@ -31,7 +34,9 @@ export const checkSvn = (throwOnMissing = false): boolean => {
   if (match) {
     const major = parseInt(match[1], 10);
     const minor = parseInt(match[2], 10);
-    const ok = major > MIN_SVN_MAJOR || (major === MIN_SVN_MAJOR && minor >= MIN_SVN_MINOR);
+    const ok =
+      major > MIN_SVN_MAJOR ||
+      (major === MIN_SVN_MAJOR && minor >= MIN_SVN_MINOR);
     if (!ok) {
       const msg =
         `SVN ${out} is too old (minimum required: ${MIN_SVN_MAJOR}.${MIN_SVN_MINOR}).\n` +
@@ -63,7 +68,11 @@ const isSvnWorkingCopy = (dir: string): boolean => {
  * Otherwise treats repo as the full URL.
  */
 const buildSvnUrl = (repo: string, branch: string): string => {
-  if (branch === 'trunk' || branch.startsWith('branches/') || branch.startsWith('tags/')) {
+  if (
+    branch === 'trunk' ||
+    branch.startsWith('branches/') ||
+    branch.startsWith('tags/')
+  ) {
     return `${repo.replace(/\/$/, '')}/${branch}`;
   }
   return repo; // repo is already the full URL
@@ -104,12 +113,11 @@ export const handleSvnRepo = async ({
   );
 
   Logger.info('Updating SVN working copy...');
-  await withRetry('Updating SVN working copy', async () =>
-    svn('update', dir)
-  );
+  await withRetry('Updating SVN working copy', async () => svn('update', dir));
 
-  const revAfter = await withRetry('Getting SVN revision after update', async () =>
-    svn('info --show-item revision', dir)
+  const revAfter = await withRetry(
+    'Getting SVN revision after update',
+    async () => svn('info --show-item revision', dir)
   );
 
   if (revBefore !== revAfter) {
@@ -123,7 +131,12 @@ export const handleSvnRepo = async ({
 
 export const getLastSvnRevision = async (
   dir: string
-): Promise<{ hash: string; message: string; author: string; date: string } | null> => {
+): Promise<{
+  hash: string;
+  message: string;
+  author: string;
+  date: string;
+} | null> => {
   try {
     const output = svn('log --limit 1 --xml', dir);
     const revMatch = output.match(/revision="(\d+)"/);
@@ -156,7 +169,11 @@ export const discardSvnChanges = async (dir: string): Promise<void> => {
   }
 };
 
-export const relocateSvnRepo = async (dir: string, newUrl: string, branch: string): Promise<void> => {
+export const relocateSvnRepo = async (
+  dir: string,
+  newUrl: string,
+  branch: string
+): Promise<void> => {
   checkSvn(true);
   const fullUrl = buildSvnUrl(newUrl, branch);
 

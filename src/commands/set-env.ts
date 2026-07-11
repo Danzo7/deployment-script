@@ -18,16 +18,13 @@ export const setEnvForApp = async ({
 
   const { envDir } = ensureDirectories(app.appDir);
 
-  Logger.info(
-    `Setting environment variable.....`
+  Logger.info(`Setting environment variable.....`);
+
+  setEnv(envDir, envName, envValue);
+
+  Logger.success(
+    `To apply the changes, run: ${Logger.highlight(`dm deploy ${name}`)}`
   );
-
- setEnv(envDir, envName, envValue);
-
-    Logger.success(
-      `To apply the changes, run: ${Logger.highlight(`dm deploy ${name}`)}`
-    );
- 
 };
 
 /**

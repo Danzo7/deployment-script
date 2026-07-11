@@ -26,15 +26,15 @@ A CLI + interactive shell for deploying and managing Next.js, NestJS, .NET, and 
 
 ## Requirements
 
-| Concern | Requirement |
-|---|---|
-| Runtime (server) | Node.js 18+ |
-| Process manager | PM2 (global) |
-| Version control | git, svn, or a local folder path |
+| Concern               | Requirement                                        |
+| --------------------- | -------------------------------------------------- |
+| Runtime (server)      | Node.js 18+                                        |
+| Process manager       | PM2 (global)                                       |
+| Version control       | git, svn, or a local folder path                   |
 | Nginx (reverse proxy) | Linux machine with nginx installed and sudo access |
-| .NET apps | .NET 8 SDK on the build machine |
-| Remote SSH client | OpenSSH client (`ssh` on PATH) |
-| PFX cert extraction | `openssl` on PATH |
+| .NET apps             | .NET 8 SDK on the build machine                    |
+| Remote SSH client     | OpenSSH client (`ssh` on PATH)                     |
+| PFX cert extraction   | `openssl` on PATH                                  |
 
 Nginx operations require Linux. dm can be installed on any OS for app management (deploy, env, logs, etc.), but `domain push` only succeeds when nginx is reachable — either locally on Linux, or via a remote Linux host over SSH.
 
@@ -52,12 +52,12 @@ Copy `.env.example` to `.env` in the dm root and edit as needed before use.
 
 ## Project types
 
-| Type | Build tool | PM2 mode | Entry point |
-|---|---|---|---|
-| `nextjs` | npm run build | cluster | next start |
-| `nestjs` | npm run build | cluster | dist/main.js |
-| `dotnet` | dotnet publish | fork | dotnet \<app\>.dll |
-| `static` | none | fork | sirv (built-in static file server) |
+| Type     | Build tool     | PM2 mode | Entry point                        |
+| -------- | -------------- | -------- | ---------------------------------- |
+| `nextjs` | npm run build  | cluster  | next start                         |
+| `nestjs` | npm run build  | cluster  | dist/main.js                       |
+| `dotnet` | dotnet publish | fork     | dotnet \<app\>.dll                 |
+| `static` | none           | fork     | sirv (built-in static file server) |
 
 Static apps must have pre-built files committed to the repo. A `package.json` with a build step is not supported for the static type.
 
@@ -93,15 +93,15 @@ dm init <name> --repo <url> [options]
 
 Registers a new application and records it in the database. Does not deploy — run `dm deploy <name>` afterwards.
 
-| Option | Default | Description |
-|---|---|---|
-| `--repo, -r` | required | Repository URL (git/svn) or local folder path |
-| `--branch, -b` | main | Branch to track |
-| `--instances, -i` | 1 | PM2 cluster instances |
-| `--port, -p` | auto | Port; auto-discovered if omitted |
-| `--type, -t` | nextjs | nextjs, nestjs, dotnet, static |
-| `--project-dir, -d` | — | Subdirectory within repo (monorepo) |
-| `--vcs` | git | git, svn, or local |
+| Option              | Default  | Description                                   |
+| ------------------- | -------- | --------------------------------------------- |
+| `--repo, -r`        | required | Repository URL (git/svn) or local folder path |
+| `--branch, -b`      | main     | Branch to track                               |
+| `--instances, -i`   | 1        | PM2 cluster instances                         |
+| `--port, -p`        | auto     | Port; auto-discovered if omitted              |
+| `--type, -t`        | nextjs   | nextjs, nestjs, dotnet, static                |
+| `--project-dir, -d` | —        | Subdirectory within repo (monorepo)           |
+| `--vcs`             | git      | git, svn, or local                            |
 
 ### deploy
 
@@ -220,11 +220,11 @@ dm route list <domainName>
 
 dm uses a three-layer merge for `add_header` directives in every location block:
 
-| Layer | Source | Priority |
-|---|---|---|
-| 1 | Built-in defaults: `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` (+ HSTS when SSL enabled) | lowest |
-| 2 | Domain-level headers — `dm domain set-header` | middle |
-| 3 | Route-level headers — `dm route set-header` | highest |
+| Layer | Source                                                                                                                                                            | Priority |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| 1     | Built-in defaults: `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` (+ HSTS when SSL enabled) | lowest   |
+| 2     | Domain-level headers — `dm domain set-header`                                                                                                                     | middle   |
+| 3     | Route-level headers — `dm route set-header`                                                                                                                       | highest  |
 
 Route headers override domain headers which override the defaults. Collision resolution is case-insensitive (per HTTP spec); the winning layer's original key casing is preserved.
 
@@ -257,6 +257,7 @@ Two certificate formats are accepted:
 **PFX/PKCS#12:** provide `--pfx` and `--password`. dm extracts the certificate and key by shelling out to the system `openssl` binary. The PFX password is written to a temp file (never passed as a CLI argument) to avoid exposure in process listings. Both modern (AES-256) and legacy-encrypted (RC2/3DES) PFX bundles are supported via automatic provider fallback.
 
 On upload, dm validates:
+
 - Certificate is not expired
 - Private key matches the certificate public key
 - Certificate covers the domain (exact DNS SAN or single-level wildcard `*.parent`)
@@ -274,6 +275,7 @@ dm domain push <name>          # compile, write, validate, reload nginx
 ```
 
 The compiled config includes:
+
 - HTTP → HTTPS redirect when SSL is configured
 - HTTPS server block with TLS directives
 - One `location` block per registered route with `proxy_pass` to `localhost:<port>` (or `PROXY_TARGET_HOST:<port>`)
@@ -297,14 +299,14 @@ If `NGINX_REMOTE_HOST` is set, `dm domain push` connects to a remote Linux machi
 6. Runs `sudo nginx -t` and `sudo nginx -s reload` over SSH
 7. On failure: restores the pre-operation snapshot on the remote machine
 
-| Env var | Description |
-|---|---|
-| `NGINX_REMOTE_HOST` | `user@host` for the remote nginx machine. If not set, pushes locally. |
-| `NGINX_REMOTE_KEY` | Path to SSH private key for the remote connection |
-| `NGINX_REMOTE_PASSWORD` | SSH password (only if `NGINX_REMOTE_KEY` is not set) |
-| `NGINX_SUDO_PASSWORD` | sudo password on the remote machine (defaults to `NGINX_REMOTE_PASSWORD`) |
-| `PUSH_CERT_DIR` | Target cert directory on the nginx machine |
-| `PROXY_TARGET_HOST` | Host to proxy to in nginx config (default: `localhost`) |
+| Env var                 | Description                                                               |
+| ----------------------- | ------------------------------------------------------------------------- |
+| `NGINX_REMOTE_HOST`     | `user@host` for the remote nginx machine. If not set, pushes locally.     |
+| `NGINX_REMOTE_KEY`      | Path to SSH private key for the remote connection                         |
+| `NGINX_REMOTE_PASSWORD` | SSH password (only if `NGINX_REMOTE_KEY` is not set)                      |
+| `NGINX_SUDO_PASSWORD`   | sudo password on the remote machine (defaults to `NGINX_REMOTE_PASSWORD`) |
+| `PUSH_CERT_DIR`         | Target cert directory on the nginx machine                                |
+| `PROXY_TARGET_HOST`     | Host to proxy to in nginx config (default: `localhost`)                   |
 
 ### Linux-only constraint
 
@@ -326,6 +328,7 @@ dm monit
 A full-screen terminal dashboard with a two-column layout: app list on the left, detail pane with five tabs on the right.
 
 The dashboard uses two polling layers:
+
 - **Fast poll (~2s):** app list, PM2 status for all apps, OS load average and memory
 - **Detail poll (~5s, selected app only):** port reachability, git drift, domain info, nginx access logs, cert validity
 
@@ -343,11 +346,13 @@ The dashboard uses two polling layers:
 Toggle between two views with `v`:
 
 **Stats view:**
+
 - CPU and memory sparklines + gauges
 - Restart count warnings
 - Per-domain request metrics: total requests, status class distribution (2xx/3xx/4xx/5xx), p50/p95 latency
 
 **Access log view:**
+
 - Recent nginx access log entries from all routes on the selected app
 - Columns: timestamp, method, status (color-coded by class), response time, bytes sent
 - Falls back gracefully when the domain has not been pushed or the `dm_json` log format is not installed
@@ -367,6 +372,7 @@ Full build history for the selected app. The active build is highlighted. Select
 All domains and routes for the selected app. SSL status is color-coded: green (valid), yellow (expiring within 30 days), red (expired/missing). A staleness indicator is shown when the config has been recompiled but not yet pushed to nginx.
 
 **Keyboard actions:**
+
 - `r` restart, `s` stop, `d` deploy, `b` rollback — all with confirmation dialogs
 - `e` open interactive env editor for the selected app
 - `l` jump to the logs tab
@@ -395,11 +401,11 @@ On first run, an ed25519 host key is generated and saved to `.remote/host_ed2551
 
 Session limits:
 
-| Env var | Default | Description |
-|---|---|---|
-| `REMOTE_MAX_SESSIONS` | 10 | Max concurrent sessions total |
-| `REMOTE_MAX_SESSIONS_PER_KEY` | 3 | Max concurrent sessions per authorized key |
-| `REMOTE_IDLE_TIMEOUT_MS` | 1800000 | Idle session auto-terminate (ms) |
+| Env var                       | Default | Description                                |
+| ----------------------------- | ------- | ------------------------------------------ |
+| `REMOTE_MAX_SESSIONS`         | 10      | Max concurrent sessions total              |
+| `REMOTE_MAX_SESSIONS_PER_KEY` | 3       | Max concurrent sessions per authorized key |
+| `REMOTE_IDLE_TIMEOUT_MS`      | 1800000 | Idle session auto-terminate (ms)           |
 
 ### Key management
 
@@ -415,13 +421,13 @@ Keys are stored in OpenSSH `authorized_keys` format at `.remote/authorized_keys`
 
 Accepted key types:
 
-| Type | Notes |
-|---|---|
-| `ssh-ed25519` | Recommended |
-| `sk-ssh-ed25519` | FIDO2 hardware key (e.g. YubiKey) |
-| `ecdsa-sha2-nistp256/384/521` | ECDSA |
-| `sk-ecdsa-sha2-nistp256` | FIDO2 ECDSA |
-| `ssh-rsa` | Accepted at **≥ 4096 bits only** |
+| Type                          | Notes                             |
+| ----------------------------- | --------------------------------- |
+| `ssh-ed25519`                 | Recommended                       |
+| `sk-ssh-ed25519`              | FIDO2 hardware key (e.g. YubiKey) |
+| `ecdsa-sha2-nistp256/384/521` | ECDSA                             |
+| `sk-ecdsa-sha2-nistp256`      | FIDO2 ECDSA                       |
+| `ssh-rsa`                     | Accepted at **≥ 4096 bits only**  |
 
 RSA < 4096 bits and DSA keys are rejected. `remote add` validates the key type, computes a SHA256 fingerprint, and rejects duplicates by both fingerprint and username.
 
@@ -436,6 +442,7 @@ dm remote connect <host> [--port 2022] [--identity ed25519]
 Shells out to the system `ssh` binary. Key resolution order (strongest first): `id_ed25519` → `id_ed25519_sk` → `id_ecdsa` → `id_ecdsa_sk` → `id_rsa` in `~/.ssh/`. If no key is found, dm offers to generate one via `ssh-keygen` and prints the public key to be authorized on the server.
 
 Effective ssh invocation:
+
 ```
 ssh -p <port> -i <keyPath>
     -o StrictHostKeyChecking=ask
@@ -488,6 +495,7 @@ Supported `--identity` values: `ed25519` (default), `ed25519_sk`, `ecdsa`, `ecds
 The algorithm list is kept in sync between dm-connect, the TypeScript client, and the server.
 
 Windows OpenSSH client is required. Install it via:
+
 ```
 Settings → Apps → Optional Features → OpenSSH Client
 # or PowerShell (Admin):
@@ -525,29 +533,29 @@ dm migrate-db                           # migrate from legacy db.json to SQL  (C
 
 All settings are read from `.env` in the dm installation root.
 
-| Variable | Default | Description |
-|---|---|---|
-| `APP_DIR` | `.applications/` | Root directory for all managed apps |
-| `NEXT_DIR` | `APP_DIR` | Override root for Next.js apps |
-| `NEST_DIR` | `APP_DIR` | Override root for NestJS apps |
-| `DOTNET_DIR` | `APP_DIR` | Override root for .NET apps |
-| `STATIC_DIR` | `APP_DIR` | Override root for static apps |
-| `STORAGE_DIR` | `APP_DIR/storages/` | Root for storage volumes |
-| `DOMAINS_DIR` | `.domains/` | Root for domain configs and certs |
-| `DATABASE_TYPE` | `sqlite` | `sqlite` or `postgres` |
-| `DATABASE_URL` | — | PostgreSQL connection string |
-| `SECRET_KEY` | — | Confirmation token required by `dm delete` |
-| `PROXY_TARGET_HOST` | `localhost` | Proxy target host in nginx config |
-| `NGINX_REMOTE_HOST` | — | `user@host` for remote nginx push |
-| `NGINX_REMOTE_KEY` | — | SSH key path for remote nginx push |
-| `NGINX_REMOTE_PASSWORD` | — | SSH password for remote nginx push |
-| `NGINX_SUDO_PASSWORD` | — | sudo password on the remote nginx machine |
-| `PUSH_CERT_DIR` | — | Target cert directory on the nginx machine |
-| `REMOTE_PORT` | `2022` | SSH server port for `dm remote serve` |
-| `REMOTE_BIND` | `127.0.0.1` | Interface for the SSH server to bind on |
-| `REMOTE_MAX_SESSIONS` | `10` | Max concurrent SSH sessions |
-| `REMOTE_MAX_SESSIONS_PER_KEY` | `3` | Max sessions per authorized key |
-| `REMOTE_IDLE_TIMEOUT_MS` | `1800000` | Idle session timeout in milliseconds |
+| Variable                      | Default             | Description                                |
+| ----------------------------- | ------------------- | ------------------------------------------ |
+| `APP_DIR`                     | `.applications/`    | Root directory for all managed apps        |
+| `NEXT_DIR`                    | `APP_DIR`           | Override root for Next.js apps             |
+| `NEST_DIR`                    | `APP_DIR`           | Override root for NestJS apps              |
+| `DOTNET_DIR`                  | `APP_DIR`           | Override root for .NET apps                |
+| `STATIC_DIR`                  | `APP_DIR`           | Override root for static apps              |
+| `STORAGE_DIR`                 | `APP_DIR/storages/` | Root for storage volumes                   |
+| `DOMAINS_DIR`                 | `.domains/`         | Root for domain configs and certs          |
+| `DATABASE_TYPE`               | `sqlite`            | `sqlite` or `postgres`                     |
+| `DATABASE_URL`                | —                   | PostgreSQL connection string               |
+| `SECRET_KEY`                  | —                   | Confirmation token required by `dm delete` |
+| `PROXY_TARGET_HOST`           | `localhost`         | Proxy target host in nginx config          |
+| `NGINX_REMOTE_HOST`           | —                   | `user@host` for remote nginx push          |
+| `NGINX_REMOTE_KEY`            | —                   | SSH key path for remote nginx push         |
+| `NGINX_REMOTE_PASSWORD`       | —                   | SSH password for remote nginx push         |
+| `NGINX_SUDO_PASSWORD`         | —                   | sudo password on the remote nginx machine  |
+| `PUSH_CERT_DIR`               | —                   | Target cert directory on the nginx machine |
+| `REMOTE_PORT`                 | `2022`              | SSH server port for `dm remote serve`      |
+| `REMOTE_BIND`                 | `127.0.0.1`         | Interface for the SSH server to bind on    |
+| `REMOTE_MAX_SESSIONS`         | `10`                | Max concurrent SSH sessions                |
+| `REMOTE_MAX_SESSIONS_PER_KEY` | `3`                 | Max sessions per authorized key            |
+| `REMOTE_IDLE_TIMEOUT_MS`      | `1800000`           | Idle session timeout in milliseconds       |
 
 ---
 

@@ -2,7 +2,11 @@ import { AppWithStoragesAndRoutes } from '../db/model.js';
 import Table from 'cli-table3';
 import chalk from 'chalk';
 import { AppRepo } from '../db/repos.js';
-import { getAllAppStatuses, openSharedPm2, closeSharedPm2 } from '../utils/pm2-helper.js';
+import {
+  getAllAppStatuses,
+  openSharedPm2,
+  closeSharedPm2,
+} from '../utils/pm2-helper.js';
 import { supportsUnicode } from '../utils/terminal-capabilities.js';
 import { formatRelative } from '../utils/date-helper.js';
 import { CERT_EXPIRY_WARNING_DAYS } from '../utils/ssl-helper.js';
@@ -16,8 +20,8 @@ import { CERT_EXPIRY_WARNING_DAYS } from '../utils/ssl-helper.js';
  */
 const TYPE_MAP: Record<string, string> = {
   nextjs: supportsUnicode ? '⚡ Next.js' : 'Next.js',
-  nestjs: supportsUnicode ? '🦁 NestJS'  : 'NestJS',
-  dotnet: supportsUnicode ? '🔷 .NET'    : '.NET',
+  nestjs: supportsUnicode ? '🦁 NestJS' : 'NestJS',
+  dotnet: supportsUnicode ? '🔷 .NET' : '.NET',
 };
 
 /**
@@ -41,10 +45,13 @@ function formatAppRoutes(app: AppWithStoragesAndRoutes): string[] {
     } else if (ssl.mode === 'custom' && ssl.expiresAt) {
       const expiry = new Date(ssl.expiresAt);
       const now = new Date();
-      const warning = new Date(now.getTime() + CERT_EXPIRY_WARNING_DAYS * 24 * 60 * 60 * 1000);
+      const warning = new Date(
+        now.getTime() + CERT_EXPIRY_WARNING_DAYS * 24 * 60 * 60 * 1000
+      );
       const distance = formatRelative(ssl.expiresAt);
       if (expiry < now) sslLabel = chalk.red(`SSL expired ${distance}`);
-      else if (expiry < warning) sslLabel = chalk.yellow(`SSL expires ${distance}`);
+      else if (expiry < warning)
+        sslLabel = chalk.yellow(`SSL expires ${distance}`);
       else sslLabel = chalk.green(`SSL valid · expires ${distance}`);
     } else if (ssl.mode === 'custom') {
       sslLabel = chalk.yellow('custom SSL (no cert)');
@@ -58,10 +65,16 @@ function formatAppRoutes(app: AppWithStoragesAndRoutes): string[] {
   return lines;
 }
 
-export const listApps = async (filterType?: string, showStorages?: boolean, showRoutes?: boolean) => {
+export const listApps = async (
+  filterType?: string,
+  showStorages?: boolean,
+  showRoutes?: boolean
+) => {
   // Fetch all apps with storages and routes (with domains) in a single query
-  let apps: (AppWithStoragesAndRoutes & { status?: string; routeDisplay?: string[] })[] = 
-    await AppRepo.getAllWithStoragesAndRoutes();
+  let apps: (AppWithStoragesAndRoutes & {
+    status?: string;
+    routeDisplay?: string[];
+  })[] = await AppRepo.getAllWithStoragesAndRoutes();
 
   // Filter by project type if requested
   if (filterType) {
@@ -77,7 +90,7 @@ export const listApps = async (filterType?: string, showStorages?: boolean, show
   try {
     // Fetch all PM2 statuses in a single query instead of one per app
     const statusMap = await getAllAppStatuses();
-    
+
     for (const app of apps) {
       app.status = statusMap.get(app.name) || 'not-found';
       if (showRoutes) {
@@ -104,9 +117,9 @@ export const listApps = async (filterType?: string, showStorages?: boolean, show
     const fixedWidth = 8 + 12 + 12 + 18; // Port + Status + Type + borders
     const remaining = Math.max(termWidth - fixedWidth, 60);
     const nameW = Math.max(15, Math.floor(remaining * 0.25));
-    const storageW = Math.max(18, Math.floor(remaining * 0.30));
+    const storageW = Math.max(18, Math.floor(remaining * 0.3));
     const routesW = Math.max(24, remaining - nameW - storageW);
-    
+
     colWidths.push(nameW, 8, 12, 12, storageW, routesW);
     headers.push(chalk.cyan('Storages'), chalk.cyan('Routes'));
   } else if (showStorages) {
@@ -115,7 +128,7 @@ export const listApps = async (filterType?: string, showStorages?: boolean, show
     const remaining = Math.max(termWidth - fixedWidth, 40);
     const nameW = Math.max(15, Math.floor(remaining * 0.4));
     const storageW = Math.max(18, remaining - nameW);
-    
+
     colWidths.push(nameW, 8, 12, 12, storageW);
     headers.push(chalk.cyan('Storages'));
   } else if (showRoutes) {
@@ -124,22 +137,22 @@ export const listApps = async (filterType?: string, showStorages?: boolean, show
     const remaining = Math.max(termWidth - fixedWidth, 40);
     const nameW = Math.max(15, Math.floor(remaining * 0.4));
     const routesW = Math.max(24, remaining - nameW);
-    
+
     colWidths.push(nameW, 8, 12, 12, routesW);
     headers.push(chalk.cyan('Routes'));
   } else {
     // Name, Port, Status, Type (minimal view)
-    
-    const longestName = Math.max(
-  ...apps.map(a => a.name.length),
-  "Name".length
-);
 
-      const nameW = Math.min(
-  Math.max(longestName + 2, 20), // at least 20
-  35                            // never exceed 35
-          );
-    
+    const longestName = Math.max(
+      ...apps.map((a) => a.name.length),
+      'Name'.length
+    );
+
+    const nameW = Math.min(
+      Math.max(longestName + 2, 20), // at least 20
+      35 // never exceed 35
+    );
+
     colWidths.push(nameW, 8, 12, 12);
   }
 

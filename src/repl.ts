@@ -30,10 +30,19 @@ function tokenise(line: string): string[] {
 
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
-    if (ch === "'" && !inDouble) { inSingle = !inSingle; continue; }
-    if (ch === '"' && !inSingle) { inDouble = !inDouble; continue; }
+    if (ch === "'" && !inDouble) {
+      inSingle = !inSingle;
+      continue;
+    }
+    if (ch === '"' && !inSingle) {
+      inDouble = !inDouble;
+      continue;
+    }
     if (ch === ' ' && !inSingle && !inDouble) {
-      if (cur.length) { tokens.push(cur); cur = ''; }
+      if (cur.length) {
+        tokens.push(cur);
+        cur = '';
+      }
       continue;
     }
     cur += ch;
@@ -55,12 +64,19 @@ function tokenise(line: string): string[] {
 //
 // --no-flag is stored as flags['no-flag'] = true; resolveLeafArgs normalises
 // that into the boolean negation for the matching option.
-function parseTokens(tokens: string[]): { positional: string[]; flags: Record<string, string | boolean> } {
+function parseTokens(tokens: string[]): {
+  positional: string[];
+  flags: Record<string, string | boolean>;
+} {
   const positional: string[] = [];
   const flags: Record<string, string | boolean> = {};
 
   const looksLikeValue = (s: string) =>
-    s === 'true' || s === 'false' || /^\d/.test(s) || s.startsWith('"') || s.startsWith("'");
+    s === 'true' ||
+    s === 'false' ||
+    /^\d/.test(s) ||
+    s.startsWith('"') ||
+    s.startsWith("'");
 
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
@@ -71,7 +87,11 @@ function parseTokens(tokens: string[]): { positional: string[]; flags: Record<st
         flags[k] = rest.join('=');
       } else {
         const next = tokens[i + 1];
-        if (next !== undefined && !next.startsWith('-') && looksLikeValue(next)) {
+        if (
+          next !== undefined &&
+          !next.startsWith('-') &&
+          looksLikeValue(next)
+        ) {
           flags[body] = next;
           i++;
         } else {
@@ -100,7 +120,12 @@ function parseTokens(tokens: string[]): { positional: string[]; flags: Record<st
 // runs the way the old hardcoded HELP string and TOP_LEVEL_COMMANDS array
 // used to.
 
-function optionSummary(options?: Record<string, { flag?: string; alias?: string; type: string; demandOption?: boolean }>): string {
+function optionSummary(
+  options?: Record<
+    string,
+    { flag?: string; alias?: string; type: string; demandOption?: boolean }
+  >
+): string {
   if (!options) return '';
   return Object.entries(options)
     .map(([key, spec]) => {
@@ -164,7 +189,10 @@ function buildHelp(): string {
       for (const [, subNode] of Object.entries(node.subcommands)) {
         if (isGroup(subNode)) continue; // no 2-level nesting today
         const opts = optionSummary(subNode.options);
-        addLine(node.group, `    ${key} ${subNode.usage}${opts ? ' ' + opts : ''}`);
+        addLine(
+          node.group,
+          `    ${key} ${subNode.usage}${opts ? ' ' + opts : ''}`
+        );
       }
     } else {
       const opts = optionSummary(node.options);
@@ -185,7 +213,10 @@ const TOP_LEVEL_COMMANDS = [
   ...Object.entries(COMMANDS)
     .filter(([, node]) => !node.cliOnly)
     .map(([key]) => key),
-  'help', 'clear', 'exit', 'quit',
+  'help',
+  'clear',
+  'exit',
+  'quit',
 ];
 
 // ─── Streaming commands (e.g. `logs`) ────────────────────────────────────────
@@ -194,9 +225,14 @@ const TOP_LEVEL_COMMANDS = [
 // instead of killing the whole shell. That SIGINT juggling is REPL-specific
 // plumbing, so it lives here rather than in command-registry.ts; the actual
 // log-tailing logic is still defined exactly once, in the registry.
-async function runStreamingInRepl(node: LeafCommand, args: Record<string, any>): Promise<void> {
+async function runStreamingInRepl(
+  node: LeafCommand,
+  args: Record<string, any>
+): Promise<void> {
   await new Promise<void>((resolveDone) => {
-    const existingSigInt = process.rawListeners('SIGINT').slice() as ((...a: any[]) => void)[];
+    const existingSigInt = process.rawListeners('SIGINT').slice() as ((
+      ...a: any[]
+    ) => void)[];
     process.removeAllListeners('SIGINT');
 
     const origExit = process.exit.bind(process) as (code?: number) => never;
@@ -224,15 +260,23 @@ async function runStreamingInRepl(node: LeafCommand, args: Record<string, any>):
 // positionals/flags with the exact same rules (see resolveLeafArgs in
 // command-registry.ts) so a command behaves identically whether it's run as
 // `dm <command>` or typed at the `dm>` prompt.
-async function runNode(node: CommandNode, fullUsage: string, rest: string[]): Promise<void> {
+async function runNode(
+  node: CommandNode,
+  fullUsage: string,
+  rest: string[]
+): Promise<void> {
   if (isGroup(node)) {
     const [subKey, ...subRest] = rest;
     const subNode = subKey ? node.subcommands[subKey] : undefined;
     if (!subNode) {
-      Logger.error(`Usage: ${fullUsage} <${Object.keys(node.subcommands).join('|')}>`);
+      Logger.error(
+        `Usage: ${fullUsage} <${Object.keys(node.subcommands).join('|')}>`
+      );
       return;
     }
-    const subUsage = isGroup(subNode) ? `${fullUsage} ${subKey}` : `${fullUsage} ${subNode.usage}`;
+    const subUsage = isGroup(subNode)
+      ? `${fullUsage} ${subKey}`
+      : `${fullUsage} ${subNode.usage}`;
     await runNode(subNode, subUsage, subRest);
     return;
   }
@@ -278,19 +322,25 @@ async function dispatch(tokens: string[]): Promise<void> {
 
   // Block sensitive commands from remote sessions entirely.
   if (REMOTE_USER && REMOTE_BLOCKED_COMMANDS.has(cmdKey)) {
-    Logger.error(`Command "${chalk.bold(cmdKey)}" is not allowed in a remote session. Run it locally on the server.`);
+    Logger.error(
+      `Command "${chalk.bold(cmdKey)}" is not allowed in a remote session. Run it locally on the server.`
+    );
     return;
   }
 
   const node = COMMANDS[cmdKey];
   if (!node) {
-    Logger.error(`Unknown command: ${chalk.bold(cmdKey)}. Type ${chalk.cyan('help')} for available commands.`);
+    Logger.error(
+      `Unknown command: ${chalk.bold(cmdKey)}. Type ${chalk.cyan('help')} for available commands.`
+    );
     return;
   }
 
   // cliOnly commands are not available in the REPL at all.
   if (node.cliOnly) {
-    Logger.error(`Command "${chalk.bold(cmdKey)}" is only available via the CLI (\`dm ${cmdKey}\`), not the interactive shell.`);
+    Logger.error(
+      `Command "${chalk.bold(cmdKey)}" is only available via the CLI (\`dm ${cmdKey}\`), not the interactive shell.`
+    );
     return;
   }
 
@@ -303,10 +353,10 @@ async function dispatch(tokens: string[]): Promise<void> {
 // key management, password auth, server lifecycle, self-update, and
 // system service installation.
 const REMOTE_BLOCKED_COMMANDS = new Set([
-  'remote',         // entire group: key-add, key-remove, set-password, serve…
-  'update',         // self-update could pull malicious code
-  'install-service',// modifies OS startup configuration
-  'migrate-db',     // direct DB mutation outside normal app flow
+  'remote', // entire group: key-add, key-remove, set-password, serve…
+  'update', // self-update could pull malicious code
+  'install-service', // modifies OS startup configuration
+  'migrate-db', // direct DB mutation outside normal app flow
 ]);
 
 // ─── Remote command audit ─────────────────────────────────────────────────────
@@ -318,22 +368,31 @@ const REMOTE_USER = process.env.DM_REMOTE_USER;
 function auditCommand(line: string): void {
   if (!REMOTE_USER) return;
   try {
-    const entry = JSON.stringify({ ts: new Date().toISOString(), event: 'repl-command', identity: REMOTE_USER, command: line });
+    const entry = JSON.stringify({
+      ts: new Date().toISOString(),
+      event: 'repl-command',
+      identity: REMOTE_USER,
+      command: line,
+    });
     fs.appendFileSync(REMOTE_AUDIT_LOG_PATH, entry + '\n');
-  } catch { /* non-fatal */ }
+  } catch {
+    /* non-fatal */
+  }
 }
 
 // ─── REPL entry point ─────────────────────────────────────────────────────────
 export async function startRepl(version: string): Promise<void> {
   await ensureAppDirectories();
-  
+
   // Clear screen and move cursor to top-left
   process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
   console.log(chalk.bold(`Deployment Manager v${version}`));
   console.log(chalk.gray('Type "help" for available commands.\n'));
 
   let resolveExit: () => void;
-  const exited = new Promise<void>((resolve) => { resolveExit = resolve; });
+  const exited = new Promise<void>((resolve) => {
+    resolveExit = resolve;
+  });
 
   // Builds a fully-configured readline interface. Registered with
   // repl-context.ts so that pauseRepl()/resumeRepl() can close this instance
@@ -367,7 +426,10 @@ export async function startRepl(version: string): Promise<void> {
 
     rl.on('line', async (rawLine) => {
       const line = rawLine.trim();
-      if (!line) { rl.prompt(); return; }
+      if (!line) {
+        rl.prompt();
+        return;
+      }
 
       auditCommand(line);
       const tokens = tokenise(line);

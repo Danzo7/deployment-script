@@ -40,7 +40,7 @@ export const releaseLock = (appName: string) => {
   }
 };
 // Helper function to forcibly release the lock
-export const forceReleaseLock = (appName:string) => {
+export const forceReleaseLock = (appName: string) => {
   const lockFile = path.join(LOCK_DIR, `${appName}.lock`);
 
   // Check if the lock file exists
@@ -55,7 +55,9 @@ export const forceReleaseLock = (appName:string) => {
 
     if (isNaN(pid)) {
       // ✅ Delete corrupt lock file even if PID is invalid
-      Logger.warn(`Invalid PID in lock file for application "${appName}". Removing lock file.`);
+      Logger.warn(
+        `Invalid PID in lock file for application "${appName}". Removing lock file.`
+      );
       fs.unlinkSync(lockFile);
       return;
     }
@@ -64,19 +66,21 @@ export const forceReleaseLock = (appName:string) => {
     try {
       process.kill(pid, 'SIGTERM'); // Attempt a graceful shutdown
       Logger.info(`Process with PID ${pid} terminated.`);
-    } catch (err:any) {
+    } catch (err: any) {
       if (err.code === 'ESRCH') {
         Logger.warn(`Process with PID ${pid} is not running.`);
       } else {
         // ✅ Still remove lock file even if kill fails with unexpected error
-        Logger.warn(`Failed to kill process ${pid}: ${err.message}. Removing lock file anyway.`);
+        Logger.warn(
+          `Failed to kill process ${pid}: ${err.message}. Removing lock file anyway.`
+        );
       }
     }
-    
+
     // ✅ Always remove the lock file
     fs.unlinkSync(lockFile);
     Logger.success(`Lock for application "${appName}" has been released.`);
-  } catch (err:any) {
+  } catch (err: any) {
     // ✅ Attempt to remove lock file even on error
     try {
       if (fs.existsSync(lockFile)) {
@@ -86,6 +90,8 @@ export const forceReleaseLock = (appName:string) => {
     } catch {
       // Ignore cleanup errors
     }
-    throw new Error(`Failed to release lock for application "${appName}": ${err.message}`);
+    throw new Error(
+      `Failed to release lock for application "${appName}": ${err.message}`
+    );
   }
 };

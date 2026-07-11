@@ -2,7 +2,10 @@ import { normalizeDomainName } from '../utils/route-validation.js';
 import { DomainRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 
-export async function domainRemoveHeader(name: string, key: string): Promise<void> {
+export async function domainRemoveHeader(
+  name: string,
+  key: string
+): Promise<void> {
   // 1. Normalize domain name
   const normalized = normalizeDomainName(name);
 

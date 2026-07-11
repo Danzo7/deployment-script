@@ -1,8 +1,8 @@
 import { AppRepo } from '../db/repos.js';
-import { ensureDirectories } from "../utils/file-utils.js";
-import { handleRepo, discardLocalChanges } from "../utils/vcs-helper.js";
-import { Logger } from "../utils/logger.js";
-import { pruneAllBuilds } from "../utils/build-pruner.js";
+import { ensureDirectories } from '../utils/file-utils.js';
+import { handleRepo, discardLocalChanges } from '../utils/vcs-helper.js';
+import { Logger } from '../utils/logger.js';
+import { pruneAllBuilds } from '../utils/build-pruner.js';
 
 export const clean = async ({ name }: { name: string }) => {
   Logger.info(`Cleaning up app: ${name}...`);

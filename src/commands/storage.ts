@@ -9,10 +9,17 @@ import { AppRepo, StorageRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 import { requireSymlinkPermission } from '../utils/os-helper.js';
 
-export const storageNew = async (name: string, linkName?: string): Promise<void> => {
+export const storageNew = async (
+  name: string,
+  linkName?: string
+): Promise<void> => {
   const storagePath = path.join(STORAGE_DIR, name);
   fs.mkdirSync(storagePath, { recursive: true });
-  await StorageRepo.add({ name, linkName: linkName ?? null, path: storagePath });
+  await StorageRepo.add({
+    name,
+    linkName: linkName ?? null,
+    path: storagePath,
+  });
   const effectiveLinkName = linkName ?? name;
   Logger.success(
     `Storage ${Logger.highlight(name)} created at ${Logger.highlight(storagePath)} (symlink name: ${Logger.highlight(effectiveLinkName)}).`
@@ -30,8 +37,10 @@ export const storageAttach = async (
 
   // Check if already attached via junction table
   const existingStorages = await AppRepo.getStoragesByAppId(app.id);
-  if (existingStorages.some(s => s.id === storage.id)) {
-    throw new Error(`Storage "${storageName}" is already attached to "${appName}"`);
+  if (existingStorages.some((s) => s.id === storage.id)) {
+    throw new Error(
+      `Storage "${storageName}" is already attached to "${appName}"`
+    );
   }
 
   // Conflict checks against linkName path in active build — before any DB write
@@ -91,7 +100,10 @@ export const storageAttach = async (
       let symlinkExists = false;
       try {
         const existingStat = fs.lstatSync(symlinkPath);
-        if (existingStat.isSymbolicLink() && fs.readlinkSync(symlinkPath) === storage.path) {
+        if (
+          existingStat.isSymbolicLink() &&
+          fs.readlinkSync(symlinkPath) === storage.path
+        ) {
           symlinkExists = true;
         }
       } catch (err: any) {
@@ -119,7 +131,7 @@ export const storageDetach = async (
 
   // Check if attached via junction table
   const existingStorages = await AppRepo.getStoragesByAppId(app.id);
-  if (!existingStorages.some(s => s.id === storage.id)) {
+  if (!existingStorages.some((s) => s.id === storage.id)) {
     throw new Error(`Storage "${storageName}" is not attached to "${appName}"`);
   }
 
@@ -150,7 +162,7 @@ export const storageRm = async (name: string): Promise<void> => {
   const attachedApps = await AppRepo.findByStorageId(storage.id);
 
   if (attachedApps.length > 0) {
-    const appNames = attachedApps.map(app => app.name);
+    const appNames = attachedApps.map((app) => app.name);
     throw new Error(
       `Storage "${name}" is still attached to the following apps: ${appNames.join(', ')}. Detach it from all apps before removing.`
     );
@@ -237,9 +249,11 @@ export const storageLs = async (): Promise<void> => {
     const sizeBytes = getDirectorySize(storage.path);
     totalBytes += sizeBytes;
 
-    const attachedApps = storage.apps.map(app => app.name);
+    const attachedApps = storage.apps.map((app) => app.name);
     const attachedAppsDisplay =
-      attachedApps.length > 0 ? chalk.whiteBright(attachedApps.join(', ')) : chalk.gray('—');
+      attachedApps.length > 0
+        ? chalk.whiteBright(attachedApps.join(', '))
+        : chalk.gray('—');
 
     const createdAt = formatDate(storage.createdAt, 'N/A');
 

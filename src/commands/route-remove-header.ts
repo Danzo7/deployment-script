@@ -1,4 +1,7 @@
-import { normalizeDomainName, normalizePath } from '../utils/route-validation.js';
+import {
+  normalizeDomainName,
+  normalizePath,
+} from '../utils/route-validation.js';
 import { DomainRepo, RouteRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 

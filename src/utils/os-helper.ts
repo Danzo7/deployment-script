@@ -17,8 +17,16 @@ export const canCreateSymlinks = (): boolean => {
   } catch {
     return false;
   } finally {
-    try { fs.unlinkSync(testLink); } catch { /* ignore */ }
-    try { fs.rmdirSync(testTarget); } catch { /* ignore */ }
+    try {
+      fs.unlinkSync(testLink);
+    } catch {
+      /* ignore */
+    }
+    try {
+      fs.rmdirSync(testTarget);
+    } catch {
+      /* ignore */
+    }
   }
 };
 

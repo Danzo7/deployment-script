@@ -37,7 +37,6 @@ export const HSTS_HEADER: [string, string] = [
   'max-age=63072000; includeSubDomains',
 ];
 
-
 /**
  * Validates a user-supplied header key. Throws with a descriptive message on failure.
  *
@@ -58,7 +57,9 @@ export function validateHeaderKey(key: string): void {
 
   // Must not be a compiler-owned proxy_set_header key
   const keyLower = key.toLowerCase();
-  const blocked = PROXY_SET_HEADERS.find(([name]) => name.toLowerCase() === keyLower);
+  const blocked = PROXY_SET_HEADERS.find(
+    ([name]) => name.toLowerCase() === keyLower
+  );
   if (blocked) {
     throw new Error(
       `Header "${key}" is managed by the proxy configuration and cannot be set`

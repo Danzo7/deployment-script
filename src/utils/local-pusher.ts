@@ -15,17 +15,20 @@ import {
   RollbackTarget,
 } from './domain-push-utils.js';
 import { validateCertPath } from './security-validation.js';
-import { compileDmLogFormatSnippet, DM_LOG_FORMAT_SNIPPET_PATH } from './nginx-compiler.js';
+import {
+  compileDmLogFormatSnippet,
+  DM_LOG_FORMAT_SNIPPET_PATH,
+} from './nginx-compiler.js';
 
 /**
  * Local Nginx pusher - uses filesystem operations and local command execution
  */
 export class LocalPusher extends NginxPusher {
   private targetCertDir?: string;
-  
+
   private constructor(domain: any, domainName: string) {
     super(domain, domainName);
-    
+
     // Set target cert directory if PUSH_CERT_DIR is configured
     if (PUSH_CERT_DIR && this.shouldCopyCerts()) {
       this.targetCertDir = validateCertPath(PUSH_CERT_DIR, this.domain.name);
@@ -39,7 +42,7 @@ export class LocalPusher extends NginxPusher {
     const domain = await DomainRepo.findByName(domainName);
     return new LocalPusher(domain, domainName);
   }
-  
+
   private get localCertPath(): string | undefined {
     if (!this.targetCertDir) return undefined;
     return path.join(this.targetCertDir, 'cert.pem');
@@ -120,7 +123,9 @@ export class LocalPusher extends NginxPusher {
         ? fs.readFileSync(DM_LOG_FORMAT_SNIPPET_PATH, 'utf8')
         : null;
       if (existing === snippet) return;
-      fs.mkdirSync(path.dirname(DM_LOG_FORMAT_SNIPPET_PATH), { recursive: true });
+      fs.mkdirSync(path.dirname(DM_LOG_FORMAT_SNIPPET_PATH), {
+        recursive: true,
+      });
       fs.writeFileSync(DM_LOG_FORMAT_SNIPPET_PATH, snippet);
     } catch (err: any) {
       // Non-fatal: if we can't write (e.g. missing sudo), nginx -t will catch the missing format
@@ -135,7 +140,8 @@ export class LocalPusher extends NginxPusher {
     try {
       execSync('sudo nginx -t', { stdio: 'pipe' });
     } catch (err: any) {
-      const output = err.stderr?.toString() || err.stdout?.toString() || err.message;
+      const output =
+        err.stderr?.toString() || err.stdout?.toString() || err.message;
       throw this.formatError('validate nginx config', 'local', err, output);
     }
   }
@@ -147,7 +153,8 @@ export class LocalPusher extends NginxPusher {
     try {
       execSync('sudo nginx -s reload', { stdio: 'pipe' });
     } catch (err: any) {
-      const output = err.stderr?.toString() || err.stdout?.toString() || err.message;
+      const output =
+        err.stderr?.toString() || err.stdout?.toString() || err.message;
       throw this.formatError('reload nginx', 'local', err, output);
     }
   }
@@ -208,17 +215,22 @@ export class LocalPusher extends NginxPusher {
     try {
       execSync('sudo nginx -t', { stdio: 'pipe' });
     } catch (err: any) {
-      validationError = err.stderr?.toString() || err.stdout?.toString() || err.message;
+      validationError =
+        err.stderr?.toString() || err.stdout?.toString() || err.message;
     }
 
     if (failures.length === 0 && !validationError) {
-      Logger.info('Rollback completed successfully. Nginx config restored to previous state.');
+      Logger.info(
+        'Rollback completed successfully. Nginx config restored to previous state.'
+      );
       return;
     }
 
     const parts = [
       ...failures.map((f) => `- failed to restore ${f}`),
-      ...(validationError ? [`- nginx -t failed after rollback: ${validationError}`] : []),
+      ...(validationError
+        ? [`- nginx -t failed after rollback: ${validationError}`]
+        : []),
     ];
     throw new Error(
       `CRITICAL: Rollback failed and Nginx state may be inconsistent. Manual intervention required.\n${parts.join('\n')}`
@@ -231,14 +243,14 @@ export class LocalPusher extends NginxPusher {
   async push(): Promise<void> {
     // Compile fresh config
     await this.compileConfig();
-    
+
     // If PUSH_CERT_DIR is set and we have SSL, rewrite cert paths and copy certs
     if (this.targetCertDir && this.shouldCopyCerts()) {
       this.preflightCertCheck();
       this.rewriteCertPaths(this.localCertPath!, this.localKeyPath!);
     }
     // Otherwise use config as-is (paths from DB, assumed to be valid on same machine)
-    
+
     const snapshot = await this.captureSnapshot();
 
     try {

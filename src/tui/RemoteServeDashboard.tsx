@@ -53,10 +53,14 @@ function fmtElapsed(from: Date): string {
 
 function levelColor(level: LogEntry['level']): string {
   switch (level) {
-    case 'success': return 'green';
-    case 'warn':    return 'yellow';
-    case 'error':   return 'red';
-    default:        return 'white';
+    case 'success':
+      return 'green';
+    case 'warn':
+      return 'yellow';
+    case 'error':
+      return 'red';
+    default:
+      return 'white';
   }
 }
 
@@ -111,15 +115,19 @@ export function RemoteServeDashboard({
       return;
     }
 
-    if (key.upArrow)   setCursor((c) => Math.max(0, c - 1));
-    if (key.downArrow) setCursor((c) => Math.min(Math.max(sessions.length - 1, 0), c + 1));
+    if (key.upArrow) setCursor((c) => Math.max(0, c - 1));
+    if (key.downArrow)
+      setCursor((c) => Math.min(Math.max(sessions.length - 1, 0), c + 1));
 
     if ((input === 'd' || input === 'D') && sessions.length > 0) {
       setConfirm(sessions[cursor]?.id ?? null);
     }
 
     // Log scroll: PgUp / PgDn
-    if (key.pageUp)   setLogOffset((o) => Math.min(o + LOG_PANEL_H, Math.max(0, logs.length - LOG_PANEL_H)));
+    if (key.pageUp)
+      setLogOffset((o) =>
+        Math.min(o + LOG_PANEL_H, Math.max(0, logs.length - LOG_PANEL_H))
+      );
     if (key.pageDown) setLogOffset((o) => Math.max(0, o - LOG_PANEL_H));
 
     if (input === 'q' || input === 'Q') {
@@ -130,15 +138,15 @@ export function RemoteServeDashboard({
 
   // ── Column widths ─────────────────────────────────────────────────────────
   const COL_USER = 18;
-  const COL_IP   = 18;
+  const COL_IP = 18;
   const COL_TYPE = 8;
   const COL_CONN = 10;
-  const COL_ID   = 6;
+  const COL_ID = 6;
 
   // ── Log slice ─────────────────────────────────────────────────────────────
   const visibleLogs = logs.slice(
     Math.max(0, logs.length - LOG_PANEL_H - logOffset),
-    logs.length - logOffset || undefined,
+    logs.length - logOffset || undefined
   );
 
   // ── Separator ─────────────────────────────────────────────────────────────
@@ -146,13 +154,16 @@ export function RemoteServeDashboard({
 
   return (
     <Box flexDirection="column" width={TERM_W}>
-
       {/* ── Top bar ── */}
       <Box flexDirection="row" justifyContent="space-between" width={TERM_W}>
         <Box flexDirection="row" gap={2}>
-          <Text bold color="yellow">dm remote</Text>
+          <Text bold color="yellow">
+            dm remote
+          </Text>
           <Text dimColor>|</Text>
-          <Text>{bindAddress}:{port}</Text>
+          <Text>
+            {bindAddress}:{port}
+          </Text>
           <Text dimColor>|</Text>
           <Text dimColor>fp: </Text>
           <Text color="cyan">{fingerprint.slice(0, 24)}…</Text>
@@ -164,18 +175,32 @@ export function RemoteServeDashboard({
       {/* ── Sessions panel ── */}
       <Box flexDirection="column" width={TERM_W}>
         <Box flexDirection="row" gap={2} marginBottom={0}>
-          <Text bold color="yellow">Active Sessions</Text>
+          <Text bold color="yellow">
+            Active Sessions
+          </Text>
           <Text dimColor>({sessions.length})</Text>
         </Box>
 
         {/* Header row */}
         <Box flexDirection="row">
-          <Text dimColor bold>{pad('ID',      COL_ID)}</Text>
-          <Text dimColor bold>{'  '}</Text>
-          <Text dimColor bold>{pad('User',    COL_USER)}</Text>
-          <Text dimColor bold>{pad('IP',      COL_IP)}</Text>
-          <Text dimColor bold>{pad('Type',    COL_TYPE)}</Text>
-          <Text dimColor bold>{pad('Uptime',  COL_CONN)}</Text>
+          <Text dimColor bold>
+            {pad('ID', COL_ID)}
+          </Text>
+          <Text dimColor bold>
+            {'  '}
+          </Text>
+          <Text dimColor bold>
+            {pad('User', COL_USER)}
+          </Text>
+          <Text dimColor bold>
+            {pad('IP', COL_IP)}
+          </Text>
+          <Text dimColor bold>
+            {pad('Type', COL_TYPE)}
+          </Text>
+          <Text dimColor bold>
+            {pad('Uptime', COL_CONN)}
+          </Text>
         </Box>
         <Text dimColor>{'─'.repeat(TERM_W)}</Text>
 
@@ -188,10 +213,13 @@ export function RemoteServeDashboard({
             const selected = i === cursor;
             return (
               <Box key={s.id} flexDirection="row">
-                {selected
-                  ? <Text bold color="yellow">▌▌</Text>
-                  : <Text>{'  '}</Text>
-                }
+                {selected ? (
+                  <Text bold color="yellow">
+                    ▌▌
+                  </Text>
+                ) : (
+                  <Text>{'  '}</Text>
+                )}
                 <Text color={selected ? 'yellow' : 'white'} bold={selected}>
                   {pad(s.id, COL_ID)}
                 </Text>
@@ -217,7 +245,8 @@ export function RemoteServeDashboard({
       {confirm && (
         <Box marginBottom={1}>
           <Text color="yellow">
-            Disconnect session {confirm} ({sessions.find(s => s.id === confirm)?.identity})? [y/N]{' '}
+            Disconnect session {confirm} (
+            {sessions.find((s) => s.id === confirm)?.identity})? [y/N]{' '}
           </Text>
         </Box>
       )}
@@ -225,7 +254,9 @@ export function RemoteServeDashboard({
       {/* ── Log panel ── */}
       <Box flexDirection="column" width={TERM_W} height={LOG_PANEL_H}>
         <Box flexDirection="row" gap={2}>
-          <Text bold color="yellow">Event Log</Text>
+          <Text bold color="yellow">
+            Event Log
+          </Text>
           {logOffset > 0 && <Text dimColor>(scrolled — PgDn to return)</Text>}
         </Box>
         <Text dimColor>{'─'.repeat(TERM_W)}</Text>
@@ -245,7 +276,6 @@ export function RemoteServeDashboard({
         <Text dimColor>PgUp/PgDn scroll log</Text>
         <Text dimColor>Q quit</Text>
       </Box>
-
     </Box>
   );
 }

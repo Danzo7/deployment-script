@@ -18,7 +18,7 @@
     "src/**/*.tsx" // Include all TSX files for ink components
   ],
   "exclude": [
-    "node_modules",  // Exclude the node_modules folder,
+    "node_modules", // Exclude the node_modules folder,
     "dist" // Exclude the dist folder
   ]
 }

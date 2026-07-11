@@ -26,9 +26,11 @@ export const changeRepo = async ({
   // Update the database
   await AppRepo.update(name, { repo: newRepo });
 
-  Logger.success(`Repository for "${Logger.highlight(name)}" has been changed successfully!`);
+  Logger.success(
+    `Repository for "${Logger.highlight(name)}" has been changed successfully!`
+  );
   Logger.advice(
     `The repository URL has been updated in both the database and the local repository. ` +
-    `Run ${Logger.command(`dm deploy ${name}`)} to deploy from the new repository.`
+      `Run ${Logger.command(`dm deploy ${name}`)} to deploy from the new repository.`
   );
 };

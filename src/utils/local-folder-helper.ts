@@ -3,8 +3,10 @@ import path from 'path';
 import { Logger } from './logger.js';
 
 export const checkLocalFolder = (repo: string): void => {
-  if (!fs.existsSync(repo)) throw new Error(`Local source folder not found: ${repo}`);
-  if (!fs.statSync(repo).isDirectory()) throw new Error(`Local source path is not a directory: ${repo}`);
+  if (!fs.existsSync(repo))
+    throw new Error(`Local source folder not found: ${repo}`);
+  if (!fs.statSync(repo).isDirectory())
+    throw new Error(`Local source path is not a directory: ${repo}`);
 };
 
 /**
@@ -71,7 +73,7 @@ export const getLocalFolderRevision = (
   const mtime = getLatestMtime(repo);
   const date = new Date(mtime);
   return {
-    hash: String(mtime).slice(-7),        // last 7 digits of epoch ms → stable short id
+    hash: String(mtime).slice(-7), // last 7 digits of epoch ms → stable short id
     message: 'local folder snapshot',
     author: 'local',
     date: date.toISOString(),

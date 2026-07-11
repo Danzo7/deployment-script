@@ -15,7 +15,7 @@ export const init = async ({
   instances,
   port,
   appsDir,
-  type="nextjs",
+  type = 'nextjs',
   projectDir,
   vcsType = 'git',
 }: {
@@ -29,7 +29,8 @@ export const init = async ({
   projectDir?: string;
   vcsType?: 'git' | 'svn' | 'local';
 }) => {
-  if (!repo) throw new Error('Repository URL or local folder path is required.');
+  if (!repo)
+    throw new Error('Repository URL or local folder path is required.');
 
   if (vcsType === 'svn') checkSvn();
   if (vcsType === 'git') checkGit();
@@ -67,9 +68,11 @@ export const init = async ({
     projectType: type,
     vcsType,
     ...(projectDir ? { projectDir } : {}),
-   });
+  });
 
-  Logger.success(`The app "${Logger.highlight(name)}" (${type || 'nextjs'}) was successfully added!`);
+  Logger.success(
+    `The app "${Logger.highlight(name)}" (${type || 'nextjs'}) was successfully added!`
+  );
 
   Logger.advice(
     `Next steps: Run ${Logger.command(

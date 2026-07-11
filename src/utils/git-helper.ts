@@ -12,8 +12,8 @@ export const checkGit = (): void => {
     execSync('git --version', { stdio: 'pipe' });
   } catch {
     throw new Error(
-      "git is not installed or not on your PATH.\n" +
-      "  → Install git from https://git-scm.com/downloads and re-run the command."
+      'git is not installed or not on your PATH.\n' +
+        '  → Install git from https://git-scm.com/downloads and re-run the command.'
     );
   }
 };
@@ -60,8 +60,9 @@ export const handleGitRepo = async ({
   }
 
   // Re-fetch status after potential reset so behind count is accurate
-  const freshStatus = await withRetry('Getting updated repository status', async () =>
-    git.status()
+  const freshStatus = await withRetry(
+    'Getting updated repository status',
+    async () => git.status()
   );
 
   if (freshStatus.behind > 0) {
@@ -85,9 +86,9 @@ export const pushChanges = async ({
     git.status()
   );
 
-    if(status.behind > 0) {
-      throw new Error('Cannot push changes. The repository is not up-to-date.');
-    }
+  if (status.behind > 0) {
+    throw new Error('Cannot push changes. The repository is not up-to-date.');
+  }
 
   try {
     // Stage changes (all files)
@@ -108,10 +109,16 @@ export const pushChanges = async ({
   } catch (error) {
     Logger.error('Failed to push changes.');
     throw error;
-  }  
-
+  }
 };
-export const getLastCommit = async (dir: string): Promise<{ hash: string; message: string; author: string; date: string } | null> => {
+export const getLastCommit = async (
+  dir: string
+): Promise<{
+  hash: string;
+  message: string;
+  author: string;
+  date: string;
+} | null> => {
   const git = simpleGit(dir);
   const log = await git.log({ maxCount: 1 });
   if (!log.latest) return null;
@@ -128,7 +135,9 @@ export const discardUncommittedChanges = async (dir: string) => {
 
   try {
     // Reset tracked files to HEAD
-    await withRetry('Resetting tracked files', async () => git.reset(ResetMode.HARD));
+    await withRetry('Resetting tracked files', async () =>
+      git.reset(ResetMode.HARD)
+    );
 
     // Restore any deleted tracked files
     await withRetry('Restoring deleted tracked files', async () =>
@@ -142,20 +151,25 @@ export const discardUncommittedChanges = async (dir: string) => {
   }
 };
 
-export const changeRemoteUrl = async (dir: string, newUrl: string): Promise<void> => {
+export const changeRemoteUrl = async (
+  dir: string,
+  newUrl: string
+): Promise<void> => {
   checkGit();
   const git = simpleGit(dir);
 
   try {
     // Get current remote name (usually 'origin')
-    const remotes = await withRetry('Getting git remotes', async () => git.getRemotes(true));
-    
+    const remotes = await withRetry('Getting git remotes', async () =>
+      git.getRemotes(true)
+    );
+
     if (remotes.length === 0) {
       throw new Error('No git remote found in repository');
     }
 
     const remoteName = remotes[0].name;
-    
+
     Logger.info(`Changing git remote '${remoteName}' to ${newUrl}`);
     await withRetry('Changing git remote URL', async () =>
       git.remote(['set-url', remoteName, newUrl])

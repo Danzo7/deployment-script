@@ -27,7 +27,8 @@ export function compileDmLogFormatSnippet(): string {
 }
 
 /** Path on the nginx host where the log-format snippet is written. */
-export const DM_LOG_FORMAT_SNIPPET_PATH = '/etc/nginx/conf.d/dm_log_format.conf';
+export const DM_LOG_FORMAT_SNIPPET_PATH =
+  '/etc/nginx/conf.d/dm_log_format.conf';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -41,7 +42,11 @@ function isApex(domainName: string): boolean {
   return domainName.split('.').length === 2;
 }
 
-function evaluateHasSsl(domain: Domain): { hasSsl: boolean; certPath?: string; keyPath?: string } {
+function evaluateHasSsl(domain: Domain): {
+  hasSsl: boolean;
+  certPath?: string;
+  keyPath?: string;
+} {
   const { mode, certPath, keyPath } = domain.ssl;
 
   if (mode === 'letsencrypt') {
@@ -52,18 +57,28 @@ function evaluateHasSsl(domain: Domain): { hasSsl: boolean; certPath?: string; k
 
   // Always use actual paths from DB for compilation (test config generation)
   if (!certPath || !fs.existsSync(certPath)) {
-    throw new Error(`SSL certificate file missing for domain "${domain.name}": ${certPath ?? ''}`);
+    throw new Error(
+      `SSL certificate file missing for domain "${domain.name}": ${certPath ?? ''}`
+    );
   }
   if (!keyPath || !fs.existsSync(keyPath)) {
-    throw new Error(`SSL key file missing for domain "${domain.name}": ${keyPath ?? ''}`);
+    throw new Error(
+      `SSL key file missing for domain "${domain.name}": ${keyPath ?? ''}`
+    );
   }
 
-  return { hasSsl: true, certPath: toPosixPath(certPath), keyPath: toPosixPath(keyPath) };
+  return {
+    hasSsl: true,
+    certPath: toPosixPath(certPath),
+    keyPath: toPosixPath(keyPath),
+  };
 }
 
 /** Returns true if the wildcard SAN covers www.<parent>. */
 function wildcardCoversWww(san: string, parent: string): boolean {
-  return san.startsWith('*.') && san.slice(2).toLowerCase() === parent.toLowerCase();
+  return (
+    san.startsWith('*.') && san.slice(2).toLowerCase() === parent.toLowerCase()
+  );
 }
 
 // ─── Block builders ──────────────────────────────────────────────────────────
@@ -88,40 +103,52 @@ function sslDirectives(certPath: string, keyPath: string): string {
   ].join('\n');
 }
 
-function buildLocationBlocks(domain: Domain, routes: RouteWithApp[], hasSsl: boolean): string {
+function buildLocationBlocks(
+  domain: Domain,
+  routes: RouteWithApp[],
+  hasSsl: boolean
+): string {
   const sorted = [...routes].sort((a, b) => b.path.length - a.path.length);
   const safeDomain = domain.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
 
-  return sorted.map((route) => {
-    const locationPath = route.path === '' ? '/' : ('/' + route.path + '/');
-    const safeRoute = route.path.replace(/[^a-z0-9]/gi, '_').replace(/^_+|_+$/g, '') || 'root';
-    const routeLogPath = `/var/log/nginx/${safeDomain}_${safeRoute}.access.log`;
+  return sorted
+    .map((route) => {
+      const locationPath = route.path === '' ? '/' : '/' + route.path + '/';
+      const safeRoute =
+        route.path.replace(/[^a-z0-9]/gi, '_').replace(/^_+|_+$/g, '') ||
+        'root';
+      const routeLogPath = `/var/log/nginx/${safeDomain}_${safeRoute}.access.log`;
 
-    const lines = [
-      `${INDENT}location ${locationPath} {`,
-      `${INDENT}${INDENT}access_log ${routeLogPath} ${DM_LOG_FORMAT_NAME};`,
-      `${INDENT}${INDENT}proxy_pass http://${PROXY_TARGET_HOST}:${route.app.port}/;`,
-      ...PROXY_SET_HEADERS.map(([n, v]) => `${INDENT}${INDENT}proxy_set_header ${n} ${v};`),
-    ];
+      const lines = [
+        `${INDENT}location ${locationPath} {`,
+        `${INDENT}${INDENT}access_log ${routeLogPath} ${DM_LOG_FORMAT_NAME};`,
+        `${INDENT}${INDENT}proxy_pass http://${PROXY_TARGET_HOST}:${route.app.port}/;`,
+        ...PROXY_SET_HEADERS.map(
+          ([n, v]) => `${INDENT}${INDENT}proxy_set_header ${n} ${v};`
+        ),
+      ];
 
-    if (route.app.projectType === 'nextjs') {
-      lines.push(
-        `${INDENT}${INDENT}proxy_http_version 1.1;`,
-        `${INDENT}${INDENT}proxy_set_header Upgrade $http_upgrade;`,
-        `${INDENT}${INDENT}proxy_set_header Connection "upgrade";`,
-        `${INDENT}${INDENT}proxy_buffering off;`
-      );
-    } else if (route.app.projectType === 'nestjs') {
-      lines.push(`${INDENT}${INDENT}proxy_http_version 1.1;`);
-    }
+      if (route.app.projectType === 'nextjs') {
+        lines.push(
+          `${INDENT}${INDENT}proxy_http_version 1.1;`,
+          `${INDENT}${INDENT}proxy_set_header Upgrade $http_upgrade;`,
+          `${INDENT}${INDENT}proxy_set_header Connection "upgrade";`,
+          `${INDENT}${INDENT}proxy_buffering off;`
+        );
+      } else if (route.app.projectType === 'nestjs') {
+        lines.push(`${INDENT}${INDENT}proxy_http_version 1.1;`);
+      }
 
-    for (const [key, value] of Object.entries(mergeHeaders(domain, route, hasSsl))) {
-      lines.push(`${INDENT}${INDENT}add_header ${key} "${value}" always;`);
-    }
+      for (const [key, value] of Object.entries(
+        mergeHeaders(domain, route, hasSsl)
+      )) {
+        lines.push(`${INDENT}${INDENT}add_header ${key} "${value}" always;`);
+      }
 
-    lines.push(`${INDENT}}`);
-    return lines.join('\n');
-  }).join('\n\n');
+      lines.push(`${INDENT}}`);
+      return lines.join('\n');
+    })
+    .join('\n\n');
 }
 
 function buildServerBlocks(
@@ -136,9 +163,10 @@ function buildServerBlocks(
   const apex = isApex(domainName);
 
   if (!hasSsl) {
-    const serverName = apex && !wwwIsRegisteredDomain
-      ? `${domainName} www.${domainName}`
-      : domainName;
+    const serverName =
+      apex && !wwwIsRegisteredDomain
+        ? `${domainName} www.${domainName}`
+        : domainName;
 
     return [
       'server {',
@@ -153,7 +181,7 @@ function buildServerBlocks(
   }
 
   const relCert = certPath!;
-  const relKey  = keyPath!;
+  const relKey = keyPath!;
 
   if (apex && !wwwIsRegisteredDomain) {
     // Three blocks: http redirect, www→apex SSL redirect, apex SSL content
@@ -227,10 +255,19 @@ export function compileDomainConfig(
   routes: RouteWithApp[],
   allDomains: Domain[]
 ): string {
-  const wwwIsRegisteredDomain = allDomains.some((d) => d.name === 'www.' + domain.name);
+  const wwwIsRegisteredDomain = allDomains.some(
+    (d) => d.name === 'www.' + domain.name
+  );
   const { hasSsl, certPath, keyPath } = evaluateHasSsl(domain);
   const locationBlocks = buildLocationBlocks(domain, routes, hasSsl);
-  const config = buildServerBlocks(domain, locationBlocks, hasSsl, wwwIsRegisteredDomain, certPath, keyPath);
+  const config = buildServerBlocks(
+    domain,
+    locationBlocks,
+    hasSsl,
+    wwwIsRegisteredDomain,
+    certPath,
+    keyPath
+  );
   return config.endsWith('\n') ? config : config + '\n';
 }
 
@@ -248,7 +285,9 @@ export interface NginxConfigResult {
  * Used by both `domainCompile` and `domainShowConfig`.
  * @throws if the domain is not found or compilation fails.
  */
-export async function resolveNginxConfig(name: string): Promise<NginxConfigResult> {
+export async function resolveNginxConfig(
+  name: string
+): Promise<NginxConfigResult> {
   const domainName = normalizeDomainName(name);
   const domain = await DomainRepo.findByNameWithRoutes(domainName);
   const allDomains = await DomainRepo.getAll();
@@ -259,7 +298,9 @@ export async function resolveNginxConfig(name: string): Promise<NginxConfigResul
   let wwwSanWarning: string | undefined;
   if (isApex(domainName) && domain.ssl.sanDomains) {
     const covered = domain.ssl.sanDomains.some(
-      (san: any) => san.toLowerCase() === wwwHost.toLowerCase() || wildcardCoversWww(san, domainName)
+      (san: any) =>
+        san.toLowerCase() === wwwHost.toLowerCase() ||
+        wildcardCoversWww(san, domainName)
     );
     if (!covered) {
       wwwSanWarning =

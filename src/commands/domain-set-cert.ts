@@ -105,11 +105,14 @@ async function _pemPath(
   const metadata = parseCertMetadata(certPem);
 
   // 12. Update domain record in DB
-  await DomainRepo.update(normalized, buildSSLConfig({
-    certPath,
-    keyPath,
-    metadata,
-  }));
+  await DomainRepo.update(
+    normalized,
+    buildSSLConfig({
+      certPath,
+      keyPath,
+      metadata,
+    })
+  );
 
   // 13. Log success
   Logger.success(
@@ -134,7 +137,7 @@ async function _pfxPath(
 
   // 5. Create two tmp file paths for extracted PEM content
   const tmpCertPath = path.join(os.tmpdir(), `dm-pfx-cert-${Date.now()}.pem`);
-  const tmpKeyPath  = path.join(os.tmpdir(), `dm-pfx-key-${Date.now()}.pem`);
+  const tmpKeyPath = path.join(os.tmpdir(), `dm-pfx-key-${Date.now()}.pem`);
 
   let certPem: string;
   let keyPem: string;
@@ -150,11 +153,11 @@ async function _pfxPath(
 
     // 7. Read the extracted PEM strings
     certPem = fs.readFileSync(tmpCertPath, 'utf8');
-    keyPem  = fs.readFileSync(tmpKeyPath,  'utf8');
+    keyPem = fs.readFileSync(tmpKeyPath, 'utf8');
   } finally {
     // 8. Always clean up the tmp files
     fs.rmSync(tmpCertPath, { force: true });
-    fs.rmSync(tmpKeyPath,  { force: true });
+    fs.rmSync(tmpKeyPath, { force: true });
   }
 
   // 9-11. Validate certificate, key, and match
@@ -194,11 +197,14 @@ async function _pfxPath(
   const metadata = parseCertMetadata(certPem);
 
   // 16. Update domain record in DB
-  await DomainRepo.update(normalized, buildSSLConfig({
-    certPath,
-    keyPath,
-    metadata,
-  }));
+  await DomainRepo.update(
+    normalized,
+    buildSSLConfig({
+      certPath,
+      keyPath,
+      metadata,
+    })
+  );
 
   // 17. Log success
   Logger.success(

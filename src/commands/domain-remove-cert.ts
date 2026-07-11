@@ -17,7 +17,9 @@ export async function domainRemoveCert(name: string): Promise<void> {
   }
 
   if (ssl.mode === 'letsencrypt') {
-    throw new Error("Let's Encrypt certificates cannot be managed with this command.");
+    throw new Error(
+      "Let's Encrypt certificates cannot be managed with this command."
+    );
   }
 
   // mode === 'custom'

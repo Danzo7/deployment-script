@@ -1,7 +1,26 @@
 import { getDB } from './db.js';
-import { App, Domain, Route, Storage, DomainSsl, RouteWithApp, DomainWithRoutesAndApps, RouteWithAppAndDomain, AppWithStorages, AppWithStoragesAndRoutes, StorageWithApps } from './model.js';
+import {
+  App,
+  Domain,
+  Route,
+  Storage,
+  DomainSsl,
+  RouteWithApp,
+  DomainWithRoutesAndApps,
+  RouteWithAppAndDomain,
+  AppWithStorages,
+  AppWithStoragesAndRoutes,
+  StorageWithApps,
+} from './model.js';
 import { eq, and } from 'drizzle-orm';
-import { appsTable, storagesTable, domainsTable, routesTable, appStorageTable, dbType } from './schema.js';
+import {
+  appsTable,
+  storagesTable,
+  domainsTable,
+  routesTable,
+  appStorageTable,
+  dbType,
+} from './schema.js';
 
 // Helper to serialize JSON for SQLite
 function serializeJSON(data: any): string | any {
@@ -50,7 +69,9 @@ function mapToApp(row: any): App {
     activeBuild: row.activeBuild,
     projectType: row.projectType as 'nextjs' | 'nestjs' | 'dotnet',
     projectDir: row.projectDir,
-    lastDeployedCommit: deserializeJSON<App['lastDeployedCommit']>(row.lastDeployedCommit),
+    lastDeployedCommit: deserializeJSON<App['lastDeployedCommit']>(
+      row.lastDeployedCommit
+    ),
   };
 }
 
@@ -108,7 +129,9 @@ export const AppRepo = {
    */
   getAllWithStorages: async (): Promise<AppWithStorages[]> => {
     const db: any = getDB();
-    const rows = await db.query[dbType === 'postgres' ? 'appsTablePostgres' : 'appsTableSqlite'].findMany({
+    const rows = await db.query[
+      dbType === 'postgres' ? 'appsTablePostgres' : 'appsTableSqlite'
+    ].findMany({
       with: {
         appStorages: {
           with: {
@@ -117,10 +140,12 @@ export const AppRepo = {
         },
       },
     });
-    
+
     return rows.map((row: any) => {
       const app = mapToApp(row);
-      const storages = (row.appStorages || []).map((as: any) => mapToStorage(as.storage));
+      const storages = (row.appStorages || []).map((as: any) =>
+        mapToStorage(as.storage)
+      );
       return { ...app, storages };
     });
   },
@@ -129,9 +154,13 @@ export const AppRepo = {
    * Get all apps with their storages AND routes (with domains) eagerly loaded via database joins
    * This is optimized for list operations that need complete app data in a single query
    */
-  getAllWithStoragesAndRoutes: async (): Promise<AppWithStoragesAndRoutes[]> => {
+  getAllWithStoragesAndRoutes: async (): Promise<
+    AppWithStoragesAndRoutes[]
+  > => {
     const db: any = getDB();
-    const rows = await db.query[dbType === 'postgres' ? 'appsTablePostgres' : 'appsTableSqlite'].findMany({
+    const rows = await db.query[
+      dbType === 'postgres' ? 'appsTablePostgres' : 'appsTableSqlite'
+    ].findMany({
       with: {
         appStorages: {
           with: {
@@ -145,10 +174,12 @@ export const AppRepo = {
         },
       },
     });
-    
+
     return rows.map((row: any) => {
       const app = mapToApp(row);
-      const storages = (row.appStorages || []).map((as: any) => mapToStorage(as.storage));
+      const storages = (row.appStorages || []).map((as: any) =>
+        mapToStorage(as.storage)
+      );
       const routes = (row.routes || []).map((r: any) => {
         const route = mapToRoute(r);
         const domain = mapToDomain(r.domain);
@@ -169,7 +200,10 @@ export const AppRepo = {
 
   findByName: async (name: string): Promise<App> => {
     const db: any = getDB();
-    const rows = await db.select().from(appsTable).where(eq(appsTable.name, name));
+    const rows = await db
+      .select()
+      .from(appsTable)
+      .where(eq(appsTable.name, name));
     if (rows.length === 0) {
       throw new Error('App not found');
     }
@@ -181,7 +215,9 @@ export const AppRepo = {
    */
   findByNameWithStorages: async (name: string): Promise<AppWithStorages> => {
     const db: any = getDB();
-    const row = await db.query[dbType === 'postgres' ? 'appsTablePostgres' : 'appsTableSqlite'].findFirst({
+    const row = await db.query[
+      dbType === 'postgres' ? 'appsTablePostgres' : 'appsTableSqlite'
+    ].findFirst({
       where: (apps: any, { eq }: any) => eq(apps.name, name),
       with: {
         appStorages: {
@@ -191,30 +227,42 @@ export const AppRepo = {
         },
       },
     });
-    
+
     if (!row) {
       throw new Error('App not found');
     }
-    
+
     const app = mapToApp(row);
-    const storages = (row.appStorages || []).map((as: any) => mapToStorage(as.storage));
+    const storages = (row.appStorages || []).map((as: any) =>
+      mapToStorage(as.storage)
+    );
     return { ...app, storages };
   },
 
-  add: async (data: Omit<App, 'id' | 'createdAt' | 'updatedAt' | 'lastDeploy'>): Promise<App> => {
+  add: async (
+    data: Omit<App, 'id' | 'createdAt' | 'updatedAt' | 'lastDeploy'>
+  ): Promise<App> => {
     const db: any = getDB();
-    
+
     // Check if app with same name exists
-    const existing = await db.select().from(appsTable).where(eq(appsTable.name, data.name));
+    const existing = await db
+      .select()
+      .from(appsTable)
+      .where(eq(appsTable.name, data.name));
     if (existing.length > 0) {
       throw new Error('An app with the same name already exists');
     }
 
     // Check if port is already in use
-    const samePort = await db.select().from(appsTable).where(eq(appsTable.port, data.port));
+    const samePort = await db
+      .select()
+      .from(appsTable)
+      .where(eq(appsTable.port, data.port));
     if (samePort.length > 0) {
       const portApp = mapToApp(samePort[0]);
-      throw new Error(`The port ${data.port} is already in use by ${portApp.name}`);
+      throw new Error(
+        `The port ${data.port} is already in use by ${portApp.name}`
+      );
     }
 
     const insertData = {
@@ -233,7 +281,7 @@ export const AppRepo = {
     };
 
     await db.insert(appsTable).values(insertData);
-    
+
     // Fetch the newly inserted app to get the DB-generated id and timestamps
     return await AppRepo.findByName(data.name);
   },
@@ -245,10 +293,13 @@ export const AppRepo = {
     return true;
   },
 
-  update: async function (name: string, updatedData: Partial<App>): Promise<App> {
+  update: async function (
+    name: string,
+    updatedData: Partial<App>
+  ): Promise<App> {
     const db: any = getDB();
     const app = await this.findByName(name);
-    
+
     const updateFields: any = {
       ...updatedData,
     };
@@ -263,11 +314,16 @@ export const AppRepo = {
       updateFields.builds = serializeJSON(updateFields.builds);
     }
     if (updateFields.lastDeployedCommit) {
-      updateFields.lastDeployedCommit = serializeJSON(updateFields.lastDeployedCommit);
+      updateFields.lastDeployedCommit = serializeJSON(
+        updateFields.lastDeployedCommit
+      );
     }
 
-    await db.update(appsTable).set(updateFields).where(eq(appsTable.name, app.name));
-    
+    await db
+      .update(appsTable)
+      .set(updateFields)
+      .where(eq(appsTable.name, app.name));
+
     return await this.findByName(name);
   },
 
@@ -275,7 +331,7 @@ export const AppRepo = {
     const app = await this.findByName(name);
     const builds = app.builds || [];
     builds.push(buildPath);
-    
+
     return await this.update(name, {
       lastDeploy: new Date(),
       builds,
@@ -283,10 +339,12 @@ export const AppRepo = {
     });
   },
 
-  resolveActiveBuild: async function (name: string): Promise<string | undefined> {
+  resolveActiveBuild: async function (
+    name: string
+  ): Promise<string | undefined> {
     const app = await this.findByName(name);
     if (!app.builds?.length) return undefined;
-    
+
     const raw = app.activeBuild as unknown;
     if (typeof raw === 'number') {
       // backward-compat: migrate the stored index to a path
@@ -317,8 +375,11 @@ export const AppRepo = {
    */
   findByStorageId: async (storageId: string | number): Promise<App[]> => {
     const db: any = getDB();
-    const appStorages = await db.select().from(appStorageTable).where(eq(appStorageTable.storageId, storageId));
-    
+    const appStorages = await db
+      .select()
+      .from(appStorageTable)
+      .where(eq(appStorageTable.storageId, storageId));
+
     const apps: App[] = [];
     for (const appStorage of appStorages) {
       try {
@@ -328,7 +389,7 @@ export const AppRepo = {
         // Skip if app no longer exists
       }
     }
-    
+
     return apps;
   },
 
@@ -337,35 +398,49 @@ export const AppRepo = {
    */
   getStoragesByAppId: async (appId: string | number): Promise<Storage[]> => {
     const db: any = getDB();
-    const appStorages = await db.select().from(appStorageTable).where(eq(appStorageTable.appId, appId));
-    
+    const appStorages = await db
+      .select()
+      .from(appStorageTable)
+      .where(eq(appStorageTable.appId, appId));
+
     if (appStorages.length === 0) return [];
-    
+
     const storageIds = appStorages.map((as: any) => as.storageId);
     const storages: Storage[] = [];
-    
+
     for (const storageId of storageIds) {
-      const rows = await db.select().from(storagesTable).where(eq(storagesTable.id, storageId));
+      const rows = await db
+        .select()
+        .from(storagesTable)
+        .where(eq(storagesTable.id, storageId));
       if (rows.length > 0) {
         storages.push(mapToStorage(rows[0]));
       }
     }
-    
+
     return storages;
   },
 
   /**
    * Link a storage to an app
    */
-  linkStorage: async (appId: string | number, storageId: string | number): Promise<void> => {
+  linkStorage: async (
+    appId: string | number,
+    storageId: string | number
+  ): Promise<void> => {
     const db: any = getDB();
-    
+
     // Check if link already exists
     const existing = await db
       .select()
       .from(appStorageTable)
-      .where(and(eq(appStorageTable.appId, appId), eq(appStorageTable.storageId, storageId)));
-    
+      .where(
+        and(
+          eq(appStorageTable.appId, appId),
+          eq(appStorageTable.storageId, storageId)
+        )
+      );
+
     if (existing.length > 0) {
       return; // Already linked
     }
@@ -376,11 +451,19 @@ export const AppRepo = {
   /**
    * Unlink a storage from an app
    */
-  unlinkStorage: async (appId: string | number, storageId: string | number): Promise<void> => {
+  unlinkStorage: async (
+    appId: string | number,
+    storageId: string | number
+  ): Promise<void> => {
     const db: any = getDB();
     await db
       .delete(appStorageTable)
-      .where(and(eq(appStorageTable.appId, appId), eq(appStorageTable.storageId, storageId)));
+      .where(
+        and(
+          eq(appStorageTable.appId, appId),
+          eq(appStorageTable.storageId, storageId)
+        )
+      );
   },
 
   /**
@@ -404,7 +487,9 @@ export const StorageRepo = {
    */
   getAllWithApps: async (): Promise<StorageWithApps[]> => {
     const db: any = getDB();
-    const rows = await db.query[dbType === 'postgres' ? 'storagesTablePostgres' : 'storagesTableSqlite'].findMany({
+    const rows = await db.query[
+      dbType === 'postgres' ? 'storagesTablePostgres' : 'storagesTableSqlite'
+    ].findMany({
       with: {
         appStorages: {
           with: {
@@ -413,7 +498,7 @@ export const StorageRepo = {
         },
       },
     });
-    
+
     return rows.map((row: any) => {
       const storage = mapToStorage(row);
       const apps = (row.appStorages || []).map((as: any) => mapToApp(as.app));
@@ -423,18 +508,28 @@ export const StorageRepo = {
 
   findByName: async (name: string): Promise<Storage> => {
     const db: any = getDB();
-    const rows = await db.select().from(storagesTable).where(eq(storagesTable.name, name));
+    const rows = await db
+      .select()
+      .from(storagesTable)
+      .where(eq(storagesTable.name, name));
     if (rows.length === 0) {
       throw new Error(`Storage "${name}" not found`);
     }
     return mapToStorage(rows[0]);
   },
 
-  add: async (data: { name: string; linkName: string|null; path: string }): Promise<Storage> => {
+  add: async (data: {
+    name: string;
+    linkName: string | null;
+    path: string;
+  }): Promise<Storage> => {
     const db: any = getDB();
-    
+
     // Check if storage exists
-    const existing = await db.select().from(storagesTable).where(eq(storagesTable.name, data.name));
+    const existing = await db
+      .select()
+      .from(storagesTable)
+      .where(eq(storagesTable.name, data.name));
     if (existing.length > 0) {
       throw new Error(`Storage "${data.name}" already exists`);
     }
@@ -444,7 +539,7 @@ export const StorageRepo = {
       linkName: data.linkName ?? null,
       path: data.path,
     });
-    
+
     // Fetch the newly inserted storage to get the DB-generated id and timestamps
     return await StorageRepo.findByName(data.name);
   },
@@ -459,7 +554,9 @@ export const StorageRepo = {
    */
   unlinkAllApps: async (storageId: string | number): Promise<void> => {
     const db: any = getDB();
-    await db.delete(appStorageTable).where(eq(appStorageTable.storageId, storageId));
+    await db
+      .delete(appStorageTable)
+      .where(eq(appStorageTable.storageId, storageId));
   },
 
   /**
@@ -467,13 +564,16 @@ export const StorageRepo = {
    */
   findByNames: async (names: string[]): Promise<Storage[]> => {
     if (names.length === 0) return [];
-    
+
     const db: any = getDB();
-    
+
     // Use inArray for efficient batch lookup
     const { inArray } = await import('drizzle-orm');
-    const rows = await db.select().from(storagesTable).where(inArray(storagesTable.name, names));
-    
+    const rows = await db
+      .select()
+      .from(storagesTable)
+      .where(inArray(storagesTable.name, names));
+
     return rows.map(mapToStorage);
   },
 };
@@ -490,7 +590,9 @@ export const DomainRepo = {
    */
   getAllWithRoutes: async (): Promise<DomainWithRoutesAndApps[]> => {
     const db: any = getDB();
-    const rows = await db.query[dbType === 'postgres' ? 'domainsTablePostgres' : 'domainsTableSqlite'].findMany({
+    const rows = await db.query[
+      dbType === 'postgres' ? 'domainsTablePostgres' : 'domainsTableSqlite'
+    ].findMany({
       with: {
         routes: {
           with: {
@@ -499,7 +601,7 @@ export const DomainRepo = {
         },
       },
     });
-    
+
     return rows.map((row: any) => {
       const domain = mapToDomain(row);
       const routes = (row.routes || []).map((r: any) => {
@@ -507,14 +609,17 @@ export const DomainRepo = {
         const app = mapToApp(r.app);
         return { ...route, app };
       });
-      
+
       return { ...domain, routes };
     });
   },
 
   findByName: async (name: string): Promise<Domain> => {
     const db: any = getDB();
-    const rows = await db.select().from(domainsTable).where(eq(domainsTable.name, name));
+    const rows = await db
+      .select()
+      .from(domainsTable)
+      .where(eq(domainsTable.name, name));
     if (rows.length === 0) {
       throw new Error(`Domain "${name}" not found`);
     }
@@ -524,9 +629,13 @@ export const DomainRepo = {
   /**
    * Find domain by name with routes eagerly loaded
    */
-  findByNameWithRoutes: async (name: string): Promise<DomainWithRoutesAndApps> => {
+  findByNameWithRoutes: async (
+    name: string
+  ): Promise<DomainWithRoutesAndApps> => {
     const db: any = getDB();
-    const row = await db.query[dbType === 'postgres' ? 'domainsTablePostgres' : 'domainsTableSqlite'].findFirst({
+    const row = await db.query[
+      dbType === 'postgres' ? 'domainsTablePostgres' : 'domainsTableSqlite'
+    ].findFirst({
       where: (domains: any, { eq }: any) => eq(domains.name, name),
       with: {
         routes: {
@@ -536,25 +645,28 @@ export const DomainRepo = {
         },
       },
     });
-    
+
     if (!row) {
       throw new Error(`Domain "${name}" not found`);
     }
-    
+
     const domain = mapToDomain(row);
     const routes = (row.routes || []).map((r: any) => {
       const route = mapToRoute(r);
       const app = mapToApp(r.app);
       return { ...route, app };
     });
-    
+
     return { ...domain, routes };
   },
 
   add: async (data: { name: string }): Promise<Domain> => {
     const db: any = getDB();
-    
-    const existing = await db.select().from(domainsTable).where(eq(domainsTable.name, data.name));
+
+    const existing = await db
+      .select()
+      .from(domainsTable)
+      .where(eq(domainsTable.name, data.name));
     if (existing.length > 0) {
       throw new Error(`Domain "${data.name}" already exists`);
     }
@@ -567,7 +679,7 @@ export const DomainRepo = {
       configPath: null,
       lastCompiledAt: null,
     });
-    
+
     // Fetch the newly inserted domain to get the DB-generated id and timestamps
     return await DomainRepo.findByName(data.name);
   },
@@ -577,10 +689,13 @@ export const DomainRepo = {
     await db.delete(domainsTable).where(eq(domainsTable.name, name));
   },
 
-  update: async function (name: string, data: Partial<Domain>): Promise<Domain> {
+  update: async function (
+    name: string,
+    data: Partial<Domain>
+  ): Promise<Domain> {
     const db: any = getDB();
     const domain = await this.findByName(name);
-    
+
     const updateFields: any = {
       ...data,
     };
@@ -598,7 +713,10 @@ export const DomainRepo = {
       updateFields.headers = serializeJSON(updateFields.headers);
     }
 
-    await db.update(domainsTable).set(updateFields).where(eq(domainsTable.name, domain.name));
+    await db
+      .update(domainsTable)
+      .set(updateFields)
+      .where(eq(domainsTable.name, domain.name));
     return await this.findByName(name);
   },
 };
@@ -615,12 +733,14 @@ export const RouteRepo = {
    */
   getAllWithApp: async (): Promise<RouteWithApp[]> => {
     const db: any = getDB();
-    const rows = await db.query[dbType === 'postgres' ? 'routesTablePostgres' : 'routesTableSqlite'].findMany({
+    const rows = await db.query[
+      dbType === 'postgres' ? 'routesTablePostgres' : 'routesTableSqlite'
+    ].findMany({
       with: {
         app: true,
       },
     });
-    
+
     return rows.map((row: any) => {
       const route = mapToRoute(row);
       const app = mapToApp(row.app);
@@ -630,28 +750,38 @@ export const RouteRepo = {
 
   getAllByDomainId: async (domainId: string | number): Promise<Route[]> => {
     const db: any = getDB();
-    const rows = await db.select().from(routesTable).where(eq(routesTable.domainId, domainId));
+    const rows = await db
+      .select()
+      .from(routesTable)
+      .where(eq(routesTable.domainId, domainId));
     return rows.map(mapToRoute);
   },
 
   getAllByAppId: async (appId: string | number): Promise<Route[]> => {
     const db: any = getDB();
-    const rows = await db.select().from(routesTable).where(eq(routesTable.appId, appId));
+    const rows = await db
+      .select()
+      .from(routesTable)
+      .where(eq(routesTable.appId, appId));
     return rows.map(mapToRoute);
   },
 
   /**
    * Get routes with app details populated for a domain
    */
-  getAllByDomainIdWithApp: async (domainId: string | number): Promise<RouteWithApp[]> => {
+  getAllByDomainIdWithApp: async (
+    domainId: string | number
+  ): Promise<RouteWithApp[]> => {
     const db: any = getDB();
-    const rows = await db.query[dbType === 'postgres' ? 'routesTablePostgres' : 'routesTableSqlite'].findMany({
+    const rows = await db.query[
+      dbType === 'postgres' ? 'routesTablePostgres' : 'routesTableSqlite'
+    ].findMany({
       where: (routes: any, { eq }: any) => eq(routes.domainId, domainId),
       with: {
         app: true,
       },
     });
-    
+
     return rows.map((row: any) => {
       const route = mapToRoute(row);
       const app = mapToApp(row.app);
@@ -662,15 +792,19 @@ export const RouteRepo = {
   /**
    * Get routes with app details populated for an app
    */
-  getAllByAppIdWithApp: async (appId: string | number): Promise<RouteWithApp[]> => {
+  getAllByAppIdWithApp: async (
+    appId: string | number
+  ): Promise<RouteWithApp[]> => {
     const db: any = getDB();
-    const rows = await db.query[dbType === 'postgres' ? 'routesTablePostgres' : 'routesTableSqlite'].findMany({
+    const rows = await db.query[
+      dbType === 'postgres' ? 'routesTablePostgres' : 'routesTableSqlite'
+    ].findMany({
       where: (routes: any, { eq }: any) => eq(routes.appId, appId),
       with: {
         app: true,
       },
     });
-    
+
     return rows.map((row: any) => {
       const route = mapToRoute(row);
       const app = mapToApp(row.app);
@@ -681,16 +815,20 @@ export const RouteRepo = {
   /**
    * Get routes with both app and domain details populated for an app
    */
-  getAllByAppIdWithAppAndDomain: async (appId: string | number): Promise<RouteWithAppAndDomain[]> => {
+  getAllByAppIdWithAppAndDomain: async (
+    appId: string | number
+  ): Promise<RouteWithAppAndDomain[]> => {
     const db: any = getDB();
-    const rows = await db.query[dbType === 'postgres' ? 'routesTablePostgres' : 'routesTableSqlite'].findMany({
+    const rows = await db.query[
+      dbType === 'postgres' ? 'routesTablePostgres' : 'routesTableSqlite'
+    ].findMany({
       where: (routes: any, { eq }: any) => eq(routes.appId, appId),
       with: {
         app: true,
         domain: true,
       },
     });
-    
+
     return rows.map((row: any) => {
       const route = mapToRoute(row);
       const app = mapToApp(row.app);
@@ -699,32 +837,44 @@ export const RouteRepo = {
     });
   },
 
-  findByDomainAndPath: async (domainId: string | number, path: string): Promise<Route | undefined> => {
+  findByDomainAndPath: async (
+    domainId: string | number,
+    path: string
+  ): Promise<Route | undefined> => {
     const db: any = getDB();
     const rows = await db
       .select()
       .from(routesTable)
-      .where(and(eq(routesTable.domainId, domainId), eq(routesTable.path, path)));
-    
+      .where(
+        and(eq(routesTable.domainId, domainId), eq(routesTable.path, path))
+      );
+
     if (rows.length === 0) return undefined;
     return mapToRoute(rows[0]);
   },
 
-  add: async (data: { domainId: string | number; path: string; appId: string | number }): Promise<Route> => {
+  add: async (data: {
+    domainId: string | number;
+    path: string;
+    appId: string | number;
+  }): Promise<Route> => {
     const db: any = getDB();
 
-    const result = await db.insert(routesTable).values({
-      domainId: data.domainId,
-      path: data.path,
-      appId: data.appId,
-      headers: null,
-    }).returning();
-    
+    const result = await db
+      .insert(routesTable)
+      .values({
+        domainId: data.domainId,
+        path: data.path,
+        appId: data.appId,
+        headers: null,
+      })
+      .returning();
+
     // For SQLite, fetch the newly inserted route since returning() may not work
     if (result && result.length > 0) {
       return mapToRoute(result[0]);
     }
-    
+
     // Fallback: find by domain and path
     const route = await RouteRepo.findByDomainAndPath(data.domainId, data.path);
     if (!route) {
@@ -745,7 +895,7 @@ export const RouteRepo = {
 
   update: async (id: string | number, data: Partial<Route>): Promise<Route> => {
     const db: any = getDB();
-    
+
     const updateFields: any = {
       ...data,
     };
@@ -760,10 +910,16 @@ export const RouteRepo = {
       updateFields.headers = serializeJSON(updateFields.headers);
     }
 
-    await db.update(routesTable).set(updateFields).where(eq(routesTable.id, id));
-    
+    await db
+      .update(routesTable)
+      .set(updateFields)
+      .where(eq(routesTable.id, id));
+
     // Return updated route
-    const rows = await db.select().from(routesTable).where(eq(routesTable.id, id));
+    const rows = await db
+      .select()
+      .from(routesTable)
+      .where(eq(routesTable.id, id));
     if (rows.length === 0) {
       throw new Error('Route not found after update');
     }

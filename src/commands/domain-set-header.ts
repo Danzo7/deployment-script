@@ -3,7 +3,11 @@ import { validateHeaderKey } from '../utils/header-merge.js';
 import { DomainRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 
-export async function domainSetHeader(name: string, key: string, value: string): Promise<void> {
+export async function domainSetHeader(
+  name: string,
+  key: string,
+  value: string
+): Promise<void> {
   // 1. Normalize domain name
   const normalized = normalizeDomainName(name);
 

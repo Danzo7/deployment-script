@@ -180,7 +180,10 @@ export function validateKey(keyPem: string): void {
  */
 export function validateKeyMatchesCert(certPem: string, keyPem: string): void {
   const cert = new X509Certificate(certPem);
-  const certPubKey = cert.publicKey.export({ type: 'spki', format: 'pem' }) as string;
+  const certPubKey = cert.publicKey.export({
+    type: 'spki',
+    format: 'pem',
+  }) as string;
 
   const privKey = createPrivateKey(keyPem);
   const derivedPubKey = createPublicKey(privKey).export({
@@ -287,26 +290,26 @@ export function writeCertFiles(opts: {
   fs.mkdirSync(certStoreDir, { recursive: true });
 
   const finalCert = path.join(certStoreDir, 'cert.pem');
-  const finalKey  = path.join(certStoreDir, 'key.pem');
-  const tmpCert   = path.join(certStoreDir, 'cert.pem.tmp');
-  const tmpKey    = path.join(certStoreDir, 'key.pem.tmp');
+  const finalKey = path.join(certStoreDir, 'key.pem');
+  const tmpCert = path.join(certStoreDir, 'cert.pem.tmp');
+  const tmpKey = path.join(certStoreDir, 'key.pem.tmp');
 
   try {
     fs.writeFileSync(tmpCert, certPem, { encoding: 'utf8' });
-    fs.writeFileSync(tmpKey,  keyPem,  { encoding: 'utf8' });
+    fs.writeFileSync(tmpKey, keyPem, { encoding: 'utf8' });
 
     // Sanity-check: verify both tmp files are readable before committing
     fs.readFileSync(tmpCert);
     fs.readFileSync(tmpKey);
 
     fs.renameSync(tmpCert, finalCert);
-    fs.renameSync(tmpKey,  finalKey);
+    fs.renameSync(tmpKey, finalKey);
 
     // NOT optional — security requirement: private key must not be world-readable
     fs.chmodSync(finalKey, 0o600);
   } finally {
     fs.rmSync(tmpCert, { force: true });
-    fs.rmSync(tmpKey,  { force: true });
+    fs.rmSync(tmpKey, { force: true });
   }
 
   return { certPath: finalCert, keyPath: finalKey };
@@ -336,12 +339,12 @@ export function deleteCertFiles(domainName: string): void {
 
 /**
  * Validates a certificate and key pair.
- * 
+ *
  * Performs all necessary validation:
  * - Certificate is valid PEM and not expired
  * - Key is valid PEM
  * - Key matches the certificate
- * 
+ *
  * @throws Error if any validation fails
  */
 export function validateCertAndKey(certPem: string, keyPem: string): void {
@@ -352,7 +355,7 @@ export function validateCertAndKey(certPem: string, keyPem: string): void {
 
 /**
  * Loads and validates a certificate and key from the Cert_Store for a domain.
- * 
+ *
  * @returns Object with certPem, keyPem, certPath, keyPath, and parsed metadata
  * @throws Error if files don't exist or validation fails
  */
@@ -386,7 +389,7 @@ export function loadCertFromStore(domainName: string): {
 
 /**
  * Prepares SSL configuration data for database update.
- * 
+ *
  * Returns the SSL configuration object that can be passed to DomainRepo.update().
  * Separated from the actual DB update to avoid circular dependencies.
  */
@@ -402,7 +405,7 @@ export function buildSSLConfig(opts: {
   };
 }) {
   const { certPath, keyPath, uploadedAt, metadata } = opts;
-  
+
   return {
     ssl: {
       mode: 'custom' as const,

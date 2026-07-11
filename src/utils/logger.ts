@@ -5,11 +5,11 @@ import { supportsUnicode } from './terminal-capabilities.js';
 // On Windows Server 2016 / conhost build 14393, non-BMP glyphs render as
 // blank boxes — this is a hard OS limit, not fixable via chcp or registry.
 const SYM = {
-  info:    supportsUnicode ? 'ℹ' : 'i',
+  info: supportsUnicode ? 'ℹ' : 'i',
   success: supportsUnicode ? '✔' : '+',
-  error:   supportsUnicode ? '✖' : 'x',
-  warn:    supportsUnicode ? '⚠' : '!',
-  advice:  supportsUnicode ? '💡' : '*',
+  error: supportsUnicode ? '✖' : 'x',
+  warn: supportsUnicode ? '⚠' : '!',
+  advice: supportsUnicode ? '💡' : '*',
 } as const;
 
 export class Logger {
@@ -55,7 +55,10 @@ export class Logger {
    */
   static advice(message?: any, ...optionalParams: any[]) {
     if (Logger.isMuted) return;
-    this.log(chalk.italic.bold.whiteBright(`${SYM.advice} ${message}`), ...optionalParams);
+    this.log(
+      chalk.italic.bold.whiteBright(`${SYM.advice} ${message}`),
+      ...optionalParams
+    );
     return this.nl();
   }
 
@@ -103,7 +106,10 @@ export class Logger {
    * Displays an inline spinner while an async operation runs.
    * Returns the result of the operation.
    */
-  static async spinner<T>(label: string, operation: () => Promise<T>): Promise<T> {
+  static async spinner<T>(
+    label: string,
+    operation: () => Promise<T>
+  ): Promise<T> {
     // Braille spinner frames require Unicode; fall back to ASCII on legacy consoles
     const frames = supportsUnicode
       ? ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
@@ -111,17 +117,23 @@ export class Logger {
     let i = 0;
     const timestamp = chalk.gray(`[${new Date().toLocaleTimeString()}]`);
     const interval = setInterval(() => {
-      process.stdout.write(`\r${timestamp} ${chalk.cyan(frames[i++ % frames.length])} ${label}`);
+      process.stdout.write(
+        `\r${timestamp} ${chalk.cyan(frames[i++ % frames.length])} ${label}`
+      );
     }, 80);
 
     try {
       const result = await operation();
       clearInterval(interval);
-      process.stdout.write(`\r${timestamp} ${chalk.green(SYM.success)} ${label}\n\n`);
+      process.stdout.write(
+        `\r${timestamp} ${chalk.green(SYM.success)} ${label}\n\n`
+      );
       return result;
     } catch (err) {
       clearInterval(interval);
-      process.stdout.write(`\r${timestamp} ${chalk.red(SYM.error)} ${label}\n\n`);
+      process.stdout.write(
+        `\r${timestamp} ${chalk.red(SYM.error)} ${label}\n\n`
+      );
       throw err;
     }
   }

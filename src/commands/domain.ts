@@ -1,9 +1,12 @@
 import chalk from 'chalk';
 import Table from 'cli-table3';
 import { formatDate, formatRelative } from '../utils/date-helper.js';
-import  {AppRepo, DomainRepo, RouteRepo } from '../db/repos.js';
+import { AppRepo, DomainRepo, RouteRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
-import { normalizeDomainName, validateHostname } from '../utils/route-validation.js';
+import {
+  normalizeDomainName,
+  validateHostname,
+} from '../utils/route-validation.js';
 import { CERT_EXPIRY_WARNING_DAYS } from '../utils/ssl-helper.js';
 import type { Domain } from '../db/model.js';
 
@@ -16,13 +19,18 @@ export async function domainAdd(name: string): Promise<void> {
   Logger.success(`Domain ${Logger.highlight(normalized)} added.`);
 }
 
-export async function domainRemove(name: string, force: boolean): Promise<void> {
+export async function domainRemove(
+  name: string,
+  force: boolean
+): Promise<void> {
   const normalized = normalizeDomainName(name);
   const domain = await DomainRepo.findByName(normalized);
   const routes = await RouteRepo.getAllByDomainIdWithApp(domain.id);
 
   if (routes.length > 0 && !force) {
-    const routeLines = routes.map((r) => `  /${r.path} → ${r.app.name}`).join('\n');
+    const routeLines = routes
+      .map((r) => `  /${r.path} → ${r.app.name}`)
+      .join('\n');
     throw new Error(
       `Domain "${normalized}" has routes:\n${routeLines}\nUse --force to cascade delete.`
     );
@@ -56,7 +64,8 @@ function expiryColored(expiresAt?: string): string {
   );
   const formatted = `${formatDate(expiresAt)} (${formatRelative(expiresAt)})`;
   if (expiry < now) return chalk.red(formatted + ' EXPIRED');
-  if (expiry < warningThreshold) return chalk.yellow(formatted + ' expiring soon');
+  if (expiry < warningThreshold)
+    return chalk.yellow(formatted + ' expiring soon');
   return chalk.green(formatted);
 }
 
@@ -80,10 +89,13 @@ export async function getAppRouteLines(appName: string): Promise<string[]> {
     } else if (ssl.mode === 'custom' && ssl.expiresAt) {
       const expiry = new Date(ssl.expiresAt);
       const now = new Date();
-      const warning = new Date(now.getTime() + CERT_EXPIRY_WARNING_DAYS * 24 * 60 * 60 * 1000);
+      const warning = new Date(
+        now.getTime() + CERT_EXPIRY_WARNING_DAYS * 24 * 60 * 60 * 1000
+      );
       const distance = formatRelative(ssl.expiresAt);
       if (expiry < now) sslLabel = chalk.red(`SSL expired ${distance}`);
-      else if (expiry < warning) sslLabel = chalk.yellow(`SSL expires ${distance}`);
+      else if (expiry < warning)
+        sslLabel = chalk.yellow(`SSL expires ${distance}`);
       else sslLabel = chalk.green(`SSL valid · expires ${distance}`);
     } else if (ssl.mode === 'custom') {
       sslLabel = chalk.yellow('custom SSL (no cert)');
@@ -117,12 +129,14 @@ export async function domainList(): Promise<void> {
 
   domains.forEach((domain, index) => {
     const routeCount = domain.routes.length;
-    
+
     let pushedValue: string;
     if (domain.lastPushedAt) {
       const relativeTime = formatRelative(domain.lastPushedAt);
-      const isStale = domain.lastCompiledAt && new Date(domain.lastCompiledAt) > new Date(domain.lastPushedAt);
-      pushedValue = isStale 
+      const isStale =
+        domain.lastCompiledAt &&
+        new Date(domain.lastCompiledAt) > new Date(domain.lastPushedAt);
+      pushedValue = isStale
         ? chalk.yellow(`⚠ ${relativeTime}`)
         : chalk.green(relativeTime);
     } else {
@@ -164,11 +178,16 @@ export async function domainShow(name: string): Promise<void> {
   }
   row('Created', chalk.yellow(formatDate(domain.createdAt)));
   row('Updated', chalk.yellow(formatDate(domain.updatedAt)));
-  
+
   // Push metadata section
   console.log(chalk.gray('  ' + '─'.repeat(40)));
   if (domain.lastPushedAt) {
-    row('Last pushed', chalk.yellow(`${formatDate(domain.lastPushedAt)} (${formatRelative(domain.lastPushedAt)})`));
+    row(
+      'Last pushed',
+      chalk.yellow(
+        `${formatDate(domain.lastPushedAt)} (${formatRelative(domain.lastPushedAt)})`
+      )
+    );
   } else {
     row('Last pushed', chalk.gray('—'));
   }
@@ -177,23 +196,33 @@ export async function domainShow(name: string): Promise<void> {
   } else {
     row('Config path', chalk.gray('—'));
   }
-  
+
   // Staleness warnings
   if (domain.lastCompiledAt && !domain.lastPushedAt) {
     console.log();
-    console.log(`  ${chalk.yellow('⚠')} Config has been compiled but not yet pushed. Run ${chalk.cyan(`'dm domain push ${name}'`)} to deploy.`);
-  } else if (domain.lastCompiledAt && domain.lastPushedAt && new Date(domain.lastCompiledAt) > new Date(domain.lastPushedAt)) {
+    console.log(
+      `  ${chalk.yellow('⚠')} Config has been compiled but not yet pushed. Run ${chalk.cyan(`'dm domain push ${name}'`)} to deploy.`
+    );
+  } else if (
+    domain.lastCompiledAt &&
+    domain.lastPushedAt &&
+    new Date(domain.lastCompiledAt) > new Date(domain.lastPushedAt)
+  ) {
     console.log();
-    console.log(`  ${chalk.yellow('⚠')} Config is stale — recompiled since last push. Run ${chalk.cyan(`'dm domain push ${name}'`)} to update.`);
+    console.log(
+      `  ${chalk.yellow('⚠')} Config is stale — recompiled since last push. Run ${chalk.cyan(`'dm domain push ${name}'`)} to update.`
+    );
   }
-  
+
   console.log(chalk.gray('  ' + '─'.repeat(40)));
 
   if (domain.routes.length === 0) {
     console.log(`  ${chalk.gray('No routes configured')}`);
   } else {
     for (const route of domain.routes) {
-      console.log(`  ${chalk.white('/' + route.path)}  →  ${chalk.whiteBright(route.app.name)}`);
+      console.log(
+        `  ${chalk.white('/' + route.path)}  →  ${chalk.whiteBright(route.app.name)}`
+      );
     }
   }
 

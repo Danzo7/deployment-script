@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { render, useApp } from 'ink';
-import { subscribeBus, readAppLogs, openSharedPm2, closeSharedPm2 } from '../utils/pm2-helper.js';
+import {
+  subscribeBus,
+  readAppLogs,
+  openSharedPm2,
+  closeSharedPm2,
+} from '../utils/pm2-helper.js';
 import { Dashboard } from './Dashboard.js';
 import type { DashboardAction } from './Dashboard.js';
 import {
@@ -16,24 +21,24 @@ import { Logger } from '../utils/logger.js';
 import { pauseRepl, resumeRepl } from '../utils/repl-context.js';
 
 // ─── Polling cadences ─────────────────────────────────────────────────────────
-const LIST_POLL_MS    = 2_000;
-const DETAIL_POLL_MS  = 5_000;
+const LIST_POLL_MS = 2_000;
+const DETAIL_POLL_MS = 5_000;
 const GIT_FETCH_EVERY = 12;
-const LOG_POLL_EVERY  = 2;
-const MAX_LOG_LINES   = 500;
+const LOG_POLL_EVERY = 2;
+const MAX_LOG_LINES = 500;
 
 function DashboardApp(): React.ReactElement {
   const { exit } = useApp();
 
   const [globalState, setGlobalState] = useState<GlobalState | null>(null);
-  const [appDetail, setAppDetail]     = useState<AppDetail | null>(null);
-  const [loading, setLoading]         = useState(true);
-  const [logLines, setLogLines]       = useState<string[]>([]);
+  const [appDetail, setAppDetail] = useState<AppDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [logLines, setLogLines] = useState<string[]>([]);
 
-  const selectedAppName    = useRef<string | null>(null);
-  const lastDetailAppName  = useRef<string | null>(null);
-  const globalStateRef     = useRef<GlobalState | null>(null);
-  const detailTickRef      = useRef(0);
+  const selectedAppName = useRef<string | null>(null);
+  const lastDetailAppName = useRef<string | null>(null);
+  const globalStateRef = useRef<GlobalState | null>(null);
+  const detailTickRef = useRef(0);
 
   // ── PM2 bus: realtime logs, filtered to selected app ─────────────────────
   useEffect(() => {
@@ -66,15 +71,25 @@ function DashboardApp(): React.ReactElement {
       if (newLines.length > 0) {
         setLogLines((prev) => {
           const next = [...prev, ...newLines];
-          return next.length > MAX_LOG_LINES ? next.slice(-MAX_LOG_LINES) : next;
+          return next.length > MAX_LOG_LINES
+            ? next.slice(-MAX_LOG_LINES)
+            : next;
         });
       }
-    }).then((c: () => void) => {
-      if (cancelled) { c(); return; }
-      cleanup = c;
-    }).catch(() => {});
+    })
+      .then((c: () => void) => {
+        if (cancelled) {
+          c();
+          return;
+        }
+        cleanup = c;
+      })
+      .catch(() => {});
 
-    return () => { cancelled = true; cleanup?.(); };
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
   }, []);
 
   // ── Fast loop: sidebar list (every 2 s) ───────────────────────────────────
@@ -90,12 +105,17 @@ function DashboardApp(): React.ReactElement {
           setGlobalState(next);
           setLoading(false);
         }
-      } catch { /* keep showing last state */ }
+      } catch {
+        /* keep showing last state */
+      }
       if (alive) timer = setTimeout(tick, LIST_POLL_MS);
     };
 
     tick();
-    return () => { alive = false; clearTimeout(timer); };
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
   }, []);
 
   // ── Slow loop: per-selected-app detail (every 5 s) ────────────────────────
@@ -112,7 +132,9 @@ function DashboardApp(): React.ReactElement {
         return;
       }
 
-      const summary: AppSummary | undefined = gs.summaries.find((s) => s.app.name === appName);
+      const summary: AppSummary | undefined = gs.summaries.find(
+        (s) => s.app.name === appName
+      );
       if (!summary) {
         if (alive) timer = setTimeout(tick, DETAIL_POLL_MS);
         return;
@@ -121,18 +143,28 @@ function DashboardApp(): React.ReactElement {
       detailTickRef.current += 1;
       const n = detailTickRef.current;
       const doGitFetch = n % GIT_FETCH_EVERY === 1;
-      const doLogPoll  = n % LOG_POLL_EVERY  === 0;
+      const doLogPoll = n % LOG_POLL_EVERY === 0;
 
       try {
-        const detail = await fetchAppDetail(appName, summary, doGitFetch, doLogPoll);
+        const detail = await fetchAppDetail(
+          appName,
+          summary,
+          doGitFetch,
+          doLogPoll
+        );
         if (alive) setAppDetail(detail);
-      } catch { /* keep last detail */ }
+      } catch {
+        /* keep last detail */
+      }
 
       if (alive) timer = setTimeout(tick, DETAIL_POLL_MS);
     };
 
     tick();
-    return () => { alive = false; clearTimeout(timer); };
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
   }, []);
 
   const handleSelectApp = useCallback((appName: string | null) => {
@@ -148,12 +180,14 @@ function DashboardApp(): React.ReactElement {
     selectedAppName.current = appName;
 
     if (appName) {
-      readAppLogs(appName, 300).then((lines) => {
-        // Only apply if app hasn't changed again by the time this resolves
-        if (selectedAppName.current === appName) {
-          setLogLines(lines);
-        }
-      }).catch(() => {});
+      readAppLogs(appName, 300)
+        .then((lines) => {
+          // Only apply if app hasn't changed again by the time this resolves
+          if (selectedAppName.current === appName) {
+            setLogLines(lines);
+          }
+        })
+        .catch(() => {});
     }
   }, []);
 
@@ -164,11 +198,13 @@ function DashboardApp(): React.ReactElement {
       if (appName) {
         setLogLines((prev) => {
           if (prev.length > 0) return prev; // already have lines, don't clobber
-          readAppLogs(appName, 300).then((lines) => {
-            if (selectedAppName.current === appName) {
-              setLogLines((cur) => (cur.length === 0 ? lines : cur));
-            }
-          }).catch(() => {});
+          readAppLogs(appName, 300)
+            .then((lines) => {
+              if (selectedAppName.current === appName) {
+                setLogLines((cur) => (cur.length === 0 ? lines : cur));
+              }
+            })
+            .catch(() => {});
           return prev;
         });
       }
@@ -183,10 +219,13 @@ function DashboardApp(): React.ReactElement {
     resetTailers();
   }, []);
 
-  const handleAction = useCallback((action: DashboardAction) => {
-    (globalThis as any).__pendingDashboardAction = action;
-    exit();
-  }, [exit]);
+  const handleAction = useCallback(
+    (action: DashboardAction) => {
+      (globalThis as any).__pendingDashboardAction = action;
+      exit();
+    },
+    [exit]
+  );
 
   return (
     <Dashboard
@@ -209,7 +248,11 @@ export async function launchDashboard(): Promise<void> {
   pauseRepl();
   Logger.isMuted = true;
 
-  try { await openSharedPm2(); } catch { /* dashboard will show pm2 unreachable */ }
+  try {
+    await openSharedPm2();
+  } catch {
+    /* dashboard will show pm2 unreachable */
+  }
 
   (globalThis as any).__pendingDashboardAction = undefined;
 
@@ -222,7 +265,8 @@ export async function launchDashboard(): Promise<void> {
   resumeRepl();
   Logger.isMuted = false;
 
-  const action: DashboardAction | undefined = (globalThis as any).__pendingDashboardAction;
+  const action: DashboardAction | undefined = (globalThis as any)
+    .__pendingDashboardAction;
   if (!action) return;
 
   console.log();

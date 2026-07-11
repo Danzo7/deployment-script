@@ -1,4 +1,7 @@
-import { drizzle as drizzleSqlite, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
+import {
+  drizzle as drizzleSqlite,
+  BetterSQLite3Database,
+} from 'drizzle-orm/better-sqlite3';
 import { drizzle as drizzlePostgres } from 'drizzle-orm/node-postgres';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Database from 'better-sqlite3';
@@ -8,7 +11,9 @@ import { APP_DIR, DATABASE_TYPE, DATABASE_URL } from '../constants.js';
 import * as schema from './schema.js';
 
 // Type for the database instance
-type DrizzleDB = BetterSQLite3Database<typeof schema> | NodePgDatabase<typeof schema>;
+type DrizzleDB =
+  | BetterSQLite3Database<typeof schema>
+  | NodePgDatabase<typeof schema>;
 
 let db: DrizzleDB | null = null;
 let sqliteInstance: Database.Database | null = null;
@@ -23,7 +28,9 @@ function getConnection(): DrizzleDB {
   if (DATABASE_TYPE === 'postgres') {
     const connectionString = DATABASE_URL;
     if (!connectionString) {
-      throw new Error('DATABASE_URL environment variable is required for PostgreSQL');
+      throw new Error(
+        'DATABASE_URL environment variable is required for PostgreSQL'
+      );
     }
     postgresInstance = new pg.Client({ connectionString });
     postgresInstance.connect();
@@ -44,11 +51,11 @@ function getConnection(): DrizzleDB {
  */
 export const initializeDB = async () => {
   getConnection();
-  
+
   // For SQLite, enable foreign keys and create tables
   if (DATABASE_TYPE === 'sqlite' && sqliteInstance) {
     sqliteInstance.pragma('foreign_keys = ON');
-    
+
     // Create tables if they don't exist
     sqliteInstance.exec(`
       CREATE TABLE IF NOT EXISTS apps (

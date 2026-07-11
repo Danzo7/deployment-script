@@ -3,31 +3,65 @@ import { Box, Text } from 'ink';
 import type { DetailTab } from './shared.js';
 import { TERM_W } from './shared.js';
 
-interface HintProps { label: string; desc: string; }
+interface HintProps {
+  label: string;
+  desc: string;
+}
 function Hint({ label, desc }: HintProps): React.ReactElement {
   return (
     <>
-      <Text bold color="white">{label}</Text>
+      <Text bold color="white">
+        {label}
+      </Text>
       <Text dimColor>{` ${desc}  `}</Text>
     </>
   );
 }
 
-interface KeybarProps { activeTab: DetailTab; }
+interface KeybarProps {
+  activeTab: DetailTab;
+}
 
 export function Keybar({ activeTab }: KeybarProps): React.ReactElement {
   const tabHints = (() => {
     switch (activeTab) {
       case 'overview':
-        return <><Hint label="r" desc="restart" /><Hint label="S" desc="stop" /><Hint label="D" desc="redeploy" /><Hint label="E" desc="env" /></>;
+        return (
+          <>
+            <Hint label="r" desc="restart" />
+            <Hint label="S" desc="stop" />
+            <Hint label="D" desc="redeploy" />
+            <Hint label="E" desc="env" />
+          </>
+        );
       case 'metrics':
-        return <><Hint label="v" desc="toggle logs" /><Hint label="c" desc="copy value" /></>;
+        return (
+          <>
+            <Hint label="v" desc="toggle logs" />
+            <Hint label="c" desc="copy value" />
+          </>
+        );
       case 'logs':
-        return <><Hint label="X" desc="clear" /><Hint label="c" desc="copy line" /></>;
+        return (
+          <>
+            <Hint label="X" desc="clear" />
+            <Hint label="c" desc="copy line" />
+          </>
+        );
       case 'deploys':
-        return <><Hint label="↵" desc="rollback" /><Hint label="c" desc="copy commit" /></>;
+        return (
+          <>
+            <Hint label="↵" desc="rollback" />
+            <Hint label="c" desc="copy commit" />
+          </>
+        );
       case 'domains':
-        return <><Hint label="↵" desc="nginx config" /><Hint label="c" desc="copy url" /></>;
+        return (
+          <>
+            <Hint label="↵" desc="nginx config" />
+            <Hint label="c" desc="copy url" />
+          </>
+        );
     }
   })();
 

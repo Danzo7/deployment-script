@@ -30,7 +30,13 @@ import {
 // ─── Public types ─────────────────────────────────────────────────────────────
 
 export type Pm2Status =
-  | 'online' | 'stopped' | 'errored' | 'launching' | 'stopping' | 'not-found' | string;
+  | 'online'
+  | 'stopped'
+  | 'errored'
+  | 'launching'
+  | 'stopping'
+  | 'not-found'
+  | string;
 
 export type { ProcessMetrics as Pm2Metrics, VcsDriftInfo };
 
@@ -92,7 +98,11 @@ export interface GlobalState {
 
 // ─── Port reachability ────────────────────────────────────────────────────────
 
-function checkPortReachable(port: number, host = '127.0.0.1', timeoutMs = 1000): Promise<boolean> {
+function checkPortReachable(
+  port: number,
+  host = '127.0.0.1',
+  timeoutMs = 1000
+): Promise<boolean> {
   return new Promise((resolve) => {
     const sock = new net.Socket();
     let done = false;
@@ -114,7 +124,8 @@ function checkPortReachable(port: number, host = '127.0.0.1', timeoutMs = 1000):
 function buildCertInfo(domain: Domain): CertInfo {
   const { ssl } = domain;
   if (ssl.mode === 'none') return { mode: 'none' };
-  if (ssl.mode === 'letsencrypt') return { mode: 'letsencrypt', expiresAt: ssl.expiresAt };
+  if (ssl.mode === 'letsencrypt')
+    return { mode: 'letsencrypt', expiresAt: ssl.expiresAt };
   if (!ssl.certPath || !fs.existsSync(ssl.certPath)) {
     return { mode: 'custom', error: 'cert file missing' };
   }
@@ -132,7 +143,8 @@ function buildCertInfo(domain: Domain): CertInfo {
       issuer: meta.issuer,
       sanDomains: meta.sanDomains,
       isExpired: daysRemaining <= 0,
-      expiringSoon: daysRemaining > 0 && daysRemaining <= CERT_EXPIRY_WARNING_DAYS,
+      expiringSoon:
+        daysRemaining > 0 && daysRemaining <= CERT_EXPIRY_WARNING_DAYS,
     };
   } catch (err: any) {
     return { mode: 'custom', error: err.message };
@@ -143,7 +155,10 @@ function buildCertInfo(domain: Domain): CertInfo {
 
 function isDomainStale(domain: Domain): boolean {
   if (!domain.lastPushedAt) return !!domain.lastCompiledAt;
-  if (domain.lastCompiledAt && new Date(domain.lastCompiledAt) > new Date(domain.lastPushedAt)) {
+  if (
+    domain.lastCompiledAt &&
+    new Date(domain.lastCompiledAt) > new Date(domain.lastPushedAt)
+  ) {
     return true;
   }
   return false;
@@ -161,17 +176,23 @@ function deriveHealth(
   pm2Data: ProcessMetrics | null,
   portReachable: boolean | undefined,
   restartDelta: number,
-  nginxWindows: LogWindow[],
+  nginxWindows: LogWindow[]
 ): AppSummary['health'] {
   if (!pm2Data) return 'unknown';
   if (pm2Data.status === 'errored') return 'down';
-  if (pm2Data.status === 'stopped' || pm2Data.status === 'not-found') return 'down';
+  if (pm2Data.status === 'stopped' || pm2Data.status === 'not-found')
+    return 'down';
   if (pm2Data.status === 'online') {
     const has5xx = nginxWindows.some((w) => {
-      const total = w.statusDist.s2xx + w.statusDist.s3xx + w.statusDist.s4xx + w.statusDist.s5xx;
+      const total =
+        w.statusDist.s2xx +
+        w.statusDist.s3xx +
+        w.statusDist.s4xx +
+        w.statusDist.s5xx;
       return total > 10 && w.statusDist.s5xx / total > 0.1;
     });
-    if (restartDelta > 0 || portReachable === false || has5xx) return 'degraded';
+    if (restartDelta > 0 || portReachable === false || has5xx)
+      return 'degraded';
     return 'healthy';
   }
   return 'unknown';
@@ -216,11 +237,20 @@ export function disconnectSharedSsh(): void {
 
 const tailerCache = new Map<string, NginxLogTailer>();
 
-function getTailer(domain: Domain, routePath: string, isRemote: boolean): NginxLogTailer {
-  const safeRoute = routePath.replace(/[^a-z0-9]/gi, '_').replace(/^_+|_+$/g, '') || 'root';
+function getTailer(
+  domain: Domain,
+  routePath: string,
+  isRemote: boolean
+): NginxLogTailer {
+  const safeRoute =
+    routePath.replace(/[^a-z0-9]/gi, '_').replace(/^_+|_+$/g, '') || 'root';
   const key = `${domain.name}:${safeRoute}:${isRemote ? 'remote' : 'local'}`;
   if (tailerCache.has(key)) return tailerCache.get(key)!;
-  const logPath = NginxLogTailer.accessLogPath(domain.name, routePath, isRemote);
+  const logPath = NginxLogTailer.accessLogPath(
+    domain.name,
+    routePath,
+    isRemote
+  );
   const sshProvider = isRemote ? () => _sharedSsh ?? undefined : undefined;
   const tailer = new NginxLogTailer(logPath, sshProvider);
   tailerCache.set(key, tailer);
@@ -238,8 +268,11 @@ function checkEnvChanged(app: App): boolean | undefined {
   try {
     const envFile = app.projectType === 'nextjs' ? '.env.local' : '.env';
     const srcEnv = path.join(app.appDir, 'env', envFile);
-    const buildEnv = app.activeBuild ? path.join(app.activeBuild, envFile) : null;
-    if (!buildEnv || !fs.existsSync(srcEnv) || !fs.existsSync(buildEnv)) return undefined;
+    const buildEnv = app.activeBuild
+      ? path.join(app.activeBuild, envFile)
+      : null;
+    if (!buildEnv || !fs.existsSync(srcEnv) || !fs.existsSync(buildEnv))
+      return undefined;
     return calculateFileHash(srcEnv) !== calculateFileHash(buildEnv);
   } catch {
     return undefined;
@@ -297,9 +330,10 @@ export async function listApps(prev: GlobalState | null): Promise<GlobalState> {
   const sshReachable = !!ssh;
 
   // ── OS metrics ────────────────────────────────────────────────────────────
-  const loadavg = os.platform() === 'win32'
-    ? null
-    : (os.loadavg() as [number, number, number]);
+  const loadavg =
+    os.platform() === 'win32'
+      ? null
+      : (os.loadavg() as [number, number, number]);
   const totalMemBytes = os.totalmem();
   const freeMemBytes = os.freemem();
 
@@ -307,14 +341,25 @@ export async function listApps(prev: GlobalState | null): Promise<GlobalState> {
   const summaries: AppSummary[] = apps.map((app): AppSummary => {
     const pm2Data: ProcessMetrics | null = pm2Reachable
       ? (pm2ByName.get(app.name) ?? {
-          name: app.name, status: 'not-found', cpu: 0, memBytes: 0, uptimeMs: 0,
-          restarts: 0, unstableRestarts: 0, execMode: 'fork', instances: 1,
+          name: app.name,
+          status: 'not-found',
+          cpu: 0,
+          memBytes: 0,
+          uptimeMs: 0,
+          restarts: 0,
+          unstableRestarts: 0,
+          execMode: 'fork',
+          instances: 1,
         })
       : null;
 
     const currentRestarts = pm2Data?.restarts ?? 0;
-    if (!restartBaseline.has(app.name)) restartBaseline.set(app.name, currentRestarts);
-    const restartDelta = Math.max(0, currentRestarts - restartBaseline.get(app.name)!);
+    if (!restartBaseline.has(app.name))
+      restartBaseline.set(app.name, currentRestarts);
+    const restartDelta = Math.max(
+      0,
+      currentRestarts - restartBaseline.get(app.name)!
+    );
 
     // Derive health without nginx data — the detail fetch will refine it
     const health = deriveHealth(pm2Data, undefined, restartDelta, []);
@@ -357,7 +402,7 @@ export async function fetchAppDetail(
   appName: string,
   summary: AppSummary,
   doGitFetch: boolean,
-  doLogPoll: boolean,
+  doLogPoll: boolean
 ): Promise<AppDetail> {
   const { app, pm2, restartDelta } = summary;
 
@@ -366,13 +411,21 @@ export async function fetchAppDetail(
 
   // Port check, VCS drift, and routes — run in parallel
   const [portReachableResult, driftResult, routesResult] = await Promise.all([
-    (pm2?.status === 'online' || !pm2)
+    pm2?.status === 'online' || !pm2
       ? checkPortReachable(app.port).catch(() => false)
       : Promise.resolve(undefined),
-    getVcsDriftInfo(app, path.join(app.appDir, 'release'), doGitFetch).catch((): VcsDriftInfo => ({
-      branch: app.branch, behind: 0, ahead: 0, hasLocalChanges: false, fetched: false,
-    })),
-    RouteRepo.getAllByAppIdWithAppAndDomain(app.id).catch(() => [] as RouteWithAppAndDomain[]),
+    getVcsDriftInfo(app, path.join(app.appDir, 'release'), doGitFetch).catch(
+      (): VcsDriftInfo => ({
+        branch: app.branch,
+        behind: 0,
+        ahead: 0,
+        hasLocalChanges: false,
+        fetched: false,
+      })
+    ),
+    RouteRepo.getAllByAppIdWithAppAndDomain(app.id).catch(
+      () => [] as RouteWithAppAndDomain[]
+    ),
   ]);
 
   const portReachable = portReachableResult as boolean | undefined;

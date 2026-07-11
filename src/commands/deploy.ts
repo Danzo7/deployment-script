@@ -1,12 +1,25 @@
 import path from 'path';
 import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
-import {  createBuildDirByType, ensureDirectories, hasPackageJson } from '../utils/file-utils.js';
+import {
+  createBuildDirByType,
+  ensureDirectories,
+  hasPackageJson,
+} from '../utils/file-utils.js';
 import { prepare } from '../utils/npm-helper.js';
 import { getAppStatus, runApp } from '../utils/pm2-helper.js';
-import { handleRepo, getLastRevision, pushVcsChanges } from '../utils/vcs-helper.js';
+import {
+  handleRepo,
+  getLastRevision,
+  pushVcsChanges,
+} from '../utils/vcs-helper.js';
 import { checkEnv } from '../utils/env-heper.js';
-import { checkDotnetSdk, ensureAssemblyName, checkAppSettings, prepareDotnet } from '../utils/dotnet-helper.js';
+import {
+  checkDotnetSdk,
+  ensureAssemblyName,
+  checkAppSettings,
+  prepareDotnet,
+} from '../utils/dotnet-helper.js';
 import { pruneOldBuilds } from '../utils/build-pruner.js';
 import { requireSymlinkPermission } from '../utils/os-helper.js';
 
@@ -19,19 +32,20 @@ export const deploy = async ({
   lint?: boolean;
   force?: boolean;
 }) => {
-
   requireSymlinkPermission();
 
   const app = await AppRepo.findByNameWithStorages(name);
   const isFirstDeploy = app.lastDeploy == undefined;
-  if(!app.projectType) {
-    await AppRepo.update(app.name,{projectType:"nextjs"});
-    app.projectType= "nextjs";
+  if (!app.projectType) {
+    await AppRepo.update(app.name, { projectType: 'nextjs' });
+    app.projectType = 'nextjs';
   }
   Logger.info(`Deploying ${Logger.highlight(name)}...`);
 
   const { relDir, envDir, logDir } = ensureDirectories(app.appDir);
-  const buildRelDir = app.projectDir ? path.join(relDir, app.projectDir) : relDir;
+  const buildRelDir = app.projectDir
+    ? path.join(relDir, app.projectDir)
+    : relDir;
   Logger.info('Checking repository...');
   await handleRepo(app, relDir);
   const currentRevision = await getLastRevision(app, relDir);
@@ -43,9 +57,14 @@ export const deploy = async ({
   const isRunning = appStatus == 'online';
 
   Logger.info('Checking environment variables...');
-  const isEnvChanged = app.projectType === 'static'
-    ? false
-    : await checkEnv(buildRelDir, envDir, app.projectType === "nextjs" ? ".env.local" : ".env");
+  const isEnvChanged =
+    app.projectType === 'static'
+      ? false
+      : await checkEnv(
+          buildRelDir,
+          envDir,
+          app.projectType === 'nextjs' ? '.env.local' : '.env'
+        );
 
   let isAppSettingsChanged = false;
   if (app.projectType === 'dotnet') {
@@ -54,7 +73,12 @@ export const deploy = async ({
     isAppSettingsChanged = await checkAppSettings(buildRelDir, envDir);
   }
 
-  if (!isEnvChanged && !isAppSettingsChanged && !isGitChanged && !isFirstDeploy) {
+  if (
+    !isEnvChanged &&
+    !isAppSettingsChanged &&
+    !isGitChanged &&
+    !isFirstDeploy
+  ) {
     Logger.info(`Everything is up to date`);
     if (isRunning) {
       Logger.info(
@@ -72,7 +96,7 @@ export const deploy = async ({
     if (hasPackageJson(buildRelDir)) {
       throw new Error(
         `Static apps with a package.json build step are not yet supported.\n` +
-        `Commit the pre-built output (dist/ or build/) to your repository and redeploy.`
+          `Commit the pre-built output (dist/ or build/) to your repository and redeploy.`
       );
     }
     // No package.json — pure static files, nothing to prepare
@@ -81,13 +105,18 @@ export const deploy = async ({
       withInstall: force || isFirstDeploy || isGitChanged || !isRunning,
       withBuild:
         force || !isRunning || isFirstDeploy || isGitChanged || isEnvChanged,
-      withFix:  lint,
+      withFix: lint,
       logDir,
     });
   }
   Logger.info('Creating build version...');
-  
-  const buildDir = createBuildDirByType(app.appDir, app.projectType, app.projectDir, app.storages);
+
+  const buildDir = createBuildDirByType(
+    app.appDir,
+    app.projectType,
+    app.projectDir,
+    app.storages
+  );
   await runApp(buildDir, {
     name: app.name,
     port: app.port,
@@ -95,14 +124,14 @@ export const deploy = async ({
     status: appStatus,
     output: path.join(logDir, 'pm2.out.log'),
     error: path.join(logDir, 'pm2.error.log'),
-    projectType: app.projectType
+    projectType: app.projectType,
   });
   await AppRepo.addBuild(name, buildDir);
   if (currentRevision) {
     await AppRepo.updateDeployedCommit(name, currentRevision);
   }
   await pruneOldBuilds(name);
-  if(lint){
+  if (lint) {
     Logger.info('Pushing lint fix...');
     await pushVcsChanges(app, relDir, `[CLI Tool] Linting fix`);
   }

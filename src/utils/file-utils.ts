@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 import { Logger } from './logger.js';
 import { Storage } from '../db/model.js';
-import fs from  'fs';
+import fs from 'fs';
 import path from 'path';
 import fsExtra from 'fs-extra';
 
@@ -10,7 +10,6 @@ export const calculateFileHash = (filePath: string): string => {
   const fileContent = fs.readFileSync(filePath, 'utf-8');
   return createHash('sha256').update(fileContent).digest('hex');
 };
-
 
 export const isDirectoryEmpty = (dir: string): boolean =>
   fs.existsSync(dir) &&
@@ -39,62 +38,72 @@ export const ensureDirectories = (appDir: string) => {
 };
 
 export const createBuildDir = (appDir: string, projectDir?: string): string => {
-  const buildDir = path.join(appDir, 'builds','build-' + Date.now());
+  const buildDir = path.join(appDir, 'builds', 'build-' + Date.now());
   const releaseDir = path.join(appDir, 'release');
   const envDir = path.join(appDir, 'env');
-  const sourceRoot = projectDir ? path.join(releaseDir, projectDir) : releaseDir;
-   const nextConfigExts = ['.mjs','.js', '.ts','.cjs', '.json'];
+  const sourceRoot = projectDir
+    ? path.join(releaseDir, projectDir)
+    : releaseDir;
+  const nextConfigExts = ['.mjs', '.js', '.ts', '.cjs', '.json'];
 
   const nextFolder = path.join(sourceRoot, '.next');
   const publicFolder = path.join(sourceRoot, 'public');
-  if(fs.existsSync(publicFolder)){
-  const publicFolderDest = path.join(buildDir, 'public');
-  fsExtra.copySync(publicFolder, publicFolderDest);}
-if(!fs.existsSync(nextFolder)){
-  throw new Error('Next.js build not found.');
-}
-   fs.mkdirSync(buildDir, { recursive: true });
+  if (fs.existsSync(publicFolder)) {
+    const publicFolderDest = path.join(buildDir, 'public');
+    fsExtra.copySync(publicFolder, publicFolderDest);
+  }
+  if (!fs.existsSync(nextFolder)) {
+    throw new Error('Next.js build not found.');
+  }
+  fs.mkdirSync(buildDir, { recursive: true });
 
   const nodeModulesSrc = path.join(sourceRoot, 'node_modules');
-  if(!fs.existsSync(nodeModulesSrc)){
+  if (!fs.existsSync(nodeModulesSrc)) {
     throw new Error('Node modules not found.');
   }
   const nodeModulesDest = path.join(buildDir, 'node_modules');
   Logger.info('Linking node modules...');
   fs.symlinkSync(nodeModulesSrc, nodeModulesDest);
 
-
   const envLocalSrc = path.join(envDir, '.env.local');
-  if(fs.existsSync(envLocalSrc)){
-  const envLocalDest = path.join(buildDir, '.env.local');
-   fs.copyFileSync(envLocalSrc, envLocalDest);}
-   Logger.info('Linking .next folder...');
+  if (fs.existsSync(envLocalSrc)) {
+    const envLocalDest = path.join(buildDir, '.env.local');
+    fs.copyFileSync(envLocalSrc, envLocalDest);
+  }
+  Logger.info('Linking .next folder...');
   const nextFolderDest = path.join(buildDir, '.next');
   fsExtra.copySync(nextFolder, nextFolderDest);
 
   //delete .next folder
   fsExtra.removeSync(nextFolder);
 
-  nextConfigExts.forEach((ext)=>{
-    const nextConfig = path.join(sourceRoot, 'next.config'+ext);
-    if( fs.existsSync(nextConfig)){
-      const nextConfigDest = path.join(buildDir, 'next.config'+ext);
-       fs.copyFileSync(nextConfig, nextConfigDest);
+  nextConfigExts.forEach((ext) => {
+    const nextConfig = path.join(sourceRoot, 'next.config' + ext);
+    if (fs.existsSync(nextConfig)) {
+      const nextConfigDest = path.join(buildDir, 'next.config' + ext);
+      fs.copyFileSync(nextConfig, nextConfigDest);
     }
   });
   return buildDir;
 };
 
-export const createBuildDirForNestJS = (appDir: string, projectDir?: string): string => {
+export const createBuildDirForNestJS = (
+  appDir: string,
+  projectDir?: string
+): string => {
   const buildDir = path.join(appDir, 'builds', 'build-' + Date.now());
   const releaseDir = path.join(appDir, 'release');
   const envDir = path.join(appDir, 'env');
-  const sourceRoot = projectDir ? path.join(releaseDir, projectDir) : releaseDir;
+  const sourceRoot = projectDir
+    ? path.join(releaseDir, projectDir)
+    : releaseDir;
 
   const distFolder = path.join(sourceRoot, 'dist');
-  
+
   if (!fs.existsSync(distFolder)) {
-    throw new Error('NestJS build not found. Make sure to run "npm run build" first.');
+    throw new Error(
+      'NestJS build not found. Make sure to run "npm run build" first.'
+    );
   }
 
   fs.mkdirSync(buildDir, { recursive: true });
@@ -138,10 +147,15 @@ export const createBuildDirForNestJS = (appDir: string, projectDir?: string): st
   return buildDir;
 };
 
-export const createBuildDirForStatic = (appDir: string, projectDir?: string): string => {
+export const createBuildDirForStatic = (
+  appDir: string,
+  projectDir?: string
+): string => {
   const buildDir = path.join(appDir, 'builds', 'build-' + Date.now());
   const releaseDir = path.join(appDir, 'release');
-  const sourceRoot = projectDir ? path.join(releaseDir, projectDir) : releaseDir;
+  const sourceRoot = projectDir
+    ? path.join(releaseDir, projectDir)
+    : releaseDir;
 
   // Look for a conventional static output folder — dist takes priority over build
   const distFolder = path.join(sourceRoot, 'dist');
@@ -157,8 +171,8 @@ export const createBuildDirForStatic = (appDir: string, projectDir?: string): st
   if (!staticSource) {
     throw new Error(
       `No static output folder found for static app.\n` +
-      `Expected a "dist/" or "build/" folder inside ${sourceRoot}.\n` +
-      `Make sure your site is built before deploying (e.g. run "npm run build" locally and commit the output, or use a CI step that produces dist/ or build/).`
+        `Expected a "dist/" or "build/" folder inside ${sourceRoot}.\n` +
+        `Make sure your site is built before deploying (e.g. run "npm run build" locally and commit the output, or use a CI step that produces dist/ or build/).`
     );
   }
 
@@ -166,14 +180,21 @@ export const createBuildDirForStatic = (appDir: string, projectDir?: string): st
   // Copy the contents of dist/ or build/ directly into the build dir (not nested)
   fsExtra.copySync(staticSource, buildDir);
 
-  Logger.info(`Copied static output from "${path.basename(staticSource)}/" into build directory.`);
+  Logger.info(
+    `Copied static output from "${path.basename(staticSource)}/" into build directory.`
+  );
   return buildDir;
 };
 
-export const createBuildDirForDotnet = (appDir: string, projectDir?: string): string => {
+export const createBuildDirForDotnet = (
+  appDir: string,
+  projectDir?: string
+): string => {
   const buildDir = path.join(appDir, 'builds', 'build-' + Date.now());
   const releaseDir = path.join(appDir, 'release');
-  const sourceRoot = projectDir ? path.join(releaseDir, projectDir) : releaseDir;
+  const sourceRoot = projectDir
+    ? path.join(releaseDir, projectDir)
+    : releaseDir;
 
   const publishFolder = path.join(sourceRoot, 'publish');
 
@@ -192,7 +213,7 @@ export const createBuildDirForDotnet = (appDir: string, projectDir?: string): st
  */
 export const hasPackageJson = (dir: string): boolean =>
   fs.existsSync(path.join(dir, 'package.json'));
- /*
+/*
  * @param appDir The application directory
  * @param projectType The type of project ('nextjs' | 'nestjs' | 'dotnet')
  * @param projectDir Optional subdirectory within the release dir (for monorepos)
@@ -203,7 +224,8 @@ export const createBuildDirByType = (
   appDir: string,
   projectType: 'nextjs' | 'nestjs' | 'dotnet' | 'static',
   projectDir?: string,
-  storages?: Storage[]): string => {
+  storages?: Storage[]
+): string => {
   let buildDir: string;
   switch (projectType) {
     case 'nestjs':
@@ -232,7 +254,10 @@ export const createBuildDirByType = (
  * @param buildDir The build directory to create symlinks in
  * @param storages Array of Storage objects to link
  */
-export const applyStorageSymlinks = (buildDir: string, storages: Storage[] = []): void => {
+export const applyStorageSymlinks = (
+  buildDir: string,
+  storages: Storage[] = []
+): void => {
   for (const storage of storages) {
     const effectiveLinkName = storage.linkName ?? storage.name;
     const linkPath = path.join(buildDir, effectiveLinkName);
@@ -243,7 +268,9 @@ export const applyStorageSymlinks = (buildDir: string, storages: Storage[] = [])
       stat = fs.lstatSync(linkPath);
     } catch (err: any) {
       if (err.code !== 'ENOENT') {
-        Logger.warn(`applyStorageSymlinks: could not stat "${linkPath}": ${err.message}`);
+        Logger.warn(
+          `applyStorageSymlinks: could not stat "${linkPath}": ${err.message}`
+        );
         continue;
       }
       // ENOENT — path does not exist, proceed to create symlink
@@ -272,7 +299,9 @@ export const applyStorageSymlinks = (buildDir: string, storages: Storage[] = [])
     // Path does not exist — ensure storage directory exists and create symlink
     fs.mkdirSync(targetPath, { recursive: true });
     fs.symlinkSync(targetPath, linkPath);
-    Logger.success(`Linked storage "${storage.name}" (${effectiveLinkName}) → "${targetPath}"`);
+    Logger.success(
+      `Linked storage "${storage.name}" (${effectiveLinkName}) → "${targetPath}"`
+    );
   }
 };
 

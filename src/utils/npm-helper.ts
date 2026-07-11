@@ -10,14 +10,19 @@ import { Logger } from './logger.js';
  * @returns An object with the command execution result.
  */
 
-const runCommand = (command: string, options: { cwd: string; logFile: string }) => {
+const runCommand = (
+  command: string,
+  options: { cwd: string; logFile: string }
+) => {
   const execOptions: ExecSyncOptions = {
     cwd: options.cwd,
     stdio: ['pipe', 'pipe', 'pipe'], // capture stdout/stderr
-    env: { ...process.env, CI: 'true',
-     NEXT_PRIVATE_SKIP_WARNINGS_IN_CI: 'true', // ignore warnings as errors
-     NEXT_TELEMETRY_DISABLED: '1',            // disable telemetry
-     }, // ensure CI-friendly mode
+    env: {
+      ...process.env,
+      CI: 'true',
+      NEXT_PRIVATE_SKIP_WARNINGS_IN_CI: 'true', // ignore warnings as errors
+      NEXT_TELEMETRY_DISABLED: '1', // disable telemetry
+    }, // ensure CI-friendly mode
     encoding: 'utf8',
   };
 
@@ -32,10 +37,14 @@ const runCommand = (command: string, options: { cwd: string; logFile: string }) 
       'utf8'
     );
 
-    return { code: 0, stdout:stdout?.toString(), stderr: null };
-  } catch (err: any) { 
+    return { code: 0, stdout: stdout?.toString(), stderr: null };
+  } catch (err: any) {
     const errorMessage = err.stderr?.toString() || err.message;
-    fs.appendFileSync(options.logFile, `Command: ${command}\nError:\n${errorMessage}\n\n`, 'utf8');
+    fs.appendFileSync(
+      options.logFile,
+      `Command: ${command}\nError:\n${errorMessage}\n\n`,
+      'utf8'
+    );
 
     return {
       code: err.status || 1,
@@ -45,7 +54,6 @@ const runCommand = (command: string, options: { cwd: string; logFile: string }) 
   }
 };
 
-
 /**
  * Runs a specified npm script in a directory and logs output to a file.
  * @param dir The directory to execute the script in.
@@ -53,17 +61,21 @@ const runCommand = (command: string, options: { cwd: string; logFile: string }) 
  * @param description A description of the script being run.
  * @param logFile The log file path.
  */
-const runScript = async (dir: string, args: string, description: string, logFile: string) => {
+const runScript = async (
+  dir: string,
+  args: string,
+  description: string,
+  logFile: string
+) => {
   Logger.info(`${description}...`);
-    const command = `npm run ${args}`;
-    const result = runCommand(command, { cwd: dir, logFile });
+  const command = `npm run ${args}`;
+  const result = runCommand(command, { cwd: dir, logFile });
 
-    if (result.code !== 0) {
-      throw new Error(`${description} failed: ${result.stderr}`);
-    }
+  if (result.code !== 0) {
+    throw new Error(`${description} failed: ${result.stderr}`);
+  }
 
-    Logger.info(`${description} completed successfully.`);
- 
+  Logger.info(`${description} completed successfully.`);
 };
 
 /**
@@ -73,15 +85,18 @@ const runScript = async (dir: string, args: string, description: string, logFile
  */
 const installDependencies = async (dir: string, logFile: string) => {
   Logger.info('Installing packages...');
-    const command = `npm install --no-audit --no-fund --yes`;
-    const result = runCommand(command, { cwd: dir, logFile });
+  const command = `npm install --no-audit --no-fund --yes`;
+  const result = runCommand(command, { cwd: dir, logFile });
 
-    if (result.code !== 0) {
-      throw new Error(`Installation failed: ${result.stderr}`);
-    }
+  if (result.code !== 0) {
+    throw new Error(`Installation failed: ${result.stderr}`);
+  }
 
-    result.stdout?.split('\n').forEach((line:string) =>line.trim()==''?null: Logger.success(line));
-  
+  result.stdout
+    ?.split('\n')
+    .forEach((line: string) =>
+      line.trim() == '' ? null : Logger.success(line)
+    );
 };
 
 /**

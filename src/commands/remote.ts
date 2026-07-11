@@ -24,7 +24,11 @@ export async function remoteServe(port: number): Promise<void> {
   await launchRemoteServe(port);
 }
 
-export async function remoteConnect(host: string, port?: number, identity?: string): Promise<void> {
+export async function remoteConnect(
+  host: string,
+  port?: number,
+  identity?: string
+): Promise<void> {
   await connectRemote(host, port, identity);
 }
 
@@ -32,23 +36,37 @@ export async function remoteKeyAdd(): Promise<void> {
   assertNotRemoteSession();
 
   // Interactive prompts: username first, then paste the public key.
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const ask = (q: string): Promise<string> => new Promise((res) => rl.question(q, res));
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  const ask = (q: string): Promise<string> =>
+    new Promise((res) => rl.question(q, res));
 
   let name: string;
   let publicKey: string;
   try {
     name = (await ask('Username for this key: ')).trim();
-    if (!name) { Logger.error('No username provided.'); return; }
-    Logger.info(`Clients can get their public key by running: ssh-keygen -y -f ~/.ssh/id_ed25519`);
+    if (!name) {
+      Logger.error('No username provided.');
+      return;
+    }
+    Logger.info(
+      `Clients can get their public key by running: ssh-keygen -y -f ~/.ssh/id_ed25519`
+    );
     publicKey = (await ask('Paste the public key: ')).trim();
-    if (!publicKey) { Logger.error('No key provided.'); return; }
+    if (!publicKey) {
+      Logger.error('No key provided.');
+      return;
+    }
   } finally {
     rl.close();
   }
 
   const key = addAuthorizedKey(publicKey, name);
-  Logger.success(`Authorized key added (${key.fingerprint}) — user: ${chalk.bold(key.comment)}`);
+  Logger.success(
+    `Authorized key added (${key.fingerprint}) — user: ${chalk.bold(key.comment)}`
+  );
 }
 
 export async function remoteKeyRemove(username: string): Promise<void> {

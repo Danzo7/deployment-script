@@ -10,10 +10,10 @@ import path from 'path';
 /**
  * Validates that a string contains only safe characters and doesn't include
  * shell metacharacters that could be used for command injection.
- * 
+ *
  * Allowed: alphanumeric, dots, hyphens, underscores
  * Disallowed: shell metacharacters like ; | & $ ` ( ) < > \ ' " and whitespace
- * 
+ *
  * @throws Error if the input contains unsafe characters
  */
 export function validateSafeString(value: string, fieldName: string): void {
@@ -33,14 +33,16 @@ export function validateSafeString(value: string, fieldName: string): void {
   // Additional check for common injection patterns
   const injectionPatterns = /(\.\.\/|\.\.\\|~\/|~\\)/;
   if (injectionPatterns.test(value)) {
-    throw new Error(`${fieldName} contains potentially malicious path traversal patterns`);
+    throw new Error(
+      `${fieldName} contains potentially malicious path traversal patterns`
+    );
   }
 }
 
 /**
  * Validates that a domain name or hostname is safe to use in file paths and commands.
  * More strict than validateHostname as it's meant for security-sensitive contexts.
- * 
+ *
  * @throws Error if the domain is invalid or contains unsafe characters
  */
 export function validateSafeDomainName(domainName: string): void {
@@ -68,10 +70,14 @@ export function validateSafeDomainName(domainName: string): void {
   const labels = domainName.split('.');
   for (const label of labels) {
     if (label.length === 0 || label.length > 63) {
-      throw new Error(`Domain label "${label}" must be between 1 and 63 characters`);
+      throw new Error(
+        `Domain label "${label}" must be between 1 and 63 characters`
+      );
     }
     if (label.startsWith('-') || label.endsWith('-')) {
-      throw new Error(`Domain label "${label}" cannot start or end with a hyphen`);
+      throw new Error(
+        `Domain label "${label}" cannot start or end with a hyphen`
+      );
     }
     if (!/^[a-zA-Z0-9-]+$/.test(label)) {
       throw new Error(`Domain label "${label}" contains invalid characters`);
@@ -82,13 +88,17 @@ export function validateSafeDomainName(domainName: string): void {
 /**
  * Validates that a file path is safe and doesn't contain traversal attacks.
  * Normalizes the path and ensures it doesn't escape the base directory.
- * 
+ *
  * @param filePath - The file path to validate
  * @param baseDir - The base directory that the path must remain within
  * @param fieldName - Human-readable field name for error messages
  * @throws Error if the path is unsafe or attempts to escape baseDir
  */
-export function validateSafePath(filePath: string, baseDir: string, fieldName: string): void {
+export function validateSafePath(
+  filePath: string,
+  baseDir: string,
+  fieldName: string
+): void {
   if (!filePath || filePath.length === 0) {
     throw new Error(`${fieldName} cannot be empty`);
   }
@@ -101,8 +111,13 @@ export function validateSafePath(filePath: string, baseDir: string, fieldName: s
   const resolvedPath = path.resolve(normalizedBase, normalizedPath);
   const resolvedBase = path.resolve(normalizedBase);
 
-  if (!resolvedPath.startsWith(resolvedBase + path.sep) && resolvedPath !== resolvedBase) {
-    throw new Error(`${fieldName} attempts to escape base directory: ${filePath}`);
+  if (
+    !resolvedPath.startsWith(resolvedBase + path.sep) &&
+    resolvedPath !== resolvedBase
+  ) {
+    throw new Error(
+      `${fieldName} attempts to escape base directory: ${filePath}`
+    );
   }
 
   // Additional checks for suspicious patterns
@@ -121,7 +136,7 @@ export function validateSafePath(filePath: string, baseDir: string, fieldName: s
 
 /**
  * Validates SSH connection credentials for security issues.
- * 
+ *
  * @param remoteHost - The remote host string (format: [user@]host)
  * @throws Error if credentials contain suspicious patterns
  */
@@ -145,15 +160,17 @@ export function validateSshCredentials(remoteHost: string): void {
 
   if (parts.length === 2) {
     const [username, host] = parts;
-    
+
     // Validate username
     if (!username || username.length === 0) {
       throw new Error('Username cannot be empty');
     }
     if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
-      throw new Error('Username contains invalid characters. Only alphanumeric, underscore, and hyphen allowed.');
+      throw new Error(
+        'Username contains invalid characters. Only alphanumeric, underscore, and hyphen allowed.'
+      );
     }
-    
+
     // Validate host
     validateHostPart(host);
   } else {
@@ -189,10 +206,14 @@ function validateHostPart(host: string): void {
   const labels = host.split('.');
   for (const label of labels) {
     if (label.length === 0 || label.length > 63) {
-      throw new Error(`Host label "${label}" must be between 1 and 63 characters`);
+      throw new Error(
+        `Host label "${label}" must be between 1 and 63 characters`
+      );
     }
     if (label.startsWith('-') || label.endsWith('-')) {
-      throw new Error(`Host label "${label}" cannot start or end with a hyphen`);
+      throw new Error(
+        `Host label "${label}" cannot start or end with a hyphen`
+      );
     }
     if (!/^[a-zA-Z0-9-]+$/.test(label)) {
       throw new Error(`Host label "${label}" contains invalid characters`);
@@ -203,12 +224,15 @@ function validateHostPart(host: string): void {
 /**
  * Generates a cryptographically secure random filename for temporary files.
  * Uses crypto.randomBytes to ensure unpredictability.
- * 
+ *
  * @param prefix - Prefix for the filename
  * @param extension - File extension (without dot)
  * @returns A secure random filename
  */
-export function generateSecureTempFilename(prefix: string, extension: string): string {
+export function generateSecureTempFilename(
+  prefix: string,
+  extension: string
+): string {
   const randomBytes = crypto.randomBytes(16).toString('hex');
   const timestamp = Date.now();
   return `${prefix}-${timestamp}-${randomBytes}.${extension}`;
@@ -217,7 +241,7 @@ export function generateSecureTempFilename(prefix: string, extension: string): s
 /**
  * Validates that a certificate directory path is safe.
  * Prevents path traversal when constructing cert/key paths.
- * 
+ *
  * @param certDir - The certificate directory path
  * @param domainName - The domain name (already validated)
  * @returns The safe, normalized path for the domain's cert directory
@@ -232,16 +256,18 @@ export function validateCertPath(certDir: string, domainName: string): string {
 
   // Normalize the base cert directory
   const normalizedCertDir = path.normalize(certDir);
-  
+
   // Construct the domain-specific path
   const domainCertPath = path.join(normalizedCertDir, domainName);
-  
+
   // Resolve to absolute path and verify it's within certDir
   const resolvedDomainPath = path.resolve(domainCertPath);
   const resolvedCertDir = path.resolve(normalizedCertDir);
 
   if (!resolvedDomainPath.startsWith(resolvedCertDir + path.sep)) {
-    throw new Error(`Domain certificate path escapes base directory: ${domainName}`);
+    throw new Error(
+      `Domain certificate path escapes base directory: ${domainName}`
+    );
   }
 
   return domainCertPath;

@@ -44,7 +44,12 @@ const VAL_COL = BOX_WIDTH - KEY_COL - 6;
 function isSecret(key: string, value: string): boolean {
   if (SECRET_KEYWORDS.test(key)) return true;
   // high-entropy heuristic: long string, mostly non-space printable chars
-  if (value.length > 20 && !/\s/.test(value) && /[A-Za-z]/.test(value) && /[0-9]/.test(value)) {
+  if (
+    value.length > 20 &&
+    !/\s/.test(value) &&
+    /[A-Za-z]/.test(value) &&
+    /[0-9]/.test(value)
+  ) {
     return true;
   }
   return false;
@@ -71,7 +76,9 @@ function buildRows(initial: EnvEntry[]): EditorRow[] {
 }
 
 function countChanges(rows: EditorRow[]) {
-  let modified = 0, added = 0, deleted = 0;
+  let modified = 0,
+    added = 0,
+    deleted = 0;
   for (const r of rows) {
     if (r.state === 'modified') modified++;
     else if (r.state === 'new') added++;
@@ -82,8 +89,16 @@ function countChanges(rows: EditorRow[]) {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function Header({ appName, modified, added, deleted }: {
-  appName: string; modified: number; added: number; deleted: number;
+function Header({
+  appName,
+  modified,
+  added,
+  deleted,
+}: {
+  appName: string;
+  modified: number;
+  added: number;
+  deleted: number;
 }) {
   const total = modified + added + deleted;
   const parts: string[] = [];
@@ -125,7 +140,7 @@ function TableHeader() {
       <Text dimColor>{'│'}</Text>
       <Text dimColor>{'  '}</Text>
       <Text bold>{keyLabel}</Text>
-      <Text>{' '}</Text>
+      <Text> </Text>
       <Text bold>{valLabel}</Text>
       <Text dimColor>{'   │'}</Text>
     </Box>
@@ -140,7 +155,7 @@ function renderEnvRow(
   isEditing: boolean,
   editDraft: string,
   setEditDraft: (v: string) => void,
-  showReal: boolean,
+  showReal: boolean
 ): React.ReactElement {
   return React.createElement(EnvRowWrapper, {
     key: rowKey,
@@ -185,9 +200,9 @@ export function EnvEditor({ appName, initial, onSave }: Props) {
   useInput((input, key) => {
     if (mode === 'list') {
       if (key.upArrow) {
-        setCursor(c => clampCursor(c - 1, visibleRows.length));
+        setCursor((c) => clampCursor(c - 1, visibleRows.length));
       } else if (key.downArrow) {
-        setCursor(c => clampCursor(c + 1, visibleRows.length));
+        setCursor((c) => clampCursor(c + 1, visibleRows.length));
       } else if (key.return) {
         // enter edit mode for selected row
         const row = visibleRows[cursor];
@@ -202,13 +217,13 @@ export function EnvEditor({ appName, initial, onSave }: Props) {
       } else if (input === 'd') {
         const row = visibleRows[cursor];
         if (!row) return;
-        setRows(prev => {
+        setRows((prev) => {
           const next = [...prev];
           const r = { ...next[cursor] };
           if (r.state === 'new') {
             // newly added row — just remove it
             next.splice(cursor, 1);
-            setCursor(c => clampCursor(c, next.length));
+            setCursor((c) => clampCursor(c, next.length));
           } else if (r.state === 'deleted') {
             // undo delete on d-again? No — u is undo. d on deleted is no-op.
           } else {
@@ -220,13 +235,14 @@ export function EnvEditor({ appName, initial, onSave }: Props) {
       } else if (input === 'u') {
         const row = visibleRows[cursor];
         if (!row) return;
-        setRows(prev => {
+        setRows((prev) => {
           const next = [...prev];
           const r = { ...next[cursor] };
           if (r.state === 'deleted') {
-            r.state = r.originalValue !== undefined && r.value !== r.originalValue
-              ? 'modified'
-              : 'unchanged';
+            r.state =
+              r.originalValue !== undefined && r.value !== r.originalValue
+                ? 'modified'
+                : 'unchanged';
             next[cursor] = r;
           } else if (r.state === 'modified') {
             r.value = r.originalValue ?? r.value;
@@ -241,7 +257,8 @@ export function EnvEditor({ appName, initial, onSave }: Props) {
           return;
         }
         setSavedCount(changes.total);
-        setMode('confirm-save');      } else if (input === 'q' || key.escape) {
+        setMode('confirm-save');
+      } else if (input === 'q' || key.escape) {
         if (changes.total === 0) {
           exit();
           return;
@@ -255,7 +272,7 @@ export function EnvEditor({ appName, initial, onSave }: Props) {
       if (key.return) {
         const row = visibleRows[cursor];
         if (!row) return;
-        setRows(prev => {
+        setRows((prev) => {
           const next = [...prev];
           const r = { ...next[cursor] };
           r.value = editDraft;
@@ -284,7 +301,7 @@ export function EnvEditor({ appName, initial, onSave }: Props) {
           return;
         }
         // check duplicate
-        if (rows.some(r => r.key === k && r.state !== 'deleted')) {
+        if (rows.some((r) => r.key === k && r.state !== 'deleted')) {
           setKeyError(`key "${k}" already exists`);
           return;
         }
@@ -305,7 +322,7 @@ export function EnvEditor({ appName, initial, onSave }: Props) {
           value: newValDraft,
           state: 'new',
         };
-        setRows(prev => {
+        setRows((prev) => {
           const next = [...prev, newRow];
           setCursor(next.length - 1);
           return next;
@@ -338,29 +355,43 @@ export function EnvEditor({ appName, initial, onSave }: Props) {
 
   useEffect(() => {
     if (mode !== 'saved') return;
-    onSave(rows, savedCount).then(() => exit()).catch(() => exit());
+    onSave(rows, savedCount)
+      .then(() => exit())
+      .catch(() => exit());
   }, [mode]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (mode === 'confirm-save') {
-    const pending = rows.filter(r => r.state !== 'unchanged');
+    const pending = rows.filter((r) => r.state !== 'unchanged');
     return (
       <Box flexDirection="column">
-        <Text>Save changes to <Text bold>{appName}</Text>?</Text>
+        <Text>
+          Save changes to <Text bold>{appName}</Text>?
+        </Text>
         <Box flexDirection="column" marginTop={1}>
           {pending.map((r, i) => {
-            const prefix = r.state === 'new' ? '+' : r.state === 'deleted' ? '-' : '*';
-            const col = r.state === 'new' ? 'green' : r.state === 'deleted' ? 'red' : 'yellow';
+            const prefix =
+              r.state === 'new' ? '+' : r.state === 'deleted' ? '-' : '*';
+            const col =
+              r.state === 'new'
+                ? 'green'
+                : r.state === 'deleted'
+                  ? 'red'
+                  : 'yellow';
             return (
               <Box key={i}>
-                <Text color={col}> {prefix} {r.key}</Text>
+                <Text color={col}>
+                  {' '}
+                  {prefix} {r.key}
+                </Text>
               </Box>
             );
           })}
         </Box>
         <Box marginTop={1}>
-          <Text>[Y] save   </Text><Text dimColor>[n] cancel, back to editor</Text>
+          <Text>[Y] save </Text>
+          <Text dimColor>[n] cancel, back to editor</Text>
         </Box>
       </Box>
     );
@@ -369,7 +400,10 @@ export function EnvEditor({ appName, initial, onSave }: Props) {
   if (mode === 'confirm-quit') {
     return (
       <Box flexDirection="column">
-        <Text color="yellow">Discard {changes.total} unsaved changes to <Text bold>{appName}</Text>? [y/N]</Text>
+        <Text color="yellow">
+          Discard {changes.total} unsaved changes to <Text bold>{appName}</Text>
+          ? [y/N]
+        </Text>
       </Box>
     );
   }
@@ -377,13 +411,16 @@ export function EnvEditor({ appName, initial, onSave }: Props) {
   if (mode === 'saved') {
     return (
       <Box flexDirection="column">
-        <Text color="green">✓ Saving {savedCount} changes to {appName}…</Text>
+        <Text color="green">
+          ✓ Saving {savedCount} changes to {appName}…
+        </Text>
       </Box>
     );
   }
 
   // list / edit / add modes
-  const isEmpty = rows.length === 0 && mode !== 'add-key' && mode !== 'add-value';
+  const isEmpty =
+    rows.length === 0 && mode !== 'add-key' && mode !== 'add-value';
 
   return (
     <Box flexDirection="column">
@@ -401,12 +438,16 @@ export function EnvEditor({ appName, initial, onSave }: Props) {
         <Box flexDirection="column">
           <Box>
             <Text dimColor>{'│'}</Text>
-            <Text>  No environment variables set for {appName}.{' '.repeat(Math.max(0, BOX_WIDTH - 40 - appName.length))}</Text>
+            <Text>
+              {' '}
+              No environment variables set for {appName}.
+              {' '.repeat(Math.max(0, BOX_WIDTH - 40 - appName.length))}
+            </Text>
             <Text dimColor>{'│'}</Text>
           </Box>
           <Box>
             <Text dimColor>{'│'}</Text>
-            <Text>  Press n to add one.{' '.repeat(BOX_WIDTH - 20)}</Text>
+            <Text> Press n to add one.{' '.repeat(BOX_WIDTH - 20)}</Text>
             <Text dimColor>{'│'}</Text>
           </Box>
         </Box>
@@ -415,7 +456,15 @@ export function EnvEditor({ appName, initial, onSave }: Props) {
           const sel = i === cursor;
           const isEditing = sel && mode === 'edit-value';
           const rowKey = `${row.key || 'new'}-${i}`;
-          return renderEnvRow(rowKey, row, sel, isEditing, editDraft, setEditDraft, isEditing);
+          return renderEnvRow(
+            rowKey,
+            row,
+            sel,
+            isEditing,
+            editDraft,
+            setEditDraft,
+            isEditing
+          );
         })
       )}
 
@@ -435,7 +484,7 @@ export function EnvEditor({ appName, initial, onSave }: Props) {
           {keyError ? (
             <Box>
               <Text dimColor>{'│'}</Text>
-              <Text color="red">  ⚠ {keyError}</Text>
+              <Text color="red"> ⚠ {keyError}</Text>
               <Text dimColor>{'│'}</Text>
             </Box>
           ) : null}
@@ -488,9 +537,10 @@ function EnvRowWrapper({
 
   const displayKey = truncate(row.key, KEY_COL);
   const rawValue = row.value;
-  const displayValue = (!showReal && isSecret(row.key, row.value) && !isEditing)
-    ? maskValue(row.value)
-    : rawValue;
+  const displayValue =
+    !showReal && isSecret(row.key, row.value) && !isEditing
+      ? maskValue(row.value)
+      : rawValue;
   const truncatedVal = truncate(displayValue, VAL_COL);
 
   const prefix = selected ? '▸' : ' ';
@@ -500,17 +550,25 @@ function EnvRowWrapper({
       <Text dimColor>{'│'}</Text>
       <Text inverse={selected}>{prefix} </Text>
       {deleted ? (
-        <Text dimColor strikethrough>{displayKey}</Text>
+        <Text dimColor strikethrough>
+          {displayKey}
+        </Text>
       ) : (
-        <Text color={keyColor} inverse={selected}>{displayKey}</Text>
+        <Text color={keyColor} inverse={selected}>
+          {displayKey}
+        </Text>
       )}
-      <Text inverse={selected}>{' '}</Text>
+      <Text inverse={selected}> </Text>
       {isEditing ? (
         <TextInput value={editDraft} onChange={setEditDraft} />
       ) : deleted ? (
-        <Text dimColor strikethrough>{truncatedVal.padEnd(VAL_COL)}</Text>
+        <Text dimColor strikethrough>
+          {truncatedVal.padEnd(VAL_COL)}
+        </Text>
       ) : (
-        <Text color={valColor} inverse={selected}>{truncatedVal.padEnd(VAL_COL)}</Text>
+        <Text color={valColor} inverse={selected}>
+          {truncatedVal.padEnd(VAL_COL)}
+        </Text>
       )}
       <Text inverse={selected}> {marker} </Text>
       <Text dimColor>{'│'}</Text>

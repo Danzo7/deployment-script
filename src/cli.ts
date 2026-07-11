@@ -5,14 +5,22 @@ import { Logger } from './utils/logger.js';
 import { acquireLock, releaseLock } from './utils/lock-utils.js';
 import { isMigrationNeeded } from './commands/migrate-db.js';
 import { startRepl } from './repl.js';
-import { COMMANDS, CommandNode, LeafCommand, isGroup, ensureAppDirectories } from './command-registry.js';
+import {
+  COMMANDS,
+  CommandNode,
+  LeafCommand,
+  isGroup,
+  ensureAppDirectories,
+} from './command-registry.js';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import { REMOTE_PORT } from './constants.js';
 
 const _require = createRequire(import.meta.url);
-const _pkg = _require(resolve(dirname(fileURLToPath(import.meta.url)), '../package.json')) as { version: string };
+const _pkg = _require(
+  resolve(dirname(fileURLToPath(import.meta.url)), '../package.json')
+) as { version: string };
 
 // Centralized cleanup logic — releases an app's lock file on exit.
 const setupCleanup = (name: string) => {
@@ -99,8 +107,14 @@ const startTime = Date.now();
 
 if (isMigrationNeeded()) {
   Logger.info(chalk.yellow('\n⚠️  Legacy db.json file detected!'));
-  Logger.info(chalk.cyan('The database has been migrated to SQL (SQLite/PostgreSQL).'));
-  Logger.info(chalk.cyan('Run "dm migrate-db" to migrate your data from db.json to the new database.\n'));
+  Logger.info(
+    chalk.cyan('The database has been migrated to SQL (SQLite/PostgreSQL).')
+  );
+  Logger.info(
+    chalk.cyan(
+      'Run "dm migrate-db" to migrate your data from db.json to the new database.\n'
+    )
+  );
 }
 
 // ─── Interactive REPL mode ────────────────────────────────────────────────────

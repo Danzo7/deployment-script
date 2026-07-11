@@ -32,14 +32,21 @@ export async function routeAdd(
   assertPathUnique(allRoutes, domain.id, normalizedPath, normalizedDomain);
   assertAppUniqueOnDomain(allRoutes, domain.id, app, normalizedDomain);
 
-  await RouteRepo.add({ domainId: domain.id, path: normalizedPath, appId: app.id });
+  await RouteRepo.add({
+    domainId: domain.id,
+    path: normalizedPath,
+    appId: app.id,
+  });
 
   Logger.success(
     `App ${Logger.highlight(appName)} routed to ${Logger.highlight(normalizedDomain)} at ${Logger.highlight('/' + normalizedPath)}.`
   );
 }
 
-export async function routeRemove(domainName: string, location: string): Promise<void> {
+export async function routeRemove(
+  domainName: string,
+  location: string
+): Promise<void> {
   const normalizedDomain = normalizeDomainName(domainName);
   const normalizedPath = normalizePath(location);
 
@@ -71,11 +78,7 @@ export async function routeList(domainName: string): Promise<void> {
   }
 
   const table = new Table({
-    head: [
-      chalk.cyan('#'),
-      chalk.whiteBright('Path'),
-      chalk.blue('App'),
-    ],
+    head: [chalk.cyan('#'), chalk.whiteBright('Path'), chalk.blue('App')],
   });
 
   routes.forEach((route, index) => {

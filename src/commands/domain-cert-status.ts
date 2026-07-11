@@ -14,7 +14,8 @@ function expiryColored(expiresAt?: string): string {
   );
   const formatted = `${formatDate(expiresAt)} (${formatRelative(expiresAt)})`;
   if (expiry < now) return chalk.red(formatted + ' EXPIRED');
-  if (expiry < warningThreshold) return chalk.yellow(formatted + ' expiring soon');
+  if (expiry < warningThreshold)
+    return chalk.yellow(formatted + ' expiring soon');
   return chalk.green(formatted);
 }
 

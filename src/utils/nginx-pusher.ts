@@ -16,10 +16,10 @@ export abstract class NginxPusher {
 
   protected constructor(domain: Domain, domainName: string) {
     this.domain = domain;
-    
+
     // Setup compiled config path
     this.compiledConfigPath = path.join(DOMAINS_DIR, domainName, 'nginx.conf');
-    
+
     // Initialize empty, will be compiled during push
     this.compiledConfig = '';
   }
@@ -29,13 +29,19 @@ export abstract class NginxPusher {
    */
   protected async compileConfig(): Promise<void> {
     // Reload domain with routes to get fresh data
-    const domainWithRoutes = await DomainRepo.findByNameWithRoutes(this.domain.name);
+    const domainWithRoutes = await DomainRepo.findByNameWithRoutes(
+      this.domain.name
+    );
     this.domain = domainWithRoutes;
-    
+
     const allDomains = await DomainRepo.getAll();
-    
-    this.compiledConfig = compileDomainConfig(this.domain, domainWithRoutes.routes, allDomains);
-    
+
+    this.compiledConfig = compileDomainConfig(
+      this.domain,
+      domainWithRoutes.routes,
+      allDomains
+    );
+
     // Save to disk for inspection
     fs.mkdirSync(path.dirname(this.compiledConfigPath), { recursive: true });
     fs.writeFileSync(this.compiledConfigPath, this.compiledConfig);
@@ -50,7 +56,7 @@ export abstract class NginxPusher {
       /ssl_certificate\s+[^;]+;/g,
       `ssl_certificate ${certPath};`
     );
-    
+
     // Replace ssl_certificate_key directive
     this.compiledConfig = this.compiledConfig.replace(
       /ssl_certificate_key\s+[^;]+;/g,
@@ -63,10 +69,10 @@ export abstract class NginxPusher {
    */
   protected preflightCertCheck(): void {
     if (this.domain.ssl.mode !== 'custom') return;
-    
+
     const certPath = this.domain.ssl.certPath;
     const keyPath = this.domain.ssl.keyPath;
-    
+
     if (certPath && !fs.existsSync(certPath)) {
       throw new Error(`SSL certificate file missing: ${certPath}`);
     }
@@ -93,13 +99,13 @@ export abstract class NginxPusher {
   ): Error {
     const domainName = this.domain.name;
     let message = `Failed to ${operation} for domain "${domainName}" on ${targetHost}`;
-    
+
     if (commandOutput) {
       message += `:\n${commandOutput}`;
     } else if (error.message) {
       message += `: ${error.message}`;
     }
-    
+
     return new Error(message);
   }
 
@@ -107,12 +113,12 @@ export abstract class NginxPusher {
    * Abstract method to be implemented by subclasses
    */
   abstract push(): Promise<void>;
-  
+
   /**
    * Abstract method to capture snapshot
    */
   protected abstract captureSnapshot(): Promise<PushSnapshot>;
-  
+
   /**
    * Abstract method to rollback
    */

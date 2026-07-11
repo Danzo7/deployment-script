@@ -24,7 +24,7 @@ type Mode =
   | 'saved';
 
 interface Props {
-  target: string;       // e.g. "example.com" or "example.com /api"
+  target: string; // e.g. "example.com" or "example.com /api"
   initial: Record<string, string>;
   onSave: (rows: HeaderRow[], count: number) => Promise<void>;
 }
@@ -54,7 +54,9 @@ function buildRows(initial: Record<string, string>): HeaderRow[] {
 }
 
 function countChanges(rows: HeaderRow[]) {
-  let modified = 0, added = 0, deleted = 0;
+  let modified = 0,
+    added = 0,
+    deleted = 0;
   for (const r of rows) {
     if (r.state === 'modified') modified++;
     else if (r.state === 'new') added++;
@@ -65,8 +67,16 @@ function countChanges(rows: HeaderRow[]) {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function Header({ target, modified, added, deleted }: {
-  target: string; modified: number; added: number; deleted: number;
+function Header({
+  target,
+  modified,
+  added,
+  deleted,
+}: {
+  target: string;
+  modified: number;
+  added: number;
+  deleted: number;
 }) {
   const total = modified + added + deleted;
   const parts: string[] = [];
@@ -90,7 +100,11 @@ function Footer({ mode }: { mode: Mode }) {
     mode === 'list'
       ? '↑↓ move   enter edit   n new   d delete   u undo   s save   q quit'
       : '';
-  return <Box marginTop={0}><Text dimColor>{legend}</Text></Box>;
+  return (
+    <Box marginTop={0}>
+      <Text dimColor>{legend}</Text>
+    </Box>
+  );
 }
 
 function TableHeader() {
@@ -99,7 +113,7 @@ function TableHeader() {
       <Text dimColor>{'│'}</Text>
       <Text dimColor>{'  '}</Text>
       <Text bold>{truncate('HEADER', KEY_COL)}</Text>
-      <Text>{' '}</Text>
+      <Text> </Text>
       <Text bold>{truncate('VALUE', VAL_COL)}</Text>
       <Text dimColor>{'   │'}</Text>
     </Box>
@@ -107,7 +121,11 @@ function TableHeader() {
 }
 
 function HeaderRowWrapper({
-  row, selected, isEditing, editDraft, setEditDraft,
+  row,
+  selected,
+  isEditing,
+  editDraft,
+  setEditDraft,
 }: {
   row: HeaderRow;
   selected: boolean;
@@ -131,16 +149,26 @@ function HeaderRowWrapper({
     <Box>
       <Text dimColor>{'│'}</Text>
       <Text inverse={selected}>{prefix} </Text>
-      {deleted
-        ? <Text dimColor strikethrough>{displayKey}</Text>
-        : <Text color={keyColor} inverse={selected}>{displayKey}</Text>}
-      <Text inverse={selected}>{' '}</Text>
+      {deleted ? (
+        <Text dimColor strikethrough>
+          {displayKey}
+        </Text>
+      ) : (
+        <Text color={keyColor} inverse={selected}>
+          {displayKey}
+        </Text>
+      )}
+      <Text inverse={selected}> </Text>
       {isEditing ? (
         <TextInput value={editDraft} onChange={setEditDraft} />
       ) : deleted ? (
-        <Text dimColor strikethrough>{displayValue.padEnd(VAL_COL)}</Text>
+        <Text dimColor strikethrough>
+          {displayValue.padEnd(VAL_COL)}
+        </Text>
       ) : (
-        <Text color={valColor} inverse={selected}>{displayValue.padEnd(VAL_COL)}</Text>
+        <Text color={valColor} inverse={selected}>
+          {displayValue.padEnd(VAL_COL)}
+        </Text>
       )}
       <Text inverse={selected}> {marker} </Text>
       <Text dimColor>{'│'}</Text>
@@ -173,9 +201,9 @@ export function HeaderEditor({ target, initial, onSave }: Props) {
   useInput((input, key) => {
     if (mode === 'list') {
       if (key.upArrow) {
-        setCursor(c => clampCursor(c - 1, rows.length));
+        setCursor((c) => clampCursor(c - 1, rows.length));
       } else if (key.downArrow) {
-        setCursor(c => clampCursor(c + 1, rows.length));
+        setCursor((c) => clampCursor(c + 1, rows.length));
       } else if (key.return) {
         const row = rows[cursor];
         if (!row || row.state === 'deleted') return;
@@ -189,12 +217,12 @@ export function HeaderEditor({ target, initial, onSave }: Props) {
       } else if (input === 'd') {
         const row = rows[cursor];
         if (!row || row.state === 'deleted') return;
-        setRows(prev => {
+        setRows((prev) => {
           const next = [...prev];
           const r = { ...next[cursor] };
           if (r.state === 'new') {
             next.splice(cursor, 1);
-            setCursor(c => clampCursor(c, next.length));
+            setCursor((c) => clampCursor(c, next.length));
           } else {
             r.state = 'deleted';
             next[cursor] = r;
@@ -204,7 +232,7 @@ export function HeaderEditor({ target, initial, onSave }: Props) {
       } else if (input === 'u') {
         const row = rows[cursor];
         if (!row) return;
-        setRows(prev => {
+        setRows((prev) => {
           const next = [...prev];
           const r = { ...next[cursor] };
           if (r.state === 'deleted') {
@@ -218,11 +246,17 @@ export function HeaderEditor({ target, initial, onSave }: Props) {
           return next;
         });
       } else if (input === 's') {
-        if (changes.total === 0) { exit(); return; }
+        if (changes.total === 0) {
+          exit();
+          return;
+        }
         setSavedCount(changes.total);
         setMode('confirm-save');
       } else if (input === 'q' || key.escape) {
-        if (changes.total === 0) { exit(); return; }
+        if (changes.total === 0) {
+          exit();
+          return;
+        }
         setMode('confirm-quit');
       }
       return;
@@ -230,7 +264,7 @@ export function HeaderEditor({ target, initial, onSave }: Props) {
 
     if (mode === 'edit-value') {
       if (key.return) {
-        setRows(prev => {
+        setRows((prev) => {
           const next = [...prev];
           const r = { ...next[cursor] };
           r.value = editDraft;
@@ -250,8 +284,16 @@ export function HeaderEditor({ target, initial, onSave }: Props) {
     if (mode === 'add-key') {
       if (key.return) {
         const k = newKeyDraft.trim();
-        if (!k) { setKeyError('Header name cannot be empty'); return; }
-        if (rows.some(r => r.key.toLowerCase() === k.toLowerCase() && r.state !== 'deleted')) {
+        if (!k) {
+          setKeyError('Header name cannot be empty');
+          return;
+        }
+        if (
+          rows.some(
+            (r) =>
+              r.key.toLowerCase() === k.toLowerCase() && r.state !== 'deleted'
+          )
+        ) {
           setKeyError(`"${k}" already exists`);
           return;
         }
@@ -267,8 +309,12 @@ export function HeaderEditor({ target, initial, onSave }: Props) {
 
     if (mode === 'add-value') {
       if (key.return) {
-        const newRow: HeaderRow = { key: newKeyDraft, value: newValDraft, state: 'new' };
-        setRows(prev => {
+        const newRow: HeaderRow = {
+          key: newKeyDraft,
+          value: newValDraft,
+          state: 'new',
+        };
+        setRows((prev) => {
           const next = [...prev, newRow];
           setCursor(next.length - 1);
           return next;
@@ -290,33 +336,54 @@ export function HeaderEditor({ target, initial, onSave }: Props) {
     }
 
     if (mode === 'confirm-quit') {
-      if (input === 'y' || input === 'Y') { exit(); }
-      else { setMode('list'); }
+      if (input === 'y' || input === 'Y') {
+        exit();
+      } else {
+        setMode('list');
+      }
       return;
     }
   });
 
   useEffect(() => {
     if (mode !== 'saved') return;
-    onSave(rows, savedCount).then(() => exit()).catch(() => exit());
+    onSave(rows, savedCount)
+      .then(() => exit())
+      .catch(() => exit());
   }, [mode]);
 
   // ── Confirm / saved screens ───────────────────────────────────────────────
 
   if (mode === 'confirm-save') {
-    const pending = rows.filter(r => r.state !== 'unchanged');
+    const pending = rows.filter((r) => r.state !== 'unchanged');
     return (
       <Box flexDirection="column">
-        <Text>Save changes to <Text bold>{target}</Text>?</Text>
+        <Text>
+          Save changes to <Text bold>{target}</Text>?
+        </Text>
         <Box flexDirection="column" marginTop={1}>
           {pending.map((r, i) => {
-            const prefix = r.state === 'new' ? '+' : r.state === 'deleted' ? '-' : '*';
-            const col = r.state === 'new' ? 'green' : r.state === 'deleted' ? 'red' : 'yellow';
-            return <Box key={i}><Text color={col}> {prefix} {r.key}</Text></Box>;
+            const prefix =
+              r.state === 'new' ? '+' : r.state === 'deleted' ? '-' : '*';
+            const col =
+              r.state === 'new'
+                ? 'green'
+                : r.state === 'deleted'
+                  ? 'red'
+                  : 'yellow';
+            return (
+              <Box key={i}>
+                <Text color={col}>
+                  {' '}
+                  {prefix} {r.key}
+                </Text>
+              </Box>
+            );
           })}
         </Box>
         <Box marginTop={1}>
-          <Text>[Y] save   </Text><Text dimColor>[n] cancel, back to editor</Text>
+          <Text>[Y] save </Text>
+          <Text dimColor>[n] cancel, back to editor</Text>
         </Box>
       </Box>
     );
@@ -325,7 +392,10 @@ export function HeaderEditor({ target, initial, onSave }: Props) {
   if (mode === 'confirm-quit') {
     return (
       <Box flexDirection="column">
-        <Text color="yellow">Discard {changes.total} unsaved changes to <Text bold>{target}</Text>? [y/N]</Text>
+        <Text color="yellow">
+          Discard {changes.total} unsaved changes to <Text bold>{target}</Text>?
+          [y/N]
+        </Text>
       </Box>
     );
   }
@@ -333,18 +403,26 @@ export function HeaderEditor({ target, initial, onSave }: Props) {
   if (mode === 'saved') {
     return (
       <Box flexDirection="column">
-        <Text color="green">✓ Saving {savedCount} changes to {target}…</Text>
+        <Text color="green">
+          ✓ Saving {savedCount} changes to {target}…
+        </Text>
       </Box>
     );
   }
 
   // ── List / edit / add ─────────────────────────────────────────────────────
 
-  const isEmpty = rows.length === 0 && mode !== 'add-key' && mode !== 'add-value';
+  const isEmpty =
+    rows.length === 0 && mode !== 'add-key' && mode !== 'add-value';
 
   return (
     <Box flexDirection="column">
-      <Header target={target} modified={changes.modified} added={changes.added} deleted={changes.deleted} />
+      <Header
+        target={target}
+        modified={changes.modified}
+        added={changes.added}
+        deleted={changes.deleted}
+      />
       <Text>{'┌' + '─'.repeat(BOX_WIDTH) + '┐'}</Text>
       <TableHeader />
       <Text>{'├' + '─'.repeat(BOX_WIDTH) + '┤'}</Text>
@@ -353,12 +431,16 @@ export function HeaderEditor({ target, initial, onSave }: Props) {
         <Box flexDirection="column">
           <Box>
             <Text dimColor>{'│'}</Text>
-            <Text>  No headers set for {target}.{' '.repeat(Math.max(0, BOX_WIDTH - 18 - target.length))}</Text>
+            <Text>
+              {' '}
+              No headers set for {target}.
+              {' '.repeat(Math.max(0, BOX_WIDTH - 18 - target.length))}
+            </Text>
             <Text dimColor>{'│'}</Text>
           </Box>
           <Box>
             <Text dimColor>{'│'}</Text>
-            <Text>  Press n to add one.{' '.repeat(BOX_WIDTH - 20)}</Text>
+            <Text> Press n to add one.{' '.repeat(BOX_WIDTH - 20)}</Text>
             <Text dimColor>{'│'}</Text>
           </Box>
         </Box>
@@ -380,13 +462,17 @@ export function HeaderEditor({ target, initial, onSave }: Props) {
           <Box>
             <Text dimColor>{'│'}</Text>
             <Text color="green">+ </Text>
-            <TextInput value={newKeyDraft} onChange={setNewKeyDraft} placeholder="X-My-Header" />
+            <TextInput
+              value={newKeyDraft}
+              onChange={setNewKeyDraft}
+              placeholder="X-My-Header"
+            />
             <Text dimColor>{'│'}</Text>
           </Box>
           {keyError ? (
             <Box>
               <Text dimColor>{'│'}</Text>
-              <Text color="red">  ⚠ {keyError}</Text>
+              <Text color="red"> ⚠ {keyError}</Text>
               <Text dimColor>{'│'}</Text>
             </Box>
           ) : null}
@@ -397,7 +483,11 @@ export function HeaderEditor({ target, initial, onSave }: Props) {
         <Box>
           <Text dimColor>{'│'}</Text>
           <Text color="green">+ {newKeyDraft.padEnd(KEY_COL - 2)} </Text>
-          <TextInput value={newValDraft} onChange={setNewValDraft} placeholder="" />
+          <TextInput
+            value={newValDraft}
+            onChange={setNewValDraft}
+            placeholder=""
+          />
           <Text dimColor>{'│'}</Text>
         </Box>
       )}

@@ -2,7 +2,10 @@ import path from 'path';
 import chalk from 'chalk';
 import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
-import { applyStorageSymlinks, ensureDirectories } from '../utils/file-utils.js';
+import {
+  applyStorageSymlinks,
+  ensureDirectories,
+} from '../utils/file-utils.js';
 import { getAppStatus, runApp } from '../utils/pm2-helper.js';
 
 export const rollback = async ({ name, to }: { name: string; to?: number }) => {
@@ -10,11 +13,15 @@ export const rollback = async ({ name, to }: { name: string; to?: number }) => {
 
   const builds = app.builds ?? [];
   if (builds.length < 2) {
-    throw new Error(`Not enough builds to rollback. Only ${builds.length} build(s) available.`);
+    throw new Error(
+      `Not enough builds to rollback. Only ${builds.length} build(s) available.`
+    );
   }
 
   const activePath = await AppRepo.resolveActiveBuild(name);
-  const currentIndex = activePath ? builds.indexOf(activePath) : builds.length - 1;
+  const currentIndex = activePath
+    ? builds.indexOf(activePath)
+    : builds.length - 1;
 
   // If no --to flag, list available builds and default to previous
   if (to === undefined) {
@@ -26,11 +33,15 @@ export const rollback = async ({ name, to }: { name: string; to?: number }) => {
     });
     console.log();
     to = currentIndex > 0 ? currentIndex - 1 : 0;
-    Logger.info(`Defaulting to build index ${to}: ${Logger.highlight(path.basename(builds[to]))}`);
+    Logger.info(
+      `Defaulting to build index ${to}: ${Logger.highlight(path.basename(builds[to]))}`
+    );
   }
 
   if (to < 0 || to >= builds.length) {
-    throw new Error(`Invalid build index ${to}. Valid range: 0–${builds.length - 1}`);
+    throw new Error(
+      `Invalid build index ${to}. Valid range: 0–${builds.length - 1}`
+    );
   }
   if (to === currentIndex) {
     Logger.info(`Build ${to} is already the active build.`);
@@ -41,7 +52,9 @@ export const rollback = async ({ name, to }: { name: string; to?: number }) => {
   const { logDir } = ensureDirectories(app.appDir);
   const status = await getAppStatus(name);
 
-  Logger.info(`Rolling back ${Logger.highlight(name)} to build ${to}: ${path.basename(targetBuild)}...`);
+  Logger.info(
+    `Rolling back ${Logger.highlight(name)} to build ${to}: ${path.basename(targetBuild)}...`
+  );
 
   await runApp(targetBuild, {
     name: app.name,
@@ -54,7 +67,9 @@ export const rollback = async ({ name, to }: { name: string; to?: number }) => {
   });
 
   await AppRepo.update(name, { activeBuild: targetBuild });
-  
+
   applyStorageSymlinks(targetBuild, app.storages);
-  Logger.success(`${Logger.highlight(name)} rolled back to build ${to} successfully.`);
+  Logger.success(
+    `${Logger.highlight(name)} rolled back to build ${to} successfully.`
+  );
 };

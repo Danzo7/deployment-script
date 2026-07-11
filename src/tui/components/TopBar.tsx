@@ -9,11 +9,19 @@ interface TopBarProps {
   sshHost?: string;
 }
 
-export function TopBar({ pm2Reachable, dbReachable, sshReachable, sshHost }: TopBarProps): React.ReactElement {
+export function TopBar({
+  pm2Reachable,
+  dbReachable,
+  sshReachable,
+  sshHost,
+}: TopBarProps): React.ReactElement {
   const [time, setTime] = useState(() => new Date().toTimeString().slice(0, 8));
 
   useEffect(() => {
-    const id = setInterval(() => setTime(new Date().toTimeString().slice(0, 8)), 1000);
+    const id = setInterval(
+      () => setTime(new Date().toTimeString().slice(0, 8)),
+      1000
+    );
     return () => clearInterval(id);
   }, []);
 
@@ -21,7 +29,9 @@ export function TopBar({ pm2Reachable, dbReachable, sshReachable, sshHost }: Top
     <Box flexDirection="column" width={TERM_W}>
       <Box flexDirection="row" justifyContent="space-between" width={TERM_W}>
         <Box flexDirection="row" gap={2}>
-          <Text bold color="yellow">dm</Text>
+          <Text bold color="yellow">
+            dm
+          </Text>
           <Box flexDirection="row" gap={0}>
             <Text color={pm2Reachable ? 'green' : 'red'}>●</Text>
             <Text> pm2</Text>

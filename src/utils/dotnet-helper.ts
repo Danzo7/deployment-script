@@ -14,8 +14,8 @@ export const checkDotnetInstalled = (): boolean => {
   } catch {
     Logger.warn(
       '.NET SDK is not installed or not on your PATH.\n' +
-      '  → Install it from https://dotnet.microsoft.com/download\n' +
-      "  → The app was registered but 'dm deploy' will fail until .NET is available."
+        '  → Install it from https://dotnet.microsoft.com/download\n' +
+        "  → The app was registered but 'dm deploy' will fail until .NET is available."
     );
     return false;
   }
@@ -27,7 +27,10 @@ export const checkDotnetInstalled = (): boolean => {
  * @param options The options containing the working directory and log file path.
  * @returns An object with the command execution result.
  */
-const runCommand = (command: string, options: { cwd: string; logFile: string }) => {
+const runCommand = (
+  command: string,
+  options: { cwd: string; logFile: string }
+) => {
   const execOptions: ExecSyncOptions = {
     cwd: options.cwd,
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -49,7 +52,7 @@ const runCommand = (command: string, options: { cwd: string; logFile: string }) 
     const stdout = err.stdout?.toString() || '';
     const stderr = err.stderr?.toString() || '';
     const errorMessage = stderr || stdout || err.message;
-    
+
     fs.appendFileSync(
       options.logFile,
       `Command: ${command}\nError:\n${errorMessage}\n\n`,
@@ -83,7 +86,10 @@ export const checkDotnetSdk = async (relDir: string): Promise<void> => {
   // 1. Check that dotnet is installed
   let installedVersion: string;
   try {
-    installedVersion = execSync('dotnet --version', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    installedVersion = execSync('dotnet --version', {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
   } catch {
     throw new Error(
       "dotnet SDK not found. Install the .NET SDK from https://dotnet.microsoft.com/download and ensure 'dotnet' is on your PATH."
@@ -100,12 +106,16 @@ export const checkDotnetSdk = async (relDir: string): Promise<void> => {
 
   // 3. Parse <TargetFramework> from .csproj
   const csprojContent = fs.readFileSync(csprojPath, 'utf-8');
-  const targetFrameworkMatch = csprojContent.match(/<TargetFramework>([^<]+)<\/TargetFramework>/);
+  const targetFrameworkMatch = csprojContent.match(
+    /<TargetFramework>([^<]+)<\/TargetFramework>/
+  );
   const targetFramework = targetFrameworkMatch?.[1] ?? '';
 
   // e.g. "net8.0" → major version 8
   const requiredMajorMatch = targetFramework.match(/net(\d+)/);
-  const requiredMajor = requiredMajorMatch ? parseInt(requiredMajorMatch[1], 10) : null;
+  const requiredMajor = requiredMajorMatch
+    ? parseInt(requiredMajorMatch[1], 10)
+    : null;
 
   // 4. Parse installed major version (e.g. "8.0.100" → 8)
   const installedMajor = parseInt(installedVersion.split('.')[0], 10);
@@ -118,15 +128,16 @@ export const checkDotnetSdk = async (relDir: string): Promise<void> => {
   }
 };
 
-
-
 /**
  * Checks and synchronises appsettings files from the env directory to the release directory.
  * @param relDir The release directory (destination).
  * @param envDir The env directory (source).
  * @returns true if any file was copied, false otherwise.
  */
-export const checkAppSettings = async (relDir: string, envDir: string): Promise<boolean> => {
+export const checkAppSettings = async (
+  relDir: string,
+  envDir: string
+): Promise<boolean> => {
   const settingsFiles = ['appsettings.json', 'appsettings.Production.json'];
   let anyChanged = false;
   let anyFoundInEnvDir = false;
@@ -167,7 +178,10 @@ export const checkAppSettings = async (relDir: string, envDir: string): Promise<
  * @param relDir The directory containing the .csproj file.
  * @param appName The registered application name.
  */
-export const ensureAssemblyName = async (relDir: string, appName: string): Promise<void> => {
+export const ensureAssemblyName = async (
+  relDir: string,
+  appName: string
+): Promise<void> => {
   // 1. Find .csproj
   const csprojPath = findCsprojFile(relDir);
   if (!csprojPath) {
@@ -180,7 +194,9 @@ export const ensureAssemblyName = async (relDir: string, appName: string): Promi
   let csprojContent = fs.readFileSync(csprojPath, 'utf-8');
 
   // 3. Check for explicit <AssemblyName>
-  const assemblyNameMatch = csprojContent.match(/<AssemblyName>([^<]+)<\/AssemblyName>/);
+  const assemblyNameMatch = csprojContent.match(
+    /<AssemblyName>([^<]+)<\/AssemblyName>/
+  );
 
   if (assemblyNameMatch) {
     const foundName = assemblyNameMatch[1].trim();
@@ -191,7 +207,9 @@ export const ensureAssemblyName = async (relDir: string, appName: string): Promi
         `<AssemblyName>${appName}</AssemblyName>`
       );
       fs.writeFileSync(csprojPath, csprojContent, 'utf-8');
-      Logger.warn(`Updated .csproj: Changed <AssemblyName> from "${foundName}" to "${appName}"`);
+      Logger.warn(
+        `Updated .csproj: Changed <AssemblyName> from "${foundName}" to "${appName}"`
+      );
     }
   } else {
     // Check if project file name matches app name
@@ -200,13 +218,16 @@ export const ensureAssemblyName = async (relDir: string, appName: string): Promi
       // Add AssemblyName to the first PropertyGroup
       const propertyGroupMatch = csprojContent.match(/(<PropertyGroup[^>]*>)/);
       if (propertyGroupMatch) {
-        const insertionPoint = propertyGroupMatch.index! + propertyGroupMatch[0].length;
+        const insertionPoint =
+          propertyGroupMatch.index! + propertyGroupMatch[0].length;
         csprojContent =
           csprojContent.slice(0, insertionPoint) +
           `\n    <AssemblyName>${appName}</AssemblyName>` +
           csprojContent.slice(insertionPoint);
         fs.writeFileSync(csprojPath, csprojContent, 'utf-8');
-        Logger.warn(`Updated .csproj: Added <AssemblyName>${appName}</AssemblyName> to match registered app name`);
+        Logger.warn(
+          `Updated .csproj: Added <AssemblyName>${appName}</AssemblyName> to match registered app name`
+        );
       } else {
         throw new Error(
           'Could not find <PropertyGroup> in .csproj file. Please add <AssemblyName> manually.'
@@ -221,7 +242,10 @@ export const ensureAssemblyName = async (relDir: string, appName: string): Promi
  * @param dir The directory containing the project.
  * @param opts Options including the log directory.
  */
-export const prepareDotnet = async (dir: string, opts: { logDir: string }): Promise<void> => {
+export const prepareDotnet = async (
+  dir: string,
+  opts: { logDir: string }
+): Promise<void> => {
   const logFile = path.join(opts.logDir, 'prepare-' + Date.now() + '.log');
 
   Logger.info('Running dotnet restore...');
@@ -231,7 +255,10 @@ export const prepareDotnet = async (dir: string, opts: { logDir: string }): Prom
   }
 
   Logger.info('Running dotnet publish...');
-  const publishResult = runCommand('dotnet publish -c Release -o ./publish', { cwd: dir, logFile });
+  const publishResult = runCommand('dotnet publish -c Release -o ./publish', {
+    cwd: dir,
+    logFile,
+  });
   if (publishResult.code !== 0) {
     throw new Error(`dotnet publish failed: ${publishResult.stderr}`);
   }

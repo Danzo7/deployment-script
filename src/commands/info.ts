@@ -18,7 +18,8 @@ export const info = async ({ name }: { name: string }) => {
   let commitAuthor = 'N/A';
   let commitDate = 'N/A';
   try {
-    const commit = app.lastDeployedCommit ?? await getLastRevision(app, relDir);
+    const commit =
+      app.lastDeployedCommit ?? (await getLastRevision(app, relDir));
     if (commit) {
       commitHash = commit.hash;
       commitMessage = commit.message;
@@ -54,7 +55,9 @@ export const info = async ({ name }: { name: string }) => {
       }
       restarts = env?.unstable_restarts ?? env?.restart_time ?? '0';
       scriptPath = env?.pm_exec_path ?? 'N/A';
-      scriptArgs = Array.isArray(env?.args) ? env.args.join(' ') : (env?.args ?? 'N/A');
+      scriptArgs = Array.isArray(env?.args)
+        ? env.args.join(' ')
+        : (env?.args ?? 'N/A');
     }
   } catch {
     // pm2 may not be running
@@ -81,7 +84,10 @@ export const info = async ({ name }: { name: string }) => {
   row('Restarts', chalk.white(restarts.toString()));
   row('Builds', chalk.white((app.builds?.length ?? 0).toString()));
   row('Active Build', chalk.white(activeBuildPath));
-  row('Last Deploy', chalk.yellow(formatDate(app.lastDeploy,chalk.gray('Never'))));
+  row(
+    'Last Deploy',
+    chalk.yellow(formatDate(app.lastDeploy, chalk.gray('Never')))
+  );
   console.log(chalk.gray('  ' + '─'.repeat(40)));
   row('Script', chalk.white(scriptPath));
   row('Script Args', chalk.white(scriptArgs));
@@ -94,10 +100,13 @@ export const info = async ({ name }: { name: string }) => {
   // Storages
   if (app.storages.length > 0) {
     console.log(chalk.gray('  ' + '─'.repeat(40)));
-    
+
     for (const storage of app.storages) {
       const size = formatSize(getDirectorySize(storage.path));
-      row('Storage', `${chalk.white(storage.name)} ${chalk.gray('(')}${chalk.green(size)}${chalk.gray(')')}`);
+      row(
+        'Storage',
+        `${chalk.white(storage.name)} ${chalk.gray('(')}${chalk.green(size)}${chalk.gray(')')}`
+      );
     }
   }
 

@@ -28,6 +28,11 @@ export function loadOrCreateHostKey(): Buffer {
 export function fingerprintHostKey(pem: Buffer): string {
   const parsed = sshUtils.parseKey(pem);
   if (parsed instanceof Error) throw parsed;
-  const pub = Array.isArray(parsed) ? parsed[0].getPublicSSH() : parsed.getPublicSSH();
-  return 'SHA256:' + createHash('sha256').update(pub).digest('base64').replace(/=+$/, '');
+  const pub = Array.isArray(parsed)
+    ? parsed[0].getPublicSSH()
+    : parsed.getPublicSSH();
+  return (
+    'SHA256:' +
+    createHash('sha256').update(pub).digest('base64').replace(/=+$/, '')
+  );
 }

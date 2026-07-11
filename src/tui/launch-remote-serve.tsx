@@ -28,9 +28,17 @@ interface ServerInfo {
   fingerprint: string;
 }
 
-function App({ serverInfo, initialLogs }: { serverInfo: ServerInfo; initialLogs: LogEntry[] }): React.ReactElement {
+function App({
+  serverInfo,
+  initialLogs,
+}: {
+  serverInfo: ServerInfo;
+  initialLogs: LogEntry[];
+}): React.ReactElement {
   const { exit } = useApp();
-  const [sessions, setSessions] = useState<SessionSnapshot[]>(() => getActiveSessions());
+  const [sessions, setSessions] = useState<SessionSnapshot[]>(() =>
+    getActiveSessions()
+  );
   const [logs, setLogs] = useState<LogEntry[]>(initialLogs);
 
   const addLog = useCallback((level: LogEntry['level'], message: string) => {
@@ -41,7 +49,8 @@ function App({ serverInfo, initialLogs }: { serverInfo: ServerInfo; initialLogs:
   }, []);
 
   useEffect(() => {
-    const onLog = (level: LogEntry['level'], message: string) => addLog(level, message);
+    const onLog = (level: LogEntry['level'], message: string) =>
+      addLog(level, message);
     const onOpen = (_s: SessionSnapshot) => setSessions(getActiveSessions());
     const onClose = (_id: string) => setSessions(getActiveSessions());
 
@@ -80,9 +89,13 @@ function App({ serverInfo, initialLogs }: { serverInfo: ServerInfo; initialLogs:
             if (entry.event === 'repl-command') {
               addLog('info', `[${entry.identity}] $ ${entry.command}`);
             }
-          } catch { /* malformed line */ }
+          } catch {
+            /* malformed line */
+          }
         }
-      } catch { /* file disappeared mid-read */ }
+      } catch {
+        /* file disappeared mid-read */
+      }
     });
 
     return () => watcher.close();
@@ -123,7 +136,9 @@ export async function launchRemoteServe(port: number): Promise<void> {
   Logger.isMuted = true;
 
   let resolveServerInfo!: (info: ServerInfo) => void;
-  const serverInfoPromise = new Promise<ServerInfo>((res) => { resolveServerInfo = res; });
+  const serverInfoPromise = new Promise<ServerInfo>((res) => {
+    resolveServerInfo = res;
+  });
 
   serverEvents.once('listening', (address, actualPort, fingerprint) => {
     resolveServerInfo({ bindAddress: address, port: actualPort, fingerprint });
@@ -136,10 +151,14 @@ export async function launchRemoteServe(port: number): Promise<void> {
   serverEvents.off('log', bufferLog);
 
   process.stdout.write('\x1b[?1049h'); // enter alternate screen
-  const { waitUntilExit } = render(<App serverInfo={serverInfo} initialLogs={pendingLogs} />);
+  const { waitUntilExit } = render(
+    <App serverInfo={serverInfo} initialLogs={pendingLogs} />
+  );
   await waitUntilExit();
   process.stdout.write('\x1b[?1049l'); // leave alternate screen
 
   Logger.isMuted = false;
-  await serverPromise.catch(() => { /* already exiting */ });
+  await serverPromise.catch(() => {
+    /* already exiting */
+  });
 }

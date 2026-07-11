@@ -39,7 +39,9 @@ export interface AuthorizedKey {
 
 function parseAuthorizedKeysFile(): AuthorizedKey[] {
   if (!fs.existsSync(REMOTE_AUTHORIZED_KEYS_PATH)) return [];
-  const lines = fs.readFileSync(REMOTE_AUTHORIZED_KEYS_PATH, 'utf8').split('\n');
+  const lines = fs
+    .readFileSync(REMOTE_AUTHORIZED_KEYS_PATH, 'utf8')
+    .split('\n');
   const keys: AuthorizedKey[] = [];
   for (const raw of lines) {
     const line = raw.trim();
@@ -47,13 +49,21 @@ function parseAuthorizedKeysFile(): AuthorizedKey[] {
     const parsed = sshUtils.parseKey(line);
     if (parsed instanceof Error || Array.isArray(parsed)) continue;
     const fp = computeFingerprint(parsed.getPublicSSH());
-    keys.push({ raw: line, parsed, fingerprint: fp, comment: line.split(' ')[2] ?? '' });
+    keys.push({
+      raw: line,
+      parsed,
+      fingerprint: fp,
+      comment: line.split(' ')[2] ?? '',
+    });
   }
   return keys;
 }
 
 function computeFingerprint(publicSSH: Buffer): string {
-  return 'SHA256:' + createHash('sha256').update(publicSSH).digest('base64').replace(/=+$/, '');
+  return (
+    'SHA256:' +
+    createHash('sha256').update(publicSSH).digest('base64').replace(/=+$/, '')
+  );
 }
 
 export function listAuthorizedKeys(): AuthorizedKey[] {
@@ -65,7 +75,7 @@ export function listAuthorizedKeys(): AuthorizedKey[] {
 // Keep in sync with ALGORITHM_KEY_MAP in ssh-client.ts.
 const ALLOWED_KEY_TYPES = new Set([
   'ssh-ed25519',
-  'sk-ssh-ed25519@openssh.com',       // FIDO2 ed25519 (e.g. YubiKey)
+  'sk-ssh-ed25519@openssh.com', // FIDO2 ed25519 (e.g. YubiKey)
   'ecdsa-sha2-nistp256',
   'ecdsa-sha2-nistp384',
   'ecdsa-sha2-nistp521',
@@ -79,7 +89,10 @@ const RSA_MIN_BITS = 4096;
  *  comment the public key file already has. This username is then used as the
  *  identity in audit logs and the DM_REMOTE_USER env var for remote sessions.
  */
-export function addAuthorizedKey(keyOrPath: string, username?: string): AuthorizedKey {
+export function addAuthorizedKey(
+  keyOrPath: string,
+  username?: string
+): AuthorizedKey {
   ensureRemoteDir();
   const raw = fs.existsSync(keyOrPath)
     ? fs.readFileSync(keyOrPath, 'utf8').trim()
@@ -87,7 +100,9 @@ export function addAuthorizedKey(keyOrPath: string, username?: string): Authoriz
 
   const parsed = sshUtils.parseKey(raw);
   if (parsed instanceof Error || Array.isArray(parsed)) {
-    throw new Error('Invalid SSH public key. Expected format: ssh-ed25519 AAAA... [comment]');
+    throw new Error(
+      'Invalid SSH public key. Expected format: ssh-ed25519 AAAA... [comment]'
+    );
   }
 
   // Reject weak/legacy key types (DSA, etc.)
@@ -125,9 +140,12 @@ export function addAuthorizedKey(keyOrPath: string, username?: string): Authoriz
       const effectiveStart = modulus[0] === 0 ? 1 : 0;
       const effectiveLen = modLen - effectiveStart;
       const firstByte = modulus[effectiveStart];
-      bitLength = effectiveLen * 8 - (firstByte === 0 ? 8 : Math.clz32(firstByte) - 24);
+      bitLength =
+        effectiveLen * 8 - (firstByte === 0 ? 8 : Math.clz32(firstByte) - 24);
     } catch {
-      throw new Error('Could not determine RSA key size. Provide an ed25519 or ECDSA key instead.');
+      throw new Error(
+        'Could not determine RSA key size. Provide an ed25519 or ECDSA key instead.'
+      );
     }
     if (bitLength < RSA_MIN_BITS) {
       throw new Error(
@@ -144,7 +162,9 @@ export function addAuthorizedKey(keyOrPath: string, username?: string): Authoriz
   const parts = raw.split(' ');
   const comment = username?.trim() || parts[2] || '';
   if (comment && existing.some((k) => k.comment === comment)) {
-    throw new Error(`Username "${comment}" is already in use. Choose a different name.`);
+    throw new Error(
+      `Username "${comment}" is already in use. Choose a different name.`
+    );
   }
 
   // Build the line: always "type base64 username" so the comment is the username.
@@ -159,7 +179,8 @@ export function removeAuthorizedKey(fingerprint: string): boolean {
   const existing = parseAuthorizedKeysFile();
   const remaining = existing.filter((k) => k.fingerprint !== fingerprint);
   if (remaining.length === existing.length) return false;
-  const content = remaining.map((k) => k.raw).join('\n') + (remaining.length ? '\n' : '');
+  const content =
+    remaining.map((k) => k.raw).join('\n') + (remaining.length ? '\n' : '');
   fs.writeFileSync(REMOTE_AUTHORIZED_KEYS_PATH, content, { mode: 0o600 });
   return true;
 }
@@ -168,13 +189,16 @@ export function removeAuthorizedKeyByUsername(username: string): boolean {
   const existing = parseAuthorizedKeysFile();
   const remaining = existing.filter((k) => k.comment !== username);
   if (remaining.length === existing.length) return false;
-  const content = remaining.map((k) => k.raw).join('\n') + (remaining.length ? '\n' : '');
+  const content =
+    remaining.map((k) => k.raw).join('\n') + (remaining.length ? '\n' : '');
   fs.writeFileSync(REMOTE_AUTHORIZED_KEYS_PATH, content, { mode: 0o600 });
   return true;
 }
 
 /** Used during SSH publickey auth — matches on SHA-256 fingerprint of the offered key. */
-export function findAuthorizedKeyByPublicSSH(publicSSH: Buffer): AuthorizedKey | undefined {
+export function findAuthorizedKeyByPublicSSH(
+  publicSSH: Buffer
+): AuthorizedKey | undefined {
   const offeredFp = computeFingerprint(publicSSH);
   return parseAuthorizedKeysFile().find((k) => k.fingerprint === offeredFp);
 }
@@ -197,7 +221,9 @@ function readAttempts(): Record<string, AttemptRecord> {
 
 function writeAttempts(data: Record<string, AttemptRecord>): void {
   ensureRemoteDir();
-  fs.writeFileSync(REMOTE_LOGIN_ATTEMPTS_PATH, JSON.stringify(data), { mode: 0o600 });
+  fs.writeFileSync(REMOTE_LOGIN_ATTEMPTS_PATH, JSON.stringify(data), {
+    mode: 0o600,
+  });
 }
 
 /** Returns ms remaining in lockout, or 0 if the IP is not currently locked. */

@@ -6,7 +6,12 @@ import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
 const _dirname = dirname(fileURLToPath(import.meta.url));
-const STATIC_SERVER_SCRIPT = resolve(_dirname, '..', 'static-server', 'serve.js');
+const STATIC_SERVER_SCRIPT = resolve(
+  _dirname,
+  '..',
+  'static-server',
+  'serve.js'
+);
 
 type Status =
   | 'online'
@@ -37,7 +42,10 @@ let _disconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 function _connect(): Promise<void> {
   // Cancel any pending deferred disconnect — we're back in use
-  if (_disconnectTimer) { clearTimeout(_disconnectTimer); _disconnectTimer = null; }
+  if (_disconnectTimer) {
+    clearTimeout(_disconnectTimer);
+    _disconnectTimer = null;
+  }
   if (_connected) return Promise.resolve();
   if (_connecting) return _connecting;
   _connecting = new Promise<void>((resolve, reject) => {
@@ -62,7 +70,11 @@ function _release(): void {
       _disconnectTimer = null;
       if (_refCount <= 0 && !_sharedConnected) {
         _connected = false;
-        try { pm2.disconnect(); } catch { /* ignore */ }
+        try {
+          pm2.disconnect();
+        } catch {
+          /* ignore */
+        }
       }
     }, 75);
   }
@@ -72,7 +84,10 @@ function _release(): void {
 export async function openSharedPm2(): Promise<void> {
   _sharedConnected = true;
   // Cancel any pending deferred disconnect before we reconnect
-  if (_disconnectTimer) { clearTimeout(_disconnectTimer); _disconnectTimer = null; }
+  if (_disconnectTimer) {
+    clearTimeout(_disconnectTimer);
+    _disconnectTimer = null;
+  }
   await _connect();
 }
 
@@ -81,9 +96,16 @@ export function closeSharedPm2(): void {
   if (!_sharedConnected) return;
   _sharedConnected = false;
   if (_refCount <= 0) {
-    if (_disconnectTimer) { clearTimeout(_disconnectTimer); _disconnectTimer = null; }
+    if (_disconnectTimer) {
+      clearTimeout(_disconnectTimer);
+      _disconnectTimer = null;
+    }
     _connected = false;
-    try { pm2.disconnect(); } catch { /* ignore */ }
+    try {
+      pm2.disconnect();
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -128,7 +150,7 @@ const getPM2Config = (
     name: string;
     port: number;
     status: Status;
-  },
+  }
 ): pm2.StartOptions => {
   const { port, projectType, ...rest } = config;
 
@@ -146,13 +168,15 @@ const getPM2Config = (
   switch (projectType) {
     case 'nestjs': {
       const nestjsMain = path.join(dir, 'dist', 'main.js');
-      if (!fs.existsSync(nestjsMain)) throw new Error(`NestJS main file not found at ${nestjsMain}`);
+      if (!fs.existsSync(nestjsMain))
+        throw new Error(`NestJS main file not found at ${nestjsMain}`);
       return { ...baseConfig, script: nestjsMain, args: undefined };
     }
 
     case 'dotnet': {
       const dllPath = path.join(dir, `${config.name}.dll`);
-      if (!fs.existsSync(dllPath)) throw new Error(`DLL not found at ${dllPath}`);
+      if (!fs.existsSync(dllPath))
+        throw new Error(`DLL not found at ${dllPath}`);
       return {
         ...rest,
         exec_mode: 'fork',
@@ -168,7 +192,12 @@ const getPM2Config = (
     }
 
     case 'static':
-      return { ...baseConfig, exec_mode: 'fork', script: STATIC_SERVER_SCRIPT, args: undefined };
+      return {
+        ...baseConfig,
+        exec_mode: 'fork',
+        script: STATIC_SERVER_SCRIPT,
+        args: undefined,
+      };
 
     case 'nextjs':
     default:
@@ -189,7 +218,7 @@ export const runApp = async (
     port: number;
     status: Status;
     projectType: 'nextjs' | 'nestjs' | 'dotnet' | 'static';
-  },
+  }
 ): Promise<void> => {
   const pm2Config = getPM2Config(dir, config);
   await withPm2(async () => {
@@ -210,57 +239,80 @@ export const stopApp = async (name: string): Promise<void> =>
   withPm2(() => _pm2Stop(name));
 
 export const deletePm2App = async (name: string): Promise<void> =>
-  withPm2(() => new Promise<void>((resolve, reject) => {
-    pm2.delete(name, (err) => {
-      if (err) return reject(err);
-      Logger.info(`"${name}" deleted successfully.`);
-      resolve();
-    });
-  }));
+  withPm2(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        pm2.delete(name, (err) => {
+          if (err) return reject(err);
+          Logger.info(`"${name}" deleted successfully.`);
+          resolve();
+        });
+      })
+  );
 
 export const getAppStatus = (name: string): Promise<Status> =>
-  withPm2(() => new Promise<Status>((resolve, reject) => {
-    pm2.list((err, list) => {
-      if (err) return reject(err);
-      const proc = list.find((p) => p.name === name);
-      resolve(proc ? (proc.pm2_env?.status ?? 'not-found') : 'not-found');
-    });
-  }));
+  withPm2(
+    () =>
+      new Promise<Status>((resolve, reject) => {
+        pm2.list((err, list) => {
+          if (err) return reject(err);
+          const proc = list.find((p) => p.name === name);
+          resolve(proc ? (proc.pm2_env?.status ?? 'not-found') : 'not-found');
+        });
+      })
+  );
 
 /**
  * Get status for multiple apps in a single PM2 query
  * Returns a Map of app name -> status for efficient lookup
  */
 export const getAllAppStatuses = (): Promise<Map<string, Status>> =>
-  withPm2(() => new Promise<Map<string, Status>>((resolve, reject) => {
-    pm2.list((err, list) => {
-      if (err) return reject(err);
-      const statusMap = new Map<string, Status>();
-      for (const proc of list) {
-        if (proc.name) {
-          statusMap.set(proc.name, (proc.pm2_env?.status as Status) ?? 'not-found');
-        }
-      }
-      resolve(statusMap);
-    });
-  }));
+  withPm2(
+    () =>
+      new Promise<Map<string, Status>>((resolve, reject) => {
+        pm2.list((err, list) => {
+          if (err) return reject(err);
+          const statusMap = new Map<string, Status>();
+          for (const proc of list) {
+            if (proc.name) {
+              statusMap.set(
+                proc.name,
+                (proc.pm2_env?.status as Status) ?? 'not-found'
+              );
+            }
+          }
+          resolve(statusMap);
+        });
+      })
+  );
 
 export const getProcessId = (name: string): Promise<number | undefined> =>
-  withPm2(() => new Promise<number | undefined>((resolve, reject) => {
-    pm2.list((err, list) => {
-      if (err) return reject(err);
-      resolve(list.find((p) => p.name === name)?.pid);
-    });
-  }));
+  withPm2(
+    () =>
+      new Promise<number | undefined>((resolve, reject) => {
+        pm2.list((err, list) => {
+          if (err) return reject(err);
+          resolve(list.find((p) => p.name === name)?.pid);
+        });
+      })
+  );
 
-export const getProcessInfo = (name: string): Promise<{ status: string; proc: pm2.ProcessDescription | undefined }> =>
-  withPm2(() => new Promise((resolve, reject) => {
-    pm2.describe(name, (err, list) => {
-      if (err) return reject(err);
-      const proc = list?.[0];
-      resolve({ status: (proc?.pm2_env as any)?.status ?? 'stopped', proc });
-    });
-  }));
+export const getProcessInfo = (
+  name: string
+): Promise<{ status: string; proc: pm2.ProcessDescription | undefined }> =>
+  withPm2(
+    () =>
+      new Promise((resolve, reject) => {
+        pm2.describe(name, (err, list) => {
+          if (err) return reject(err);
+          const proc = list?.[0];
+          resolve({
+            status: (proc?.pm2_env as any)?.status ?? 'stopped',
+            proc,
+          });
+        });
+      })
+  );
 
 // ─── Process metrics ──────────────────────────────────────────────────────────
 
@@ -315,12 +367,15 @@ function buildMetrics(processList: pm2.ProcessDescription[]): ProcessMetrics[] {
 }
 
 export const listAllProcessMetrics = (): Promise<ProcessMetrics[]> =>
-  withPm2(() => new Promise((resolve, reject) => {
-    pm2.list((err, list) => {
-      if (err) return reject(err);
-      resolve(buildMetrics(list));
-    });
-  }));
+  withPm2(
+    () =>
+      new Promise((resolve, reject) => {
+        pm2.list((err, list) => {
+          if (err) return reject(err);
+          resolve(buildMetrics(list));
+        });
+      })
+  );
 
 // ─── Bus subscription ─────────────────────────────────────────────────────────
 
@@ -337,7 +392,7 @@ export interface BusPacket {
  */
 export const subscribeBus = (
   onPacket: (packet: BusPacket) => void,
-  onError?: (err: Error) => void,
+  onError?: (err: Error) => void
 ): Promise<() => void> =>
   new Promise((resolve, reject) => {
     pm2.launchBus((err, bus) => {
@@ -345,8 +400,16 @@ export const subscribeBus = (
       for (const ev of ['log:out', 'log:err', 'process:event']) {
         bus.on(ev, (packet: any) => onPacket({ ...packet, event: ev }));
       }
-      bus.on('error', (e: any) => onError?.(e instanceof Error ? e : new Error(String(e))));
-      resolve(() => { try { bus.close(); } catch { /* ignore */ } });
+      bus.on('error', (e: any) =>
+        onError?.(e instanceof Error ? e : new Error(String(e)))
+      );
+      resolve(() => {
+        try {
+          bus.close();
+        } catch {
+          /* ignore */
+        }
+      });
     });
   });
 
@@ -358,58 +421,81 @@ export const subscribeBus = (
  * Uses the shared connection when open.
  */
 export const readRecentLogs = (maxLines = 300): Promise<string[]> =>
-  withPm2(() => new Promise((resolve) => {
-    pm2.list((err, processList) => {
-      if (err || !processList) return resolve([]);
-      const results: string[] = [];
-      for (const proc of processList) {
-        const env = proc.pm2_env as any;
-        const name = proc.name ?? 'unknown';
-        for (const [logKey, tag] of [
-          ['pm_out_log_path', ''],
-          ['pm_err_log_path', '[err]'],
-        ] as const) {
-          const logPath: string | undefined = env?.[logKey];
-          if (!logPath) continue;
-          try {
-            if (!fs.existsSync(logPath)) continue;
-            const lines = fs.readFileSync(logPath, 'utf8').split('\n').filter(Boolean);
-            for (const line of lines.slice(-maxLines)) {
-              results.push(`[${name}] ${tag ? tag + ' ' : ''}${line.trim()}`);
+  withPm2(
+    () =>
+      new Promise((resolve) => {
+        pm2.list((err, processList) => {
+          if (err || !processList) return resolve([]);
+          const results: string[] = [];
+          for (const proc of processList) {
+            const env = proc.pm2_env as any;
+            const name = proc.name ?? 'unknown';
+            for (const [logKey, tag] of [
+              ['pm_out_log_path', ''],
+              ['pm_err_log_path', '[err]'],
+            ] as const) {
+              const logPath: string | undefined = env?.[logKey];
+              if (!logPath) continue;
+              try {
+                if (!fs.existsSync(logPath)) continue;
+                const lines = fs
+                  .readFileSync(logPath, 'utf8')
+                  .split('\n')
+                  .filter(Boolean);
+                for (const line of lines.slice(-maxLines)) {
+                  results.push(
+                    `[${name}] ${tag ? tag + ' ' : ''}${line.trim()}`
+                  );
+                }
+              } catch {
+                /* skip unreadable files */
+              }
             }
-          } catch { /* skip unreadable files */ }
-        }
-      }
-      resolve(results);
-    });
-  }));
+          }
+          resolve(results);
+        });
+      })
+  );
 
 /**
  * Reads the last `maxLines` lines from a single app's PM2 log files.
  * Returns formatted strings with `[appName]` and `[appName][err]` prefixes.
  */
-export const readAppLogs = (appName: string, maxLines = 300): Promise<string[]> =>
-  withPm2(() => new Promise((resolve) => {
-    pm2.list((err, processList) => {
-      if (err || !processList) return resolve([]);
-      const proc = processList.find((p) => p.name === appName);
-      if (!proc) return resolve([]);
-      const env = proc.pm2_env as any;
-      const results: string[] = [];
-      for (const [logKey, tag] of [
-        ['pm_out_log_path', ''],
-        ['pm_err_log_path', '[err]'],
-      ] as const) {
-        const logPath: string | undefined = env?.[logKey];
-        if (!logPath) continue;
-        try {
-          if (!fs.existsSync(logPath)) continue;
-          const lines = fs.readFileSync(logPath, 'utf8').split('\n').filter(Boolean);
-          for (const line of lines.slice(-maxLines)) {
-            results.push(`[${appName}]${tag ? '[err]' : ''} ${line.trim()}`);
+export const readAppLogs = (
+  appName: string,
+  maxLines = 300
+): Promise<string[]> =>
+  withPm2(
+    () =>
+      new Promise((resolve) => {
+        pm2.list((err, processList) => {
+          if (err || !processList) return resolve([]);
+          const proc = processList.find((p) => p.name === appName);
+          if (!proc) return resolve([]);
+          const env = proc.pm2_env as any;
+          const results: string[] = [];
+          for (const [logKey, tag] of [
+            ['pm_out_log_path', ''],
+            ['pm_err_log_path', '[err]'],
+          ] as const) {
+            const logPath: string | undefined = env?.[logKey];
+            if (!logPath) continue;
+            try {
+              if (!fs.existsSync(logPath)) continue;
+              const lines = fs
+                .readFileSync(logPath, 'utf8')
+                .split('\n')
+                .filter(Boolean);
+              for (const line of lines.slice(-maxLines)) {
+                results.push(
+                  `[${appName}]${tag ? '[err]' : ''} ${line.trim()}`
+                );
+              }
+            } catch {
+              /* skip unreadable */
+            }
           }
-        } catch { /* skip unreadable */ }
-      }
-      resolve(results);
-    });
-  }));
+          resolve(results);
+        });
+      })
+  );

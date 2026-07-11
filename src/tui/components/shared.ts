@@ -9,27 +9,42 @@ export const DETAIL_H = Math.max(5, TERM_H - 8);
 export const TOAST_TTL_TICKS = 10;
 
 export type DetailTab = 'overview' | 'metrics' | 'logs' | 'deploys' | 'domains';
-export type ActionMode = 'none' | 'confirm-restart' | 'confirm-stop' | 'confirm-rollback' | 'cmd-palette';
+export type ActionMode =
+  | 'none'
+  | 'confirm-restart'
+  | 'confirm-stop'
+  | 'confirm-rollback'
+  | 'cmd-palette';
 
 export function statusColor(status: string): string {
   switch (status) {
-    case 'online':  return 'green';
+    case 'online':
+      return 'green';
     case 'errored':
-    case 'error':   return 'red';
+    case 'error':
+      return 'red';
     case 'stopped':
-    case 'stopping': return 'yellow';
-    default:        return 'gray';
+    case 'stopping':
+      return 'yellow';
+    default:
+      return 'gray';
   }
 }
 
-export function statusDot(_status: string): string { return '●'; }
+export function statusDot(_status: string): string {
+  return '●';
+}
 
 export function healthColor(health: string): string {
   switch (health) {
-    case 'healthy':  return 'green';
-    case 'degraded': return 'yellow';
-    case 'down':     return 'red';
-    default:         return 'gray';
+    case 'healthy':
+      return 'green';
+    case 'degraded':
+      return 'yellow';
+    case 'down':
+      return 'red';
+    default:
+      return 'gray';
   }
 }
 
@@ -45,8 +60,10 @@ export function fmtMem(bytes: number): string {
 export function fmtUptime(ms: number): string {
   if (!ms || ms < 0) return '-';
   const s = Math.floor(ms / 1000);
-  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600);
-  const m = Math.floor((s % 3600) / 60), sec = s % 60;
+  const d = Math.floor(s / 86400),
+    h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60),
+    sec = s % 60;
   if (d > 0) return `${d}d ${h}h`;
   if (h > 0) return `${h}h ${m}m`;
   if (m > 0) return `${m}m ${sec}s`;
@@ -85,10 +102,19 @@ export function sparkline(values: number[], width = 10): string {
   if (!values.length) return ' '.repeat(width);
   const max = Math.max(...values, 1);
   const slice = values.slice(-width);
-  const padded = slice.length < width
-    ? [...Array(width - slice.length).fill(0), ...slice]
-    : slice;
+  const padded =
+    slice.length < width
+      ? [...Array(width - slice.length).fill(0), ...slice]
+      : slice;
   return padded
-    .map((v) => SPARK_CHARS[Math.min(Math.floor((v / max) * (SPARK_CHARS.length - 1)), SPARK_CHARS.length - 1)])
+    .map(
+      (v) =>
+        SPARK_CHARS[
+          Math.min(
+            Math.floor((v / max) * (SPARK_CHARS.length - 1)),
+            SPARK_CHARS.length - 1
+          )
+        ]
+    )
     .join('');
 }
