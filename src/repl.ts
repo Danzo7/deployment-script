@@ -55,28 +55,34 @@ function tokenise(line: string): string[] {
 // Parses --flag, --flag=value, --flag value, -f, -f value, --no-flag from a
 // token array.
 //
-// Because this parser is type-unaware, it uses a conservative heuristic when
-// deciding whether the token after a bare --flag is its value or a separate
-// positional: only consume the next token as the flag's value if it looks
-// explicitly like one (i.e. it is "true", "false", starts with a digit, or
-// starts with a quote character). Anything else is left as a positional for
-// resolveLeafArgs to handle.
+// Uses the command's option specs to determine whether a flag expects a value:
+// - Boolean flags: consume as standalone (--force) unless explicitly provided (--force=true)
+// - String/number flags: consume the next token as value
 //
 // --no-flag is stored as flags['no-flag'] = true; resolveLeafArgs normalises
 // that into the boolean negation for the matching option.
-function parseTokens(tokens: string[]): {
+function parseTokens(
+  tokens: string[],
+  optionSpecs?: Record<
+    string,
+    { flag?: string; alias?: string; type: string }
+  >
+): {
   positional: string[];
   flags: Record<string, string | boolean>;
 } {
   const positional: string[] = [];
   const flags: Record<string, string | boolean> = {};
 
-  const looksLikeValue = (s: string) =>
-    s === 'true' ||
-    s === 'false' ||
-    /^\d/.test(s) ||
-    s.startsWith('"') ||
-    s.startsWith("'");
+  // Build lookup: flag/alias -> type
+  const flagTypes = new Map<string, string>();
+  if (optionSpecs) {
+    for (const [key, spec] of Object.entries(optionSpecs)) {
+      const flagName = spec.flag ?? key;
+      flagTypes.set(flagName, spec.type);
+      if (spec.alias) flagTypes.set(spec.alias, spec.type);
+    }
+  }
 
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
@@ -86,12 +92,15 @@ function parseTokens(tokens: string[]): {
         const [k, ...rest] = body.split('=');
         flags[k] = rest.join('=');
       } else {
+        const flagType = flagTypes.get(body);
         const next = tokens[i + 1];
-        if (
-          next !== undefined &&
-          !next.startsWith('-') &&
-          looksLikeValue(next)
-        ) {
+        
+        // Boolean flags don't consume the next token
+        // Non-boolean flags consume next token if it exists and isn't a flag
+        // Unknown flags fall back to old behavior: consume if next exists and isn't a flag
+        if (flagType === 'boolean') {
+          flags[body] = true;
+        } else if (next !== undefined && !next.startsWith('-')) {
           flags[body] = next;
           i++;
         } else {
@@ -100,8 +109,15 @@ function parseTokens(tokens: string[]): {
       }
     } else if (t.startsWith('-') && t.length === 2) {
       const key = t.slice(1);
+      const flagType = flagTypes.get(key);
       const next = tokens[i + 1];
-      if (next !== undefined && !next.startsWith('-') && looksLikeValue(next)) {
+      
+      // Boolean flags don't consume the next token
+      // Non-boolean flags consume next token if it exists and isn't a flag
+      // Unknown flags fall back to old behavior: consume if next exists and isn't a flag
+      if (flagType === 'boolean') {
+        flags[key] = true;
+      } else if (next !== undefined && !next.startsWith('-')) {
         flags[key] = next;
         i++;
       } else {
@@ -281,7 +297,7 @@ async function runNode(
     return;
   }
 
-  const { positional, flags } = parseTokens(rest);
+  const { positional, flags } = parseTokens(rest, node.options);
   let args: Record<string, any>;
   try {
     args = resolveLeafArgs(node, positional, flags);
