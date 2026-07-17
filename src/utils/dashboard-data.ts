@@ -402,12 +402,22 @@ export async function fetchAppDetail(
   appName: string,
   summary: AppSummary,
   doGitFetch: boolean,
-  doLogPoll: boolean
+  doLogPoll: boolean,
+  signal?: AbortSignal
 ): Promise<AppDetail> {
   const { app, pm2, restartDelta } = summary;
 
+  // Check abort early
+  if (signal?.aborted) {
+    throw new Error('AbortError');
+  }
+
   // Reconnect SSH before log polling so a dead connection is replaced first
   const ssh = doLogPoll ? await getSharedSsh() : (_sharedSsh ?? null);
+
+  if (signal?.aborted) {
+    throw new Error('AbortError');
+  }
 
   // Port check, VCS drift, and routes — run in parallel
   const [portReachableResult, driftResult, routesResult] = await Promise.all([
@@ -432,11 +442,19 @@ export async function fetchAppDetail(
   const drift = driftResult;
   const routes = routesResult;
 
+  if (signal?.aborted) {
+    throw new Error('AbortError');
+  }
+
   // Build DomainInfo list (deduplicated by domain name)
   const seenDomains = new Set<string>();
   const domainInfoList: DomainInfo[] = [];
 
   for (const route of routes) {
+    if (signal?.aborted) {
+      throw new Error('AbortError');
+    }
+
     const domainName = route.domain.name;
     if (seenDomains.has(domainName)) continue;
     seenDomains.add(domainName);
@@ -449,12 +467,18 @@ export async function fetchAppDetail(
       routes
         .filter((r) => r.domain.name === domainName)
         .map(async (r) => {
+          if (signal?.aborted) {
+            throw new Error('AbortError');
+          }
           const routePath = r.path === '' ? '/' : r.path;
           let nginxLog: LogWindow | undefined;
           if (domain.lastPushedAt) {
             const tailer = getTailer(domain, routePath, !!NGINX_REMOTE_HOST);
             if (doLogPoll) {
-              await tailer.poll().catch(() => {});
+              await tailer.poll(signal).catch(() => {});
+              if (signal?.aborted) {
+                throw new Error('AbortError');
+              }
             }
             nginxLog = tailer.getWindow();
           }

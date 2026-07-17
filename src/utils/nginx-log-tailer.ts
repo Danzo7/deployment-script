@@ -225,9 +225,11 @@ export class NginxLogTailer {
     return `${dir}/${safeDomain}_${safeRoute}.access.log`;
   }
 
-  async poll(): Promise<void> {
+  async poll(signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted) return;
+    
     if (this.ssh && this.ssh.isConnected) {
-      await this.pollRemote();
+      await this.pollRemote(signal);
     } else if (!this.ssh) {
       this.pollLocal();
     }
@@ -271,13 +273,16 @@ export class NginxLogTailer {
     }
   }
 
-  private async pollRemote(): Promise<void> {
+  private async pollRemote(signal?: AbortSignal): Promise<void> {
     const path = this.remoteLogPath ?? this.logPath;
     const sshConn = this.ssh;
     if (!sshConn || !sshConn.isConnected) {
       this.lastError = 'Remote log read failed: SSH not connected';
       return;
     }
+    
+    if (signal?.aborted) return;
+    
     try {
       const MAX_READ = 256 * 1024;
 
@@ -285,8 +290,12 @@ export class NginxLogTailer {
         sshConn,
         path,
         this.localOffset,
-        MAX_READ
+        MAX_READ,
+        signal
       );
+      
+      if (signal?.aborted) return;
+      
       if (result === null) {
         this.lastError = `Log file not found: ${path}`;
         return;
@@ -315,6 +324,7 @@ export class NginxLogTailer {
       this.lastError = undefined;
       this.hasPolled = true;
     } catch (err: any) {
+      if (signal?.aborted) return;
       this.lastError = `Remote log read failed: ${err.message}`;
     }
   }
@@ -324,20 +334,26 @@ export class NginxLogTailer {
     sshConn: SshConnection,
     path: string,
     offset: number,
-    maxBytes: number
+    maxBytes: number,
+    signal?: AbortSignal
   ): Promise<{ size: number; chunk: Buffer } | null> {
+    if (signal?.aborted) return null;
+    
     try {
       // For initial seed (offset=0), read last maxBytes of the file
       if (offset === 0) {
-        const stat = await sshConn.sftpReadChunk(path, 0, 0);
+        const stat = await sshConn.sftpReadChunk(path, 0, 0, signal);
+        if (signal?.aborted) return null;
         if (stat === null) return null;
         const seedOffset = Math.max(0, stat.size - maxBytes);
-        return await sshConn.sftpReadChunk(path, seedOffset, maxBytes);
+        return await sshConn.sftpReadChunk(path, seedOffset, maxBytes, signal);
       }
-      return await sshConn.sftpReadChunk(path, offset, maxBytes);
+      return await sshConn.sftpReadChunk(path, offset, maxBytes, signal);
     } catch {
+      if (signal?.aborted) return null;
       // SFTP failed (permission denied) — fall back to sudo cat and slice
-      const text = await sshConn.execWithSudo(`cat "${path}"`);
+      const text = await sshConn.execWithSudo(`cat "${path}"`, signal);
+      if (signal?.aborted) return null;
       const buf = Buffer.from(text, 'utf8');
       if (buf.length === 0) return null;
       const chunk =

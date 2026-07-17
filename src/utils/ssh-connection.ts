@@ -136,14 +136,45 @@ export class SshConnection {
 
   private async run(
     command: string,
-    stdin?: string
+    stdin?: string,
+    timeoutMs = 30000,
+    signal?: AbortSignal
   ): Promise<{ code: number; result: ExecResult }> {
     if (!this.connected) {
       throw new Error('(SSH) Not connected');
     }
+    if (signal?.aborted) {
+      const err = new Error('Operation aborted');
+      err.name = 'AbortError';
+      throw err;
+    }
     return new Promise((resolve, reject) => {
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        this.connected = false;
+        reject(new Error(`SSH command timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      const abortHandler = () => {
+        if (!timedOut) {
+          clearTimeout(timer);
+          const err = new Error('Operation aborted');
+          err.name = 'AbortError';
+          reject(err);
+        }
+      };
+
+      signal?.addEventListener('abort', abortHandler);
+
       this.client.exec(command, (err, stream) => {
+        if (timedOut || signal?.aborted) {
+          signal?.removeEventListener('abort', abortHandler);
+          return;
+        }
         if (err) {
+          clearTimeout(timer);
+          signal?.removeEventListener('abort', abortHandler);
           // Channel open failure means the underlying TCP connection is dead.
           // Mark it so getSharedSsh() will reconnect on next poll.
           this.connected = false;
@@ -159,9 +190,13 @@ export class SshConnection {
         }
 
         stream
-          .on('close', (code: number) =>
-            resolve({ code, result: { stdout, stderr } })
-          )
+          .on('close', (code: number) => {
+            if (!timedOut && !signal?.aborted) {
+              clearTimeout(timer);
+              signal?.removeEventListener('abort', abortHandler);
+              resolve({ code, result: { stdout, stderr } });
+            }
+          })
           .on('data', (data: Buffer) => {
             stdout += data.toString();
           })
@@ -177,8 +212,8 @@ export class SshConnection {
    * is scrubbed of any configured password so secrets never leak into logs
    * or surfaced error messages.
    */
-  async exec(command: string, stdin?: string): Promise<string> {
-    const { code, result } = await this.run(command, stdin);
+  async exec(command: string, stdin?: string, signal?: AbortSignal): Promise<string> {
+    const { code, result } = await this.run(command, stdin, 30000, signal);
     if (code !== 0) {
       throw new Error(
         this.redact(
@@ -229,24 +264,35 @@ export class SshConnection {
    * Use this when you know the command requires root privileges.
    * Tries `sudo -S` (with password) first if available, otherwise `sudo -n` (non-interactive).
    */
-  async execWithSudo(command: string): Promise<string> {
+  async execWithSudo(command: string, signal?: AbortSignal): Promise<string> {
     if (this.creds.sudoPassword) {
       return await this.exec(
         `sudo -S ${command}`,
-        this.creds.sudoPassword + '\n'
+        this.creds.sudoPassword + '\n',
+        signal
       );
     }
-    return await this.exec(`sudo -n ${command}`);
+    return await this.exec(`sudo -n ${command}`, undefined, signal);
   }
 
   async sftpFastPut(localPath: string, remotePath: string): Promise<void> {
     return new Promise((resolve, reject) => {
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        reject(new Error(`SFTP put timed out after 30000ms`));
+      }, 30000);
+
       this.client.sftp((err, sftp) => {
+        if (timedOut) return;
         if (err) {
+          clearTimeout(timer);
           reject(new Error(`Failed to start SFTP: ${err.message}`));
           return;
         }
         sftp.fastPut(localPath, remotePath, (err) => {
+          if (timedOut) return;
+          clearTimeout(timer);
           if (err) {
             reject(
               new Error(
@@ -263,12 +309,22 @@ export class SshConnection {
 
   async sftpReadFile(remotePath: string): Promise<Buffer | null> {
     return new Promise((resolve, reject) => {
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        reject(new Error(`SFTP readFile timed out after 15000ms`));
+      }, 15000);
+
       this.client.sftp((err, sftp) => {
+        if (timedOut) return;
         if (err) {
+          clearTimeout(timer);
           reject(err);
           return;
         }
         sftp.readFile(remotePath, (err, data) => {
+          if (timedOut) return;
+          clearTimeout(timer);
           if (err) {
             if (err.message.includes('No such file')) {
               resolve(null);
@@ -291,16 +347,51 @@ export class SshConnection {
   async sftpReadChunk(
     remotePath: string,
     offset: number,
-    maxBytes: number
+    maxBytes: number,
+    signal?: AbortSignal
   ): Promise<{ size: number; chunk: Buffer } | null> {
+    if (signal?.aborted) {
+      const err = new Error('Operation aborted');
+      err.name = 'AbortError';
+      throw err;
+    }
     return new Promise((resolve, reject) => {
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        reject(new Error(`SFTP read timed out after 15000ms`));
+      }, 15000);
+
+      const abortHandler = () => {
+        if (!timedOut) {
+          clearTimeout(timer);
+          const err = new Error('Operation aborted');
+          err.name = 'AbortError';
+          reject(err);
+        }
+      };
+
+      signal?.addEventListener('abort', abortHandler);
+
       this.client.sftp((err, sftp) => {
+        if (timedOut || signal?.aborted) {
+          signal?.removeEventListener('abort', abortHandler);
+          return;
+        }
         if (err) {
+          clearTimeout(timer);
+          signal?.removeEventListener('abort', abortHandler);
           reject(err);
           return;
         }
         sftp.stat(remotePath, (statErr, stats) => {
+          if (timedOut || signal?.aborted) {
+            signal?.removeEventListener('abort', abortHandler);
+            return;
+          }
           if (statErr) {
+            clearTimeout(timer);
+            signal?.removeEventListener('abort', abortHandler);
             if (statErr.message.includes('No such file')) {
               resolve(null);
               return;
@@ -310,18 +401,32 @@ export class SshConnection {
           }
           const size = stats.size;
           if (offset >= size) {
+            clearTimeout(timer);
+            signal?.removeEventListener('abort', abortHandler);
             resolve({ size, chunk: Buffer.alloc(0) });
             return;
           }
           const toRead = Math.min(size - offset, maxBytes);
           const buf = Buffer.alloc(toRead);
           sftp.open(remotePath, 'r', (openErr, handle) => {
+            if (timedOut || signal?.aborted) {
+              signal?.removeEventListener('abort', abortHandler);
+              return;
+            }
             if (openErr) {
+              clearTimeout(timer);
+              signal?.removeEventListener('abort', abortHandler);
               reject(openErr);
               return;
             }
             sftp.read(handle, buf, 0, toRead, offset, (readErr, bytesRead) => {
               sftp.close(handle, () => {});
+              if (timedOut || signal?.aborted) {
+                signal?.removeEventListener('abort', abortHandler);
+                return;
+              }
+              clearTimeout(timer);
+              signal?.removeEventListener('abort', abortHandler);
               if (readErr) {
                 reject(readErr);
                 return;

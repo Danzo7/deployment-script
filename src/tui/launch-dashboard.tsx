@@ -39,6 +39,7 @@ function DashboardApp(): React.ReactElement {
   const lastDetailAppName = useRef<string | null>(null);
   const globalStateRef = useRef<GlobalState | null>(null);
   const detailTickRef = useRef(0);
+  const currentAbortController = useRef<AbortController | null>(null);
 
   // ── PM2 bus: realtime logs, filtered to selected app ─────────────────────
   useEffect(() => {
@@ -140,21 +141,36 @@ function DashboardApp(): React.ReactElement {
         return;
       }
 
+      // Cancel previous fetch if still running
+      if (currentAbortController.current) {
+        currentAbortController.current.abort();
+      }
+
       detailTickRef.current += 1;
       const n = detailTickRef.current;
       const doGitFetch = n % GIT_FETCH_EVERY === 1;
       const doLogPoll = n % LOG_POLL_EVERY === 0;
+
+      currentAbortController.current = new AbortController();
+      const signal = currentAbortController.current.signal;
 
       try {
         const detail = await fetchAppDetail(
           appName,
           summary,
           doGitFetch,
-          doLogPoll
+          doLogPoll,
+          signal
         );
-        if (alive) setAppDetail(detail);
-      } catch {
-        /* keep last detail */
+        if (alive && !signal.aborted) setAppDetail(detail);
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          /* keep last detail */
+        }
+      } finally {
+        if (currentAbortController.current?.signal === signal) {
+          currentAbortController.current = null;
+        }
       }
 
       if (alive) timer = setTimeout(tick, DETAIL_POLL_MS);
@@ -164,6 +180,7 @@ function DashboardApp(): React.ReactElement {
     return () => {
       alive = false;
       clearTimeout(timer);
+      currentAbortController.current?.abort();
     };
   }, []);
 
@@ -172,6 +189,13 @@ function DashboardApp(): React.ReactElement {
       selectedAppName.current = appName;
       return;
     }
+    
+    // Cancel any in-flight fetch immediately when changing apps
+    if (currentAbortController.current) {
+      currentAbortController.current.abort();
+      currentAbortController.current = null;
+    }
+    
     // App changed — clear stale data and seed logs from file for instant content
     setAppDetail(null);
     setLogLines([]);
