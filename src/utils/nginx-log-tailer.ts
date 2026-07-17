@@ -278,10 +278,14 @@ export class NginxLogTailer {
     const sshConn = this.ssh;
     if (!sshConn || !sshConn.isConnected) {
       this.lastError = 'Remote log read failed: SSH not connected';
+      this.hasPolled = true; // Mark as polled even on error
       return;
     }
     
-    if (signal?.aborted) return;
+    if (signal?.aborted) {
+      this.hasPolled = true; // Mark as polled even when aborted
+      return;
+    }
     
     try {
       const MAX_READ = 256 * 1024;
@@ -294,10 +298,14 @@ export class NginxLogTailer {
         signal
       );
       
-      if (signal?.aborted) return;
+      if (signal?.aborted) {
+        this.hasPolled = true; // Mark as polled even when aborted
+        return;
+      }
       
       if (result === null) {
         this.lastError = `Log file not found: ${path}`;
+        this.hasPolled = true; // Mark as polled even when file not found
         return;
       }
 
@@ -324,8 +332,12 @@ export class NginxLogTailer {
       this.lastError = undefined;
       this.hasPolled = true;
     } catch (err: any) {
-      if (signal?.aborted) return;
+      if (signal?.aborted) {
+        this.hasPolled = true; // Mark as polled even when aborted during error handling
+        return;
+      }
       this.lastError = `Remote log read failed: ${err.message}`;
+      this.hasPolled = true; // Mark as polled even on error
     }
   }
 
