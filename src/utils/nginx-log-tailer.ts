@@ -276,14 +276,23 @@ export class NginxLogTailer {
   private async pollRemote(signal?: AbortSignal): Promise<void> {
     const path = this.remoteLogPath ?? this.logPath;
     const sshConn = this.ssh;
-    if (!sshConn || !sshConn.isConnected) {
-      this.lastError = 'Remote log read failed: SSH not connected';
-      this.hasPolled = true; // Mark as polled even on error
+    
+    // If we have a dead connection, clear the error and wait for reconnect on next poll
+    if (sshConn && !sshConn.isConnected) {
+      this.lastError = undefined; // Clear old error to avoid showing stale "(SSH) Not connected"
+      this.hasPolled = true;
+      return;
+    }
+    
+    if (!sshConn) {
+      // No SSH provider or provider returned undefined - this is expected when not configured
+      this.lastError = undefined;
+      this.hasPolled = true;
       return;
     }
     
     if (signal?.aborted) {
-      this.hasPolled = true; // Mark as polled even when aborted
+      this.hasPolled = true;
       return;
     }
     
