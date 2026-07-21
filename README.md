@@ -522,7 +522,7 @@ dm unlock <name>                        # force-release a stuck lock
 dm clean <name>                         # discard uncommitted local changes
 dm clean-all                            # clean all apps and prune old builds
 dm update                               # update dm itself  (CLI only)
-dm change-repo <name> --repo <url>      # change the repo URL for an app  (CLI only)
+dm change-repo <name> --repo <url> [--branch <name>]  # change the repo URL and/or branch for an app  (CLI only)
 dm install-service                      # install a boot service to run dm start-all  (CLI only)
 dm migrate-db                           # migrate from legacy db.json to SQL  (CLI only)
 ```

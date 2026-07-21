@@ -5,32 +5,45 @@ import { changeRepoUrl } from '../utils/vcs-helper.js';
 export const changeRepo = async ({
   name,
   newRepo,
+  newBranch,
 }: {
   name: string;
-  newRepo: string;
+  newRepo?: string;
+  newBranch?: string;
 }) => {
-  if (!newRepo) {
-    throw new Error('New repository URL is required.');
+  if (!newRepo && !newBranch) {
+    throw new Error('At least one of repository URL or branch name is required.');
   }
 
   // Fetch the app from the database
   const app = await AppRepo.findByName(name);
 
   Logger.info(`Changing repository for app "${Logger.highlight(name)}"...`);
-  Logger.info(`Current repository: ${app.repo}`);
-  Logger.info(`New repository: ${newRepo}`);
+  
+  if (newRepo) {
+    Logger.info(`Current repository: ${app.repo}`);
+    Logger.info(`New repository: ${newRepo}`);
+  }
+  
+  if (newBranch) {
+    Logger.info(`Current branch: ${app.branch}`);
+    Logger.info(`New branch: ${newBranch}`);
+  }
 
-  // Change the remote URL in the actual repository folder
-  await changeRepoUrl(app, app.appDir, newRepo);
+  // Change the remote URL and/or branch in the actual repository folder
+  await changeRepoUrl(app, app.appDir, newRepo || app.repo, newBranch);
 
   // Update the database
-  await AppRepo.update(name, { repo: newRepo });
+  const updates: Partial<Pick<typeof app, 'repo' | 'branch'>> = {};
+  if (newRepo) updates.repo = newRepo;
+  if (newBranch) updates.branch = newBranch;
+  await AppRepo.update(name, updates);
 
   Logger.success(
     `Repository for "${Logger.highlight(name)}" has been changed successfully!`
   );
   Logger.advice(
-    `The repository URL has been updated in both the database and the local repository. ` +
-      `Run ${Logger.command(`dm deploy ${name}`)} to deploy from the new repository.`
+    `The repository ${newRepo ? 'URL ' : ''}${newRepo && newBranch ? 'and ' : ''}${newBranch ? 'branch ' : ''}${newRepo || newBranch ? 'has' : 'have'} been updated. ` +
+      `Run ${Logger.command(`dm deploy ${name}`)} to deploy from the ${newBranch ? 'new branch' : 'new repository'}.`
   );
 };

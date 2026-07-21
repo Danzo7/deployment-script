@@ -75,15 +75,16 @@ export const discardLocalChanges = async (
 export const changeRepoUrl = async (
   app: Pick<App, 'vcsType' | 'branch'>,
   dir: string,
-  newRepo: string
+  newRepo: string,
+  newBranch?: string
 ): Promise<void> => {
   if (app.vcsType === 'svn') {
-    return relocateSvnRepo(dir, newRepo, app.branch);
+    return relocateSvnRepo(dir, newRepo, newBranch || app.branch);
   }
   if (app.vcsType === 'local') {
     return; // repo path is updated in the DB by the caller; no in-dir action needed
   }
-  return changeRemoteUrl(dir, newRepo);
+  return changeRemoteUrl(dir, newRepo, newBranch);
 };
 
 export interface VcsDriftInfo {

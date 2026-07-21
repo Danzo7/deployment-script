@@ -153,7 +153,8 @@ export const discardUncommittedChanges = async (dir: string) => {
 
 export const changeRemoteUrl = async (
   dir: string,
-  newUrl: string
+  newUrl: string,
+  newBranch?: string
 ): Promise<void> => {
   checkGit();
   const git = simpleGit(dir);
@@ -176,8 +177,40 @@ export const changeRemoteUrl = async (
     );
 
     Logger.success(`Git remote URL changed successfully to ${newUrl}`);
+
+    // Change branch if specified
+    if (newBranch) {
+      Logger.info(`Switching to branch '${newBranch}'`);
+      
+      // Fetch the new branch from remote
+      await withRetry('Fetching new branch', async () =>
+        git.fetch([remoteName, newBranch])
+      );
+
+      // Check if branch exists locally
+      const branches = await withRetry('Getting branches', async () =>
+        git.branchLocal()
+      );
+
+      if (branches.all.includes(newBranch)) {
+        // Branch exists locally, just checkout
+        await withRetry('Checking out branch', async () =>
+          git.checkout(newBranch)
+        );
+      } else {
+        // Branch doesn't exist locally, create and track remote branch
+        await withRetry('Checking out new branch', async () =>
+          git.checkout(['-b', newBranch, `${remoteName}/${newBranch}`])
+        );
+      }
+
+      // Pull latest changes
+      await withRetry('Pulling latest changes', async () => git.pull());
+
+      Logger.success(`Switched to branch '${newBranch}' successfully`);
+    }
   } catch (error) {
-    Logger.error('Failed to change git remote URL.');
+    Logger.error('Failed to change git remote URL or branch.');
     throw error;
   }
 };

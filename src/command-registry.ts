@@ -1117,7 +1117,7 @@ export const COMMANDS: Record<string, CommandNode> = {
   'change-repo': {
     kind: 'leaf',
     usage: 'change-repo <name>',
-    describe: 'Change the repository URL for an application',
+    describe: 'Change the repository URL and/or branch for an application',
     group: 'Database',
     cliOnly: true,
     positionals: [
@@ -1131,13 +1131,17 @@ export const COMMANDS: Record<string, CommandNode> = {
       repo: {
         alias: 'r',
         type: 'string',
-        demandOption: true,
         describe: 'The new repository URL',
+      },
+      branch: {
+        alias: 'b',
+        type: 'string',
+        describe: 'The new branch name',
       },
     },
     lockArg: 'name',
-    handler: async ({ name, repo }) => {
-      await changeRepo({ name, newRepo: repo });
+    handler: async ({ name, repo, branch }) => {
+      await changeRepo({ name, newRepo: repo, newBranch: branch });
     },
   },
 
