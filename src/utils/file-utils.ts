@@ -48,10 +48,20 @@ export const createBuildDir = (appDir: string, projectDir?: string): string => {
 
   const nextFolder = path.join(sourceRoot, '.next');
   const publicFolder = path.join(sourceRoot, 'public');
+  const contentFolder = path.join(sourceRoot, 'content');
+  
   if (fs.existsSync(publicFolder)) {
     const publicFolderDest = path.join(buildDir, 'public');
     fsExtra.copySync(publicFolder, publicFolderDest);
   }
+  
+  // Preserve content folder if it exists
+  if (fs.existsSync(contentFolder)) {
+    Logger.info('Content folder found and being preserved...');
+    const contentFolderDest = path.join(buildDir, 'content');
+    fsExtra.copySync(contentFolder, contentFolderDest);
+  }
+  
   if (!fs.existsSync(nextFolder)) {
     throw new Error('Next.js build not found.');
   }
