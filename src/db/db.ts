@@ -121,6 +121,22 @@ export const initializeDB = async () => {
       );
       CREATE INDEX IF NOT EXISTS app_storage_app_id_idx ON app_storage(appId);
       CREATE INDEX IF NOT EXISTS app_storage_storage_id_idx ON app_storage(storageId);
+
+      CREATE TABLE IF NOT EXISTS app_config (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        appId INTEGER NOT NULL UNIQUE REFERENCES apps(id) ON DELETE CASCADE,
+        instances INTEGER NOT NULL DEFAULT 1,
+        maxMemory TEXT NOT NULL DEFAULT '250M',
+        autorestart INTEGER,
+        maxRestarts INTEGER,
+        minUptime TEXT,
+        restartDelay INTEGER,
+        nodeArgs TEXT,
+        killTimeout INTEGER,
+        createdAt INTEGER NOT NULL,
+        updatedAt INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS app_config_app_id_idx ON app_config(appId);
     `);
   } else if (DATABASE_TYPE === 'postgres' && postgresInstance) {
     // For PostgreSQL, create tables using CREATE IF NOT EXISTS
@@ -188,6 +204,22 @@ export const initializeDB = async () => {
       );
       CREATE INDEX IF NOT EXISTS app_storage_app_id_idx ON app_storage(app_id);
       CREATE INDEX IF NOT EXISTS app_storage_storage_id_idx ON app_storage(storage_id);
+
+      CREATE TABLE IF NOT EXISTS app_config (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        app_id UUID NOT NULL UNIQUE REFERENCES apps(id) ON DELETE CASCADE,
+        instances INTEGER NOT NULL DEFAULT 1,
+        max_memory VARCHAR(20) NOT NULL DEFAULT '250M',
+        autorestart VARCHAR(5),
+        max_restarts INTEGER,
+        min_uptime VARCHAR(20),
+        restart_delay INTEGER,
+        node_args TEXT,
+        kill_timeout INTEGER,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS app_config_app_id_idx ON app_config(app_id);
     `);
   }
 };
