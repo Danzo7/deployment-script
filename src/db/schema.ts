@@ -38,7 +38,6 @@ export const appsTableSqlite = sqliteTable(
       .default(sql`(unixepoch())`)
       .$onUpdate(() => new Date()),
     port: integer('port').notNull(),
-    instances: integer('instances').default(1),
     repo: text('repo').notNull(),
     branch: text('branch').notNull(),
     vcsType: text('vcsType', { enum: ['git', 'svn', 'local'] }).default('git'),
@@ -182,7 +181,6 @@ export const appsTablePostgres = pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
     port: pgInteger('port').notNull(),
-    instances: pgInteger('instances').default(1),
     repo: pgText('repo').notNull(),
     branch: varchar('branch', { length: 255 }).notNull(),
     vcsType: varchar('vcs_type', {

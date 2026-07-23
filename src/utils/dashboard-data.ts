@@ -11,14 +11,14 @@ import net from 'net';
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
-import { AppRepo, RouteRepo } from '../db/repos.js';
+import { AppRepo, AppConfigRepo, RouteRepo } from '../db/repos.js';
 import { parseCertMetadata, CERT_EXPIRY_WARNING_DAYS } from './ssl-helper.js';
 import { SshConnection } from './ssh-connection.js';
 import { NginxLogTailer, LogWindow } from './nginx-log-tailer.js';
 import { getVcsDriftInfo, VcsDriftInfo } from './vcs-helper.js';
 import { calculateFileHash } from './file-utils.js';
 import { listAllProcessMetrics, ProcessMetrics } from './pm2-helper.js';
-import type { App, Domain, RouteWithAppAndDomain } from '../db/model.js';
+import type { App, AppConfig, Domain, RouteWithAppAndDomain } from '../db/model.js';
 import {
   NGINX_REMOTE_HOST,
   NGINX_REMOTE_KEY,
@@ -65,6 +65,7 @@ export interface DomainInfo {
 /** Lightweight summary shown in the sidebar — populated by listApps() */
 export interface AppSummary {
   app: App;
+  config: AppConfig;
   pm2: ProcessMetrics | null;
   pm2Error?: string;
   restartDelta: number;
@@ -338,7 +339,7 @@ export async function listApps(prev: GlobalState | null): Promise<GlobalState> {
   const freeMemBytes = os.freemem();
 
   // ── Build summaries ───────────────────────────────────────────────────────
-  const summaries: AppSummary[] = apps.map((app): AppSummary => {
+  const summaries: AppSummary[] = await Promise.all(apps.map(async (app): Promise<AppSummary> => {
     const pm2Data: ProcessMetrics | null = pm2Reachable
       ? (pm2ByName.get(app.name) ?? {
           name: app.name,
@@ -361,18 +362,29 @@ export async function listApps(prev: GlobalState | null): Promise<GlobalState> {
       currentRestarts - restartBaseline.get(app.name)!
     );
 
+    // Load app config (create default if missing for backwards compatibility)
+    let config = await AppConfigRepo.findByAppId(app.id);
+    if (!config) {
+      config = await AppConfigRepo.create({
+        appId: app.id,
+        instances: 1,
+        maxMemory: '250M',
+      });
+    }
+
     // Derive health without nginx data — the detail fetch will refine it
     const health = deriveHealth(pm2Data, undefined, restartDelta, []);
 
     return {
       app,
+      config,
       pm2: pm2Data,
       pm2Error: pm2Reachable ? undefined : 'PM2 unreachable',
       restartDelta,
       isLocked: isLocked(app.name),
       health,
     };
-  });
+  }));
 
   return {
     summaries,

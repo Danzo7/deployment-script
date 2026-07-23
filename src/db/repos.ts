@@ -348,7 +348,6 @@ export const AppRepo = {
       name: data.name,
       appDir: data.appDir,
       port: data.port,
-      instances: 1,
       repo: data.repo,
       branch: data.branch,
       vcsType: data.vcsType ?? 'git',

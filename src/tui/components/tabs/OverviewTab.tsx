@@ -8,7 +8,6 @@ import type {
 import type { DomainInfo } from '../../../utils/dashboard-data.js';
 import {
   DETAIL_W,
-  fmtMem,
   fmtUptime,
   fmtDate,
   truncate,
@@ -24,7 +23,7 @@ export function OverviewTab({
   summary,
   detail,
 }: OverviewTabProps): React.ReactElement {
-  const { app, pm2 } = summary;
+  const { app, config, pm2 } = summary;
   const drift: VcsDriftInfo | null = detail?.drift ?? null;
   const domains: DomainInfo[] = detail?.domains ?? [];
   const envChanged = detail?.envChanged;
@@ -122,7 +121,8 @@ export function OverviewTab({
         <Box flexDirection="column" width={half}>
           <KVItem label="Port" value={String(app.port)} />
           <KVItem label="Type" value={app.projectType ?? '—'} />
-          <KVItem label="Instances" value={String(app.instances ?? 1)} />
+          <KVItem label="Instances" value={String(config.instances)} />
+          <KVItem label="Max Memory" value={config.maxMemory} />
           <KVItem label="Branch" value={drift?.branch ?? app.branch ?? '—'} />
           <KVItem
             label="Uptime"

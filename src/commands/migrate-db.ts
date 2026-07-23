@@ -171,7 +171,6 @@ export async function migrateFromJSON() {
             name: app.name,
             appDir: app.appDir,
             port: app.port,
-            instances: app.instances ?? 1,
             repo: app.repo,
             branch: app.branch ?? 'main',
             vcsType: app.vcsType || 'git',
