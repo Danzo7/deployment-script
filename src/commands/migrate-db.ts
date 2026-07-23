@@ -3,7 +3,7 @@ import path from 'path';
 import { APP_DIR } from '../constants.js';
 import { Logger } from '../utils/logger.js';
 import { initializeDB as initNewDB, closeDB } from '../db/db.js';
-import { AppRepo, StorageRepo, DomainRepo, RouteRepo } from '../db/repos.js';
+import { AppRepo, StorageRepo, DomainRepo, RouteRepo, AppConfigRepo } from '../db/repos.js';
 import chalk from 'chalk';
 
 interface LegacyDatabaseSchema {
@@ -14,7 +14,50 @@ interface LegacyDatabaseSchema {
 }
 
 /**
+ * Ensure all apps have app_config entries
+ * This handles both new apps and existing apps without configs
+ */
+async function ensureAppConfigs() {
+  Logger.info(chalk.blue('🔄 Ensuring all apps have config entries...'));
+  
+  const apps = await AppRepo.getAll();
+  let created = 0;
+  let skipped = 0;
+
+  for (const app of apps) {
+    try {
+      const existingConfig = await AppConfigRepo.findByAppId(app.id);
+      
+      if (existingConfig) {
+        skipped++;
+        continue;
+      }
+
+      // Create default config for apps without one
+      await AppConfigRepo.create({
+        appId: app.id,
+        instances: 1,
+        maxMemory: '250M',
+      });
+
+      Logger.info(chalk.gray(`  → Created config for: ${app.name} (instances: 1, memory: 250M)`));
+      created++;
+    } catch (error) {
+      Logger.warn(`  ⚠ Failed to create config for app ${app.name}:`, error);
+    }
+  }
+
+  if (created > 0) {
+    Logger.info(chalk.green(`✓ Created ${created} new app config(s)`));
+  }
+  if (skipped > 0) {
+    Logger.info(chalk.gray(`  ${skipped} app(s) already had configs`));
+  }
+}
+
+/**
  * Migrate from legacy lowdb JSON file to Drizzle (SQLite or PostgreSQL)
+ * Also ensures all apps have app_config entries
  */
 export async function migrateFromJSON() {
   Logger.info('Initializing database...');
@@ -22,8 +65,13 @@ export async function migrateFromJSON() {
   Logger.info(chalk.green('✓ Database initialized successfully'));
 
   const jsonPath = path.resolve(APP_DIR, 'db.json');
+  const hasJsonToMigrate = existsSync(jsonPath);
 
-  if (!existsSync(jsonPath)) {
+  // If no JSON file exists, just ensure all apps have configs
+  if (!hasJsonToMigrate) {
+    Logger.info(chalk.blue('No legacy JSON database found.'));
+    await ensureAppConfigs();
+    await closeDB();
     return;
   }
   Logger.info(chalk.blue('🔄 Starting database migration from JSON to SQL...'));
@@ -148,6 +196,14 @@ export async function migrateFromJSON() {
 
           stats.apps++;
           Logger.info(chalk.green(`  ✓ Migrated app: ${app.name}`));
+
+          // Create default app config
+          await AppConfigRepo.create({
+            appId: createdApp.id,
+            instances: app.instances ?? 1,
+            maxMemory: '250M',
+          });
+          Logger.info(chalk.gray(`    → Created app config (instances: ${app.instances ?? 1}, memory: 250M)`));
 
           // Migrate linkedStorages to app_storage junction table
           if (app.linkedStorages && Array.isArray(app.linkedStorages)) {
@@ -318,6 +374,10 @@ export async function migrateFromJSON() {
         `\n   You can safely delete db.json after verifying the migration.`
       )
     );
+
+    // Ensure all apps have configs (in case any were missed or added later)
+    Logger.info('');
+    await ensureAppConfigs();
   } catch (error) {
     Logger.error('Migration failed:', error);
     throw error;

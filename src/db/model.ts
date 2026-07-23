@@ -5,7 +5,6 @@ export interface App {
   createdAt: Date; // Database-generated creation timestamp
   updatedAt: Date; // Last update timestamp
   port: number; // Unique port number for the app
-  instances?: number; // Number of instances (default 1)
   repo: string; // Repository URL or path
   branch: string; // Branch name or SVN path suffix (e.g. trunk, branches/x)
   vcsType?: 'git' | 'svn' | 'local'; // Version control system (default: git)
@@ -22,8 +21,40 @@ export interface App {
   };
 }
 
+// PM2 Configuration for an app
+export interface AppConfig {
+  id: string | number; // UUID (PostgreSQL) or auto-increment integer (SQLite)
+  appId: string | number; // Foreign key to apps.id
+  
+  // Mandatory fields with our defaults
+  instances: number;           // default: 1
+  maxMemory: string;            // default: '250M' (format: 250M, 1G, 512M)
+  
+  // Optional PM2 fields - if null/undefined, PM2 uses its own defaults
+  autorestart?: boolean | null;       // PM2 default: true
+  maxRestarts?: number | null;        // PM2 default: 15
+  minUptime?: string | null;          // PM2 default: '1000ms' (format: 10s, 1m, 5000ms)
+  restartDelay?: number | null;       // PM2 default: 0 (milliseconds)
+  nodeArgs?: string | null;           // PM2 default: undefined (e.g., '--max-old-space-size=768')
+  killTimeout?: number | null;        // PM2 default: 1600 (milliseconds)
+  
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Extended app with config eagerly loaded
+export interface AppWithConfig extends App {
+  config: AppConfig;
+}
+
 // Extended app with storages eagerly loaded
 export interface AppWithStorages extends App {
+  storages: Storage[];
+}
+
+// Extended app with config and storages eagerly loaded
+export interface AppWithConfigAndStorages extends App {
+  config: AppConfig;
   storages: Storage[];
 }
 

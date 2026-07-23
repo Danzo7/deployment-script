@@ -33,6 +33,7 @@ import { info } from './commands/info.js';
 import { restart } from './commands/restart.js';
 import { stop } from './commands/stop.js';
 import { rollback } from './commands/rollback.js';
+import { scale } from './commands/scale.js';
 import { dashboard } from './commands/dashboard.js';
 import { cleanAll } from './commands/clean-all.js';
 import {
@@ -262,12 +263,6 @@ export const COMMANDS: Record<string, CommandNode> = {
         default: 'main',
         describe: 'The branch to use',
       },
-      instances: {
-        alias: 'i',
-        type: 'number',
-        default: 1,
-        describe: 'The number of instances to initialize (default: 1)',
-      },
       port: {
         alias: 'p',
         type: 'number',
@@ -300,7 +295,6 @@ export const COMMANDS: Record<string, CommandNode> = {
       name,
       repo,
       branch,
-      instances,
       port,
       type,
       projectDir,
@@ -318,7 +312,6 @@ export const COMMANDS: Record<string, CommandNode> = {
         name,
         repo,
         branch,
-        instances,
         port,
         type,
         appsDir,
@@ -405,6 +398,76 @@ export const COMMANDS: Record<string, CommandNode> = {
     lockArg: 'name',
     handler: async ({ name, to }) => {
       await rollback({ name, to });
+    },
+  },
+
+  scale: {
+    kind: 'leaf',
+    usage: 'scale <name>',
+    describe: 'Scale app instances and configure PM2 parameters',
+    group: 'App lifecycle',
+    positionals: [
+      { name: 'name', demandOption: true, describe: 'Application name' },
+    ],
+    options: {
+      instances: {
+        alias: 'i',
+        type: 'number',
+        describe: 'Number of instances (cluster mode)',
+      },
+      memory: {
+        alias: 'm',
+        type: 'string',
+        describe: 'Max memory per instance (e.g., 250M, 1G)',
+      },
+      autorestart: {
+        type: 'boolean',
+        describe: 'Enable/disable auto-restart on crash',
+      },
+      'max-restarts': {
+        type: 'number',
+        describe: 'Max restarts within min-uptime window',
+      },
+      'min-uptime': {
+        type: 'string',
+        describe: 'Min uptime to consider app stable (e.g., 10s, 1m)',
+      },
+      'restart-delay': {
+        type: 'number',
+        describe: 'Delay between restarts in milliseconds',
+      },
+      'node-args': {
+        type: 'string',
+        describe: 'Node.js arguments (e.g., --max-old-space-size=768)',
+      },
+      'kill-timeout': {
+        type: 'number',
+        describe: 'Time before SIGKILL in milliseconds',
+      },
+      show: {
+        type: 'boolean',
+        describe: 'Show current configuration',
+      },
+      'reset-optional': {
+        type: 'boolean',
+        describe: 'Reset optional params to PM2 defaults',
+      },
+    },
+    lockArg: 'name',
+    handler: async (args) => {
+      await scale({
+        name: args.name,
+        instances: args.instances,
+        memory: args.memory,
+        autorestart: args.autorestart,
+        maxRestarts: args['max-restarts'],
+        minUptime: args['min-uptime'],
+        restartDelay: args['restart-delay'],
+        nodeArgs: args['node-args'],
+        killTimeout: args['kill-timeout'],
+        show: args.show,
+        resetOptional: args['reset-optional'],
+      });
     },
   },
 

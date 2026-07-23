@@ -5,7 +5,7 @@ import { ensureDirectories } from '../utils/file-utils.js';
 import { getAppStatus, runApp } from '../utils/pm2-helper.js';
 
 export const restart = async ({ name }: { name: string }) => {
-  const app = await AppRepo.findByName(name);
+  const app = await AppRepo.findByNameWithConfig(name);
 
   if (!app.builds?.length || !app.activeBuild) {
     throw new Error(
@@ -25,11 +25,11 @@ export const restart = async ({ name }: { name: string }) => {
   await runApp(buildDir, {
     name: app.name,
     port: app.port,
-    instances: app.instances,
     status,
     output: path.join(logDir, 'pm2.out.log'),
     error: path.join(logDir, 'pm2.error.log'),
     projectType: app.projectType,
+    config: app.config,
   });
 
   Logger.success(`${Logger.highlight(name)} restarted successfully.`);

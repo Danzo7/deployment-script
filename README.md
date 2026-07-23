@@ -57,7 +57,7 @@ Copy `.env.example` to `.env` in the dm root and edit as needed before use.
 | `nextjs` | npm run build  | cluster  | next start                         |
 | `nestjs` | npm run build  | cluster  | dist/main.js                       |
 | `dotnet` | dotnet publish | fork     | dotnet \<app\>.dll                 |
-| `static` | none           | fork     | sirv (built-in static file server) |
+| `static` | none           | cluster  | sirv (built-in static file server) |
 
 Static apps must have pre-built files committed to the repo. A `package.json` with a build step is not supported for the static type.
 
@@ -97,7 +97,6 @@ Registers a new application and records it in the database. Does not deploy — 
 | ------------------- | -------- | --------------------------------------------- |
 | `--repo, -r`        | required | Repository URL (git/svn) or local folder path |
 | `--branch, -b`      | main     | Branch to track                               |
-| `--instances, -i`   | 1        | PM2 cluster instances                         |
 | `--port, -p`        | auto     | Port; auto-discovered if omitted              |
 | `--type, -t`        | nextjs   | nextjs, nestjs, dotnet, static                |
 | `--project-dir, -d` | —        | Subdirectory within repo (monorepo)           |
@@ -122,15 +121,41 @@ The deploy pipeline runs these steps in order:
 9. Prunes all but the 3 most recent builds in the background
 10. Releases the lock
 
-### restart / stop / rollback
+### restart / stop / rollback / scale
 
 ```bash
 dm restart <name>
 dm stop <name>
 dm rollback <name> [--to <build-index>]
+dm scale <name> [options]
 ```
 
 `rollback` re-points PM2 at a previous build directory without rebuilding. Use `--to <n>` to target a specific build index (visible in the Deploys tab). Defaults to the previous build.
+
+`scale` modifies runtime configuration for an app. Changes are saved to the database and applied immediately if the app is running.
+
+| Option               | Description                                                        |
+| -------------------- | ------------------------------------------------------------------ |
+| `--instances <n>`    | Number of PM2 cluster instances (1-N). Not supported for .NET.     |
+| `--memory <size>`    | Max memory per instance (e.g. 250M, 1G, 512M). PM2 restarts on OOM. |
+| `--autorestart`      | Enable/disable automatic restart on crash (true/false)              |
+| `--max-restarts <n>` | Max unstable restarts before stopping (PM2 default: 15)             |
+| `--min-uptime <t>`   | Min uptime before a restart is considered unstable (e.g. 10s, 1m)   |
+| `--restart-delay <ms>` | Delay in milliseconds between restarts (PM2 default: 0)          |
+| `--kill-timeout <ms>`  | Grace period for shutdown before SIGKILL (PM2 default: 1600)     |
+| `--node-args <args>` | Node.js arguments (e.g. --max-old-space-size=4096). Node.js only.  |
+| `--show`             | Display current configuration without making changes                |
+| `--reset-optional`   | Reset all optional parameters to PM2 defaults                       |
+
+**Examples:**
+
+```bash
+dm scale my-app --instances 4 --memory 512M
+dm scale my-app --autorestart false --max-restarts 3
+dm scale my-app --node-args "--max-old-space-size=4096"
+dm scale my-app --show
+dm scale my-app --reset-optional
+```
 
 ### start-all / stop-all
 
@@ -524,7 +549,7 @@ dm clean-all                            # clean all apps and prune old builds
 dm update                               # update dm itself  (CLI only)
 dm change-repo <name> --repo <url> [--branch <name>]  # change the repo URL and/or branch for an app  (CLI only)
 dm install-service                      # install a boot service to run dm start-all  (CLI only)
-dm migrate-db                           # migrate from legacy db.json to SQL  (CLI only)
+dm migrate-db                           # migrate db schema and ensure all apps have configs  (CLI only)
 ```
 
 ---
@@ -566,3 +591,5 @@ dm v2.0 uses SQLite by default (better-sqlite3 + Drizzle ORM). PostgreSQL is sup
 The database stores: apps, build history, storage volumes, domains, routes, SSL certificate metadata.
 
 Upgrading from v1.x: run `dm migrate-db` once to import from the legacy `db.json` format.
+
+After adding new features: run `dm migrate-db` to apply schema updates to your database.

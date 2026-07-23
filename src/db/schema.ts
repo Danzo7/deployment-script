@@ -139,6 +139,33 @@ export const appStorageTableSqlite = sqliteTable(
   ]
 );
 
+export const appConfigTableSqlite = sqliteTable(
+  'app_config',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    appId: integer('appId')
+      .notNull()
+      .unique()
+      .references(() => appsTableSqlite.id, { onDelete: 'cascade' }),
+    instances: integer('instances').notNull().default(1),
+    maxMemory: text('maxMemory').notNull().default('250M'),
+    autorestart: integer('autorestart', { mode: 'boolean' }),
+    maxRestarts: integer('maxRestarts'),
+    minUptime: text('minUptime'),
+    restartDelay: integer('restartDelay'),
+    nodeArgs: text('nodeArgs'),
+    killTimeout: integer('killTimeout'),
+    createdAt: integer('createdAt', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    updatedAt: integer('updatedAt', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(unixepoch())`)
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [sqliteIndex('app_config_app_id_idx').on(table.appId)]
+);
+
 // ============================================================================
 // PostgreSQL Schema
 // ============================================================================
@@ -252,6 +279,31 @@ export const appStorageTablePostgres = pgTable(
   ]
 );
 
+export const appConfigTablePostgres = pgTable(
+  'app_config',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    appId: uuid('app_id')
+      .notNull()
+      .unique()
+      .references(() => appsTablePostgres.id, { onDelete: 'cascade' }),
+    instances: pgInteger('instances').notNull().default(1),
+    maxMemory: varchar('max_memory', { length: 20 }).notNull().default('250M'),
+    autorestart: varchar('autorestart', { length: 5 }),
+    maxRestarts: pgInteger('max_restarts'),
+    minUptime: varchar('min_uptime', { length: 20 }),
+    restartDelay: pgInteger('restart_delay'),
+    nodeArgs: pgText('node_args'),
+    killTimeout: pgInteger('kill_timeout'),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date' })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [pgIndex('app_config_app_id_idx').on(table.appId)]
+);
+
 // Export the appropriate tables based on dbType
 export const appsTable =
   dbType === 'postgres' ? appsTablePostgres : appsTableSqlite;
@@ -263,15 +315,21 @@ export const routesTable =
   dbType === 'postgres' ? routesTablePostgres : routesTableSqlite;
 export const appStorageTable =
   dbType === 'postgres' ? appStorageTablePostgres : appStorageTableSqlite;
+export const appConfigTable =
+  dbType === 'postgres' ? appConfigTablePostgres : appConfigTableSqlite;
 
 // ============================================================================
 // Relations
 // ============================================================================
 
 // SQLite Relations
-export const appsRelationsSqlite = relations(appsTableSqlite, ({ many }) => ({
+export const appsRelationsSqlite = relations(appsTableSqlite, ({ many, one }) => ({
   routes: many(routesTableSqlite),
   appStorages: many(appStorageTableSqlite),
+  config: one(appConfigTableSqlite, {
+    fields: [appsTableSqlite.id],
+    references: [appConfigTableSqlite.appId],
+  }),
 }));
 
 export const domainsRelationsSqlite = relations(
@@ -316,12 +374,26 @@ export const appStorageRelationsSqlite = relations(
   })
 );
 
+export const appConfigRelationsSqlite = relations(
+  appConfigTableSqlite,
+  ({ one }) => ({
+    app: one(appsTableSqlite, {
+      fields: [appConfigTableSqlite.appId],
+      references: [appsTableSqlite.id],
+    }),
+  })
+);
+
 // PostgreSQL Relations
 export const appsRelationsPostgres = relations(
   appsTablePostgres,
-  ({ many }) => ({
+  ({ many, one }) => ({
     routes: many(routesTablePostgres),
     appStorages: many(appStorageTablePostgres),
+    config: one(appConfigTablePostgres, {
+      fields: [appsTablePostgres.id],
+      references: [appConfigTablePostgres.appId],
+    }),
   })
 );
 
@@ -363,6 +435,16 @@ export const appStorageRelationsPostgres = relations(
     storage: one(storagesTablePostgres, {
       fields: [appStorageTablePostgres.storageId],
       references: [storagesTablePostgres.id],
+    }),
+  })
+);
+
+export const appConfigRelationsPostgres = relations(
+  appConfigTablePostgres,
+  ({ one }) => ({
+    app: one(appsTablePostgres, {
+      fields: [appConfigTablePostgres.appId],
+      references: [appsTablePostgres.id],
     }),
   })
 );

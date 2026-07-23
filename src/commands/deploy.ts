@@ -34,7 +34,7 @@ export const deploy = async ({
 }) => {
   requireSymlinkPermission();
 
-  const app = await AppRepo.findByNameWithStorages(name);
+  const app = await AppRepo.findByNameWithConfigAndStorages(name);
   const isFirstDeploy = app.lastDeploy == undefined;
   if (!app.projectType) {
     await AppRepo.update(app.name, { projectType: 'nextjs' });
@@ -117,14 +117,15 @@ export const deploy = async ({
     app.projectDir,
     app.storages
   );
+
   await runApp(buildDir, {
     name: app.name,
     port: app.port,
-    instances: app.instances,
     status: appStatus,
     output: path.join(logDir, 'pm2.out.log'),
     error: path.join(logDir, 'pm2.error.log'),
     projectType: app.projectType,
+    config: app.config,
   });
   await AppRepo.addBuild(name, buildDir);
   if (currentRevision) {

@@ -9,7 +9,7 @@ import {
 import { getAppStatus, runApp } from '../utils/pm2-helper.js';
 
 export const rollback = async ({ name, to }: { name: string; to?: number }) => {
-  const app = await AppRepo.findByNameWithStorages(name);
+  const app = await AppRepo.findByNameWithConfigAndStorages(name);
 
   const builds = app.builds ?? [];
   if (builds.length < 2) {
@@ -59,11 +59,11 @@ export const rollback = async ({ name, to }: { name: string; to?: number }) => {
   await runApp(targetBuild, {
     name: app.name,
     port: app.port,
-    instances: app.instances,
     status,
     output: path.join(logDir, 'pm2.out.log'),
     error: path.join(logDir, 'pm2.error.log'),
     projectType: app.projectType,
+    config: app.config,
   });
 
   await AppRepo.update(name, { activeBuild: targetBuild });

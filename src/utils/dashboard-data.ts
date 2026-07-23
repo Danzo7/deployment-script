@@ -413,7 +413,7 @@ export async function fetchAppDetail(
   }
 
   // Reconnect SSH before log polling so a dead connection is replaced first
-  const ssh = doLogPoll ? await getSharedSsh() : (_sharedSsh ?? null);
+  if (doLogPoll) await getSharedSsh();
 
   if (signal?.aborted) {
     throw new Error('AbortError');

@@ -1,4 +1,4 @@
-import { AppRepo } from '../db/repos.js';
+import { AppRepo, AppConfigRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 import { findAvailablePort } from '../utils/network-utils.js';
 import path from 'path';
@@ -12,7 +12,6 @@ export const init = async ({
   name,
   repo,
   branch,
-  instances,
   port,
   appsDir,
   type = 'nextjs',
@@ -22,7 +21,6 @@ export const init = async ({
   name: string;
   repo: string;
   branch: string;
-  instances?: number;
   port?: number;
   appsDir: string;
   type?: 'nextjs' | 'nestjs' | 'dotnet' | 'static';
@@ -58,16 +56,22 @@ export const init = async ({
     port = await findAvailablePort(apps.map((a) => a.port));
   }
 
-  await AppRepo.add({
+  const app = await AppRepo.add({
     port,
     repo,
     branch,
-    instances,
     name,
     appDir,
     projectType: type,
     vcsType,
     ...(projectDir ? { projectDir } : {}),
+  });
+
+  // Create default app config with 1 instance
+  await AppConfigRepo.create({
+    appId: app.id,
+    instances: 1,
+    maxMemory: '250M',
   });
 
   Logger.success(

@@ -19,14 +19,17 @@ export async function startAllApplications() {
         Logger.warn(`No build found for ${app.name}`);
         continue;
       } else {
+        // Get app with config
+        const appWithConfig = await AppRepo.findByNameWithConfig(app.name);
+
         await runApp(buildDir, {
           name: app.name,
           port: app.port,
-          instances: app.instances,
           status: appStatus,
           output: path.join(logDir, 'pm2.out.log'),
           error: path.join(logDir, 'pm2.error.log'),
           projectType: app.projectType ?? 'nextjs',
+          config: appWithConfig.config,
         });
       }
       //1s timeout to avoid

@@ -11,6 +11,9 @@ import {
   AppWithStorages,
   AppWithStoragesAndRoutes,
   StorageWithApps,
+  AppConfig,
+  AppWithConfig,
+  AppWithConfigAndStorages,
 } from './model.js';
 import { eq, and } from 'drizzle-orm';
 import {
@@ -19,6 +22,7 @@ import {
   domainsTable,
   routesTable,
   appStorageTable,
+  appConfigTable,
   dbType,
 } from './schema.js';
 
@@ -60,7 +64,6 @@ function mapToApp(row: any): App {
     createdAt: toDate(row.createdAt)!,
     updatedAt: toDate(row.updatedAt)!,
     port: row.port,
-    instances: row.instances,
     repo: row.repo,
     branch: row.branch,
     vcsType: row.vcsType as 'git' | 'svn',
@@ -211,6 +214,39 @@ export const AppRepo = {
   },
 
   /**
+   * Find app by name with config eagerly loaded via database join
+   */
+  findByNameWithConfig: async (name: string): Promise<AppWithConfig> => {
+    const db: any = getDB();
+    const row = await db.query[
+      dbType === 'postgres' ? 'appsTablePostgres' : 'appsTableSqlite'
+    ].findFirst({
+      where: (apps: any, { eq }: any) => eq(apps.name, name),
+      with: {
+        config: true,
+      },
+    });
+
+    if (!row) {
+      throw new Error('App not found');
+    }
+
+    const app = mapToApp(row);
+    
+    // Create default config if missing (backwards compatibility)
+    let config = row.config ? mapToAppConfig(row.config) : null;
+    if (!config) {
+      config = await AppConfigRepo.create({
+        appId: app.id,
+        instances: 1,
+        maxMemory: '250M',
+      });
+    }
+
+    return { ...app, config };
+  },
+
+  /**
    * Find app by name with storages eagerly loaded via database join
    */
   findByNameWithStorages: async (name: string): Promise<AppWithStorages> => {
@@ -237,6 +273,49 @@ export const AppRepo = {
       mapToStorage(as.storage)
     );
     return { ...app, storages };
+  },
+
+  /**
+   * Find app by name with config and storages eagerly loaded via database join
+   */
+  findByNameWithConfigAndStorages: async (
+    name: string
+  ): Promise<AppWithConfigAndStorages> => {
+    const db: any = getDB();
+    const row = await db.query[
+      dbType === 'postgres' ? 'appsTablePostgres' : 'appsTableSqlite'
+    ].findFirst({
+      where: (apps: any, { eq }: any) => eq(apps.name, name),
+      with: {
+        config: true,
+        appStorages: {
+          with: {
+            storage: true,
+          },
+        },
+      },
+    });
+
+    if (!row) {
+      throw new Error('App not found');
+    }
+
+    const app = mapToApp(row);
+    
+    // Create default config if missing (backwards compatibility)
+    let config = row.config ? mapToAppConfig(row.config) : null;
+    if (!config) {
+      config = await AppConfigRepo.create({
+        appId: app.id,
+        instances: 1,
+        maxMemory: '250M',
+      });
+    }
+
+    const storages = (row.appStorages || []).map((as: any) =>
+      mapToStorage(as.storage)
+    );
+    return { ...app, config, storages };
   },
 
   add: async (
@@ -269,7 +348,7 @@ export const AppRepo = {
       name: data.name,
       appDir: data.appDir,
       port: data.port,
-      instances: data.instances ?? 1,
+      instances: 1,
       repo: data.repo,
       branch: data.branch,
       vcsType: data.vcsType ?? 'git',
@@ -924,5 +1003,111 @@ export const RouteRepo = {
       throw new Error('Route not found after update');
     }
     return mapToRoute(rows[0]);
+  },
+};
+
+// ─── AppConfig Repository ──────────────────────────────────────────────────
+
+// Helper to map DB row to AppConfig model
+function mapToAppConfig(row: any): AppConfig {
+  return {
+    id: row.id,
+    appId: row.appId,
+    instances: row.instances,
+    maxMemory: row.maxMemory,
+    autorestart: row.autorestart === null || row.autorestart === undefined 
+      ? null 
+      : (typeof row.autorestart === 'string' ? row.autorestart === 'true' : Boolean(row.autorestart)),
+    maxRestarts: row.maxRestarts ?? null,
+    minUptime: row.minUptime ?? null,
+    restartDelay: row.restartDelay ?? null,
+    nodeArgs: row.nodeArgs ?? null,
+    killTimeout: row.killTimeout ?? null,
+    createdAt: toDate(row.createdAt)!,
+    updatedAt: toDate(row.updatedAt)!,
+  };
+}
+
+export const AppConfigRepo = {
+  findByAppId: async (appId: string | number): Promise<AppConfig | undefined> => {
+    const db: any = getDB();
+    const rows = await db
+      .select()
+      .from(appConfigTable)
+      .where(eq(appConfigTable.appId, appId));
+    if (rows.length === 0) return undefined;
+    return mapToAppConfig(rows[0]);
+  },
+
+  create: async (data: {
+    appId: string | number;
+    instances?: number;
+    maxMemory?: string;
+    autorestart?: boolean | null;
+    maxRestarts?: number | null;
+    minUptime?: string | null;
+    restartDelay?: number | null;
+    nodeArgs?: string | null;
+    killTimeout?: number | null;
+  }): Promise<AppConfig> => {
+    const db: any = getDB();
+
+    const insertData: any = {
+      appId: data.appId,
+      instances: data.instances ?? 1,
+      maxMemory: data.maxMemory ?? '250M',
+      autorestart: data.autorestart === null || data.autorestart === undefined 
+        ? null 
+        : (dbType === 'sqlite' ? (data.autorestart ? 1 : 0) : String(data.autorestart)),
+      maxRestarts: data.maxRestarts ?? null,
+      minUptime: data.minUptime ?? null,
+      restartDelay: data.restartDelay ?? null,
+      nodeArgs: data.nodeArgs ?? null,
+      killTimeout: data.killTimeout ?? null,
+    };
+
+    await db.insert(appConfigTable).values(insertData);
+    const config = await AppConfigRepo.findByAppId(data.appId);
+    if (!config) throw new Error('Failed to create app config');
+    return config;
+  },
+
+  update: async (
+    appId: string | number,
+    data: Partial<Omit<AppConfig, 'id' | 'appId' | 'createdAt' | 'updatedAt'>>
+  ): Promise<AppConfig> => {
+    const db: any = getDB();
+
+    const updateFields: any = {};
+
+    if (data.instances !== undefined) updateFields.instances = data.instances;
+    if (data.maxMemory !== undefined) updateFields.maxMemory = data.maxMemory;
+    
+    // Handle autorestart boolean/null conversion
+    if ('autorestart' in data) {
+      updateFields.autorestart = data.autorestart === null || data.autorestart === undefined
+        ? null
+        : (dbType === 'sqlite' ? (data.autorestart ? 1 : 0) : String(data.autorestart));
+    }
+    
+    if ('maxRestarts' in data) updateFields.maxRestarts = data.maxRestarts ?? null;
+    if ('minUptime' in data) updateFields.minUptime = data.minUptime ?? null;
+    if ('restartDelay' in data) updateFields.restartDelay = data.restartDelay ?? null;
+    if ('nodeArgs' in data) updateFields.nodeArgs = data.nodeArgs ?? null;
+    if ('killTimeout' in data) updateFields.killTimeout = data.killTimeout ?? null;
+
+    await db
+      .update(appConfigTable)
+      .set(updateFields)
+      .where(eq(appConfigTable.appId, appId));
+
+    const config = await AppConfigRepo.findByAppId(appId);
+    if (!config) throw new Error('App config not found after update');
+    return config;
+  },
+
+  delete: async (appId: string | number): Promise<void> => {
+    const db: any = getDB();
+    await db.delete(appConfigTable).where(eq(appConfigTable.appId, appId));
   },
 };
