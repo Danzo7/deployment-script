@@ -1,31 +1,36 @@
-import pm2 from 'pm2';
-import fs from 'fs';
+import path from 'path';
 import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
+import { ensureDirectories } from '../utils/file-utils.js';
+import { getAppStatus, stopApp, flushApp, runApp } from '../utils/pm2-helper.js';
+import type { AppWithConfig } from '../db/model.js';
 
-/** Truncate a log file to empty if it exists. */
-function clearFile(filePath: string | undefined): void {
-  if (!filePath) return;
-  try {
-    if (fs.existsSync(filePath)) {
-      fs.writeFileSync(filePath, '');
-    }
-  } catch {
-    // ignore missing / permission errors silently
+async function clearLogsForProcess(app: AppWithConfig): Promise<void> {
+  const status = await getAppStatus(app.name);
+  const wasRunning = status === 'online' || status === 'launching';
+
+  if (wasRunning) {
+    Logger.info(`Stopping "${Logger.highlight(app.name)}" before clearing logs...`);
+    await stopApp(app.name);
   }
-}
 
-/** Clear PM2 log files for a single named process. */
-async function clearLogsForProcess(name: string): Promise<void> {
-  await new Promise<void>((resolve) => {
-    pm2.describe(name, (err, list) => {
-      if (err || !list?.length) return resolve();
-      const env = list[0].pm2_env as any;
-      clearFile(env?.pm_out_log_path);
-      clearFile(env?.pm_err_log_path);
-      resolve();
-    });
-  });
+  await flushApp(app.name);
+
+  if (wasRunning) {
+    const buildDir = await AppRepo.resolveActiveBuild(app.name);
+    if (buildDir) {
+      const { logDir } = ensureDirectories(app.appDir);
+      await runApp(buildDir, {
+        name: app.name,
+        port: app.port,
+        status,
+        output: path.join(logDir, 'pm2.out.log'),
+        error: path.join(logDir, 'pm2.error.log'),
+        projectType: app.projectType,
+        config: app.config,
+      });
+    }
+  }
 }
 
 export const logClear = async ({
@@ -35,32 +40,19 @@ export const logClear = async ({
   name?: string;
   all?: boolean;
 }) => {
-  await new Promise<void>((resolve, reject) => {
-    pm2.connect((connectErr) => {
-      if (connectErr)
-        return reject(new Error(`Failed to connect to pm2: ${connectErr}`));
-      resolve();
-    });
-  });
-
-  try {
-    if (all) {
-      const apps = await AppRepo.getAll();
-      for (const app of apps) {
-        await clearLogsForProcess(app.name);
-        Logger.info(`Cleared logs for "${Logger.highlight(app.name)}"`);
-      }
-      Logger.info('All app logs cleared.');
-    } else {
-      if (!name)
-        throw new Error(
-          'Provide an app <name> or use --all to clear all logs.'
-        );
-      await AppRepo.findByName(name);
-      await clearLogsForProcess(name);
-      Logger.info(`Logs cleared for "${Logger.highlight(name)}".`);
+  if (all) {
+    const apps = await AppRepo.getAll();
+    for (const app of apps) {
+      const appWithConfig = await AppRepo.findByNameWithConfig(app.name);
+      await clearLogsForProcess(appWithConfig);
+      Logger.info(`Cleared logs for "${Logger.highlight(app.name)}"`);
     }
-  } finally {
-    pm2.disconnect();
+    Logger.info('All app logs cleared.');
+  } else {
+    if (!name)
+      throw new Error('Provide an app <name> or use --all to clear all logs.');
+    const app = await AppRepo.findByNameWithConfig(name);
+    await clearLogsForProcess(app);
+    Logger.info(`Logs cleared for "${Logger.highlight(name)}".`);
   }
 };

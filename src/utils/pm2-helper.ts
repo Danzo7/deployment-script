@@ -142,6 +142,12 @@ function _pm2Delete(name: string): Promise<void> {
   });
 }
 
+function _pm2Flush(name: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    pm2.flush(name, (err) => (err ? reject(err) : resolve()));
+  });
+}
+
 // ─── PM2 config builder ───────────────────────────────────────────────────────
 
 const getPM2Config = (
@@ -276,6 +282,9 @@ export const runApp = async (
 
 export const stopApp = async (name: string): Promise<void> =>
   withPm2(() => _pm2Stop(name));
+
+export const flushApp = async (name: string): Promise<void> =>
+  withPm2(() => _pm2Flush(name));
 
 export const deletePm2App = async (name: string): Promise<void> =>
   withPm2(
