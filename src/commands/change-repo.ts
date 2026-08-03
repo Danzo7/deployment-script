@@ -1,6 +1,7 @@
 import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 import { changeRepoUrl } from '../utils/vcs-helper.js';
+import { ensureDirectories } from '../utils/file-utils.js';
 
 export const changeRepo = async ({
   name,
@@ -30,8 +31,10 @@ export const changeRepo = async ({
     Logger.info(`New branch: ${newBranch}`);
   }
 
+  const { relDir } = ensureDirectories(app.appDir);
+
   // Change the remote URL and/or branch in the actual repository folder
-  await changeRepoUrl(app, app.appDir, newRepo || app.repo, newBranch);
+  await changeRepoUrl(app, relDir, newRepo || app.repo, newBranch);
 
   // Update the database
   const updates: Partial<Pick<typeof app, 'repo' | 'branch'>> = {};
