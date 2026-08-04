@@ -23,19 +23,9 @@ export const rollback = async ({ name, to }: { name: string; to?: number }) => {
     ? builds.indexOf(activePath)
     : builds.length - 1;
 
-  // If no --to flag, list available builds and default to previous
+  // If no --to flag, default to previous
   if (to === undefined) {
-    console.log();
-    console.log(chalk.bold.cyan(`  Available builds for ${name}:`));
-    builds.forEach((b, i) => {
-      const tag = i === currentIndex ? chalk.green(' ← active') : '';
-      console.log(`  ${chalk.gray(i)}  ${path.basename(b)}${tag}`);
-    });
-    console.log();
     to = currentIndex > 0 ? currentIndex - 1 : 0;
-    Logger.info(
-      `Defaulting to build index ${to}: ${Logger.highlight(path.basename(builds[to]))}`
-    );
   }
 
   if (to < 0 || to >= builds.length) {
@@ -72,4 +62,14 @@ export const rollback = async ({ name, to }: { name: string; to?: number }) => {
   Logger.success(
     `${Logger.highlight(name)} rolled back to build ${to} successfully.`
   );
+
+  console.log();
+  console.log(chalk.bold.cyan(`  Builds for ${name}:`));
+  builds.forEach((b, i) => {
+    let tag = '';
+    if (i === to) tag = chalk.green(' ← active');
+    else if (i === currentIndex) tag = chalk.gray(' ← previous');
+    console.log(`  ${chalk.gray(i)}  ${path.basename(b)}${tag}`);
+  });
+  console.log();
 };
