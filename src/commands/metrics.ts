@@ -45,11 +45,28 @@ export const metrics = async ({ name }: { name: string }) => {
     }
   }
 
+  // Filter out routes whose domain has never been pushed to nginx
+  const unpushedDomains = [...new Set(
+    routes.filter((r) => !r.domain.lastPushedAt).map((r) => r.domain.name)
+  )];
+  if (unpushedDomains.length > 0) {
+    for (const d of unpushedDomains) {
+      Logger.warn(`Domain "${d}" has never been pushed to Nginx — skipping (run: dm domain push ${d})`);
+    }
+  }
+
+  const pushedRoutes = routes.filter((r) => r.domain.lastPushedAt);
+  if (pushedRoutes.length === 0) {
+    Logger.error('No pushed domains found for this app. Run dm domain push <domain> first.');
+    ssh?.disconnect?.();
+    process.exit(1);
+  }
+
   // Build one tailer per unique log file
   const tailers: Array<{ label: string; tailer: NginxLogTailer }> = [];
   const seen = new Set<string>();
 
-  for (const route of routes) {
+  for (const route of pushedRoutes) {
     const routePath = route.path === '' ? '/' : route.path;
     const logPath = NginxLogTailer.accessLogPath(route.domain.name, routePath, isRemote);
     if (seen.has(logPath)) continue;
