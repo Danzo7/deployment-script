@@ -70,7 +70,7 @@ function mapToApp(row: any): App {
     lastDeploy: toDate(row.lastDeploy),
     builds: deserializeJSON<string[]>(row.builds) || [],
     activeBuild: row.activeBuild,
-    projectType: row.projectType as 'nextjs' | 'nestjs' | 'dotnet',
+    projectType: row.projectType,
     projectDir: row.projectDir,
     lastDeployedCommit: deserializeJSON<App['lastDeployedCommit']>(
       row.lastDeployedCommit

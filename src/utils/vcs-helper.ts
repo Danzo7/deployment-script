@@ -6,18 +6,66 @@ import {
   discardUncommittedChanges,
   pushChanges,
   changeRemoteUrl,
+  isGitRepo,
 } from './git-helper.js';
 import {
   handleSvnRepo,
   getLastSvnRevision,
   discardSvnChanges,
   relocateSvnRepo,
+  isSvnRepo,
 } from './svn-helper.js';
 import {
   handleLocalFolder,
   getLocalFolderRevision,
 } from './local-folder-helper.js';
 import fs from 'fs';
+
+export type VcsType = 'git' | 'svn' | 'local';
+
+/**
+ * Detects the VCS type for a given repo URL or local path.
+ */
+export const detectVcsType = async (repo: string): Promise<VcsType> => {
+  // 1. Local path
+  if (fs.existsSync(repo)) return 'local';
+
+  const lower = repo.toLowerCase();
+
+  const hasGitHint =
+    lower.startsWith('git@') ||
+    lower.startsWith('git://') ||
+    lower.endsWith('.git') ||
+    (/^https?:\/\//.test(lower) && lower.includes('git'));
+
+  const hasSvnHint =
+    lower.startsWith('svn://') ||
+    lower.startsWith('svn+ssh://') ||
+    lower.includes('svn') ||
+    /(\/trunk(\/|$)|\/branches\/|\/tags\/)/.test(lower);
+
+  // 2. Git-hinted, not svn-hinted → probe git first
+  if (hasGitHint && !hasSvnHint) {
+    if (await isGitRepo(repo)) return 'git';
+    // git probe failed — could still be svn, fall through
+  }
+
+  // 3. SVN-hinted, not git-hinted → probe svn first
+  if (hasSvnHint && !hasGitHint) {
+    if (isSvnRepo(repo)) return 'svn';
+    // svn probe failed — fall through
+  }
+
+  // 4. Ambiguous or neither hint — probe both
+  if (await isGitRepo(repo)) return 'git';
+  if (isSvnRepo(repo)) return 'svn';
+
+  throw new Error(
+    `Cannot detect VCS type for "${repo}".\n` +
+    `  → The repository is unreachable or not recognised as git or svn.\n` +
+    `  → Pass --vcs git, --vcs svn, or --vcs local explicitly.`
+  );
+};
 
 export const handleRepo = (
   app: Pick<App, 'vcsType' | 'repo' | 'branch'>,
@@ -121,7 +169,6 @@ export const getVcsDriftInfo = async (
   }
 
   if (app.vcsType === 'local') {
-    // Local folders have no remote — nothing to drift against
     return {
       branch: 'local',
       behind: 0,

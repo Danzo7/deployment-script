@@ -4,52 +4,66 @@ import { findAvailablePort } from '../utils/network-utils.js';
 import path from 'path';
 import { ensureDirectories } from '../utils/file-utils.js';
 import { checkSvn } from '../utils/svn-helper.js';
-import { checkDotnetInstalled } from '../utils/dotnet-helper.js';
 import { checkGit } from '../utils/git-helper.js';
 import { checkLocalFolder } from '../utils/local-folder-helper.js';
+import { getHandler } from '../app-types/index.js';
+import { detectProjectType } from '../utils/app-type-detector.js';
+import { detectVcsType } from '../utils/vcs-helper.js';
+import type { ProjectType } from '../app-types/index.js';
+import type { VcsType } from '../utils/vcs-helper.js';
 
 export const init = async ({
   name,
   repo,
   branch,
   port,
-  appsDir,
-  type = 'nextjs',
+  type,
   projectDir,
-  vcsType = 'git',
+  vcsType,
 }: {
   name: string;
   repo: string;
   branch: string;
   port?: number;
-  appsDir: string;
-  type?: 'nextjs' | 'nestjs' | 'dotnet' | 'static';
+  type?: ProjectType;
   projectDir?: string;
-  vcsType?: 'git' | 'svn' | 'local';
+  vcsType?: VcsType;
 }) => {
-  if (!repo)
-    throw new Error('Repository URL or local folder path is required.');
+  if (!repo) throw new Error('Repository URL or local folder path is required.');
 
-  if (vcsType === 'svn') checkSvn();
-  if (vcsType === 'git') checkGit();
-  if (vcsType === 'local') checkLocalFolder(repo);
-  if (type === 'dotnet') checkDotnetInstalled();
+  const resolvedVcsType: VcsType = vcsType ?? await detectVcsType(repo);
+  if (!vcsType) {
+    Logger.info(`VCS type not specified — detected: ${Logger.highlight(resolvedVcsType)}`);
+  }
+
+  if (resolvedVcsType === 'svn') checkSvn();
+  if (resolvedVcsType === 'git') checkGit();
+  if (resolvedVcsType === 'local') checkLocalFolder(repo);
 
   // Check if app already exists
   try {
     await AppRepo.findByName(name);
     throw new Error(`An app with the name "${name}" already exists.`);
   } catch (err: any) {
-    // If app not found, that's what we want - continue
-    if (!err.message?.includes('not found')) {
-      throw err;
-    }
+    if (!err.message?.includes('not found')) throw err;
   }
 
-  const appDir = path.join(appsDir, name);
+  // Resolve type — explicit or auto-detected
+  const resolvedType: ProjectType = type ?? await detectProjectType({
+    appName: name,
+    repo,
+    branch,
+    projectDir,
+    vcsType: resolvedVcsType,
+  });
+
+  // Single prerequisites check after type is known
+  const handler = getHandler(resolvedType);
+  handler.checkPrerequisites?.();
+
+  const appDir = path.join(handler.getAppsDir(), name);
   ensureDirectories(appDir);
 
-  // Find an available port if none is specified
   if (!port) {
     Logger.info('Port not specified. Searching for an available port...');
     const apps = await AppRepo.getAll();
@@ -62,25 +76,15 @@ export const init = async ({
     branch,
     name,
     appDir,
-    projectType: type,
-    vcsType,
+    projectType: resolvedType,
+    vcsType: resolvedVcsType,
     ...(projectDir ? { projectDir } : {}),
   });
 
-  // Create default app config with 1 instance
-  await AppConfigRepo.create({
-    appId: app.id,
-    instances: 1,
-    maxMemory: '250M',
-  });
+  await AppConfigRepo.create({ appId: app.id, instances: 1, maxMemory: '250M' });
 
-  Logger.success(
-    `The app "${Logger.highlight(name)}" (${type || 'nextjs'}) was successfully added!`
-  );
-
+  Logger.success(`The app "${Logger.highlight(name)}" (${resolvedType}) was successfully added!`);
   Logger.advice(
-    `Next steps: Run ${Logger.command(
-      `dm deploy ${name}`
-    )} to deploy the app. Use ${Logger.command(`dm list`)} to verify its status.`
+    `Next steps: Run ${Logger.command(`dm deploy ${name}`)} to deploy the app. Use ${Logger.command(`dm list`)} to verify its status.`
   );
 };

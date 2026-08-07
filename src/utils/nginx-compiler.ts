@@ -4,6 +4,7 @@ import { PROXY_TARGET_HOST } from '../constants.js';
 import { PROXY_SET_HEADERS, mergeHeaders } from './header-merge.js';
 import { normalizeDomainName } from './route-validation.js';
 import { DomainRepo } from '../db/repos.js';
+import { getHandler } from '../app-types/index.js';
 // ─── dm_json log format ───────────────────────────────────────────────────────
 
 /**
@@ -126,18 +127,10 @@ function buildLocationBlocks(
         ...PROXY_SET_HEADERS.map(
           ([n, v]) => `${INDENT}${INDENT}proxy_set_header ${n} ${v};`
         ),
+        ...getHandler(route.app.projectType).getNginxLocationDirectives().map(
+          (d) => `${INDENT}${INDENT}${d};`
+        ),
       ];
-
-      if (route.app.projectType === 'nextjs') {
-        lines.push(
-          `${INDENT}${INDENT}proxy_http_version 1.1;`,
-          `${INDENT}${INDENT}proxy_set_header Upgrade $http_upgrade;`,
-          `${INDENT}${INDENT}proxy_set_header Connection "upgrade";`,
-          `${INDENT}${INDENT}proxy_buffering off;`
-        );
-      } else if (route.app.projectType === 'nestjs') {
-        lines.push(`${INDENT}${INDENT}proxy_http_version 1.1;`);
-      }
 
       for (const [key, value] of Object.entries(
         mergeHeaders(domain, route, hasSsl)

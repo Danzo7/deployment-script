@@ -44,9 +44,7 @@ export const appsTableSqlite = sqliteTable(
     lastDeploy: integer('lastDeploy', { mode: 'timestamp' }),
     builds: text('builds'), // JSON array
     activeBuild: text('activeBuild'),
-    projectType: text('projectType', {
-      enum: ['nextjs', 'nestjs', 'dotnet', 'static'],
-    }).notNull(),
+    projectType: text('projectType').notNull(),
     projectDir: text('projectDir'),
     lastDeployedCommit: text('lastDeployedCommit'), // JSON object
   },
@@ -190,10 +188,7 @@ export const appsTablePostgres = pgTable(
     lastDeploy: timestamp('last_deploy', { mode: 'date' }),
     builds: jsonb('builds'), // JSON array
     activeBuild: varchar('active_build', { length: 500 }),
-    projectType: varchar('project_type', {
-      length: 20,
-      enum: ['nextjs', 'nestjs', 'dotnet', 'static'],
-    }).notNull(),
+    projectType: varchar('project_type', { length: 100 }).notNull(),
     projectDir: varchar('project_dir', { length: 255 }),
     lastDeployedCommit: jsonb('last_deployed_commit'), // JSON object
   },

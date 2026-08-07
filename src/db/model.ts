@@ -11,7 +11,7 @@ export interface App {
   lastDeploy?: Date; // Optional last deployment timestamp
   builds?: string[];
   activeBuild?: string; // path to the active build directory
-  projectType: 'nextjs' | 'nestjs' | 'dotnet' | 'static'; // Project framework type
+  projectType: string; // Project framework type (e.g. 'nextjs', 'nestjs', 'dotnet', 'static')
   projectDir?: string; // Optional subdirectory within the repo that contains the project (for monorepos)
   lastDeployedCommit?: {
     hash: string; // Short commit hash (7 chars) or SVN revision

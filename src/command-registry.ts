@@ -14,13 +14,10 @@ import { deploy } from './commands/deploy.js';
 import { init } from './commands/init.js';
 import {
   APP_DIR,
-  NEXT_DIR,
-  NEST_DIR,
-  DOTNET_DIR,
-  STATIC_DIR,
   SECRET_KEY,
   REMOTE_PORT,
 } from './constants.js';
+import { getRegisteredTypes } from './app-types/index.js';
 import { listApps } from './commands/list.js';
 import { unlock } from './commands/unlock.js';
 import { clean } from './commands/clean.js';
@@ -271,9 +268,8 @@ export const COMMANDS: Record<string, CommandNode> = {
       type: {
         alias: 't',
         type: 'string',
-        choices: ['nextjs', 'nestjs', 'dotnet', 'static'],
-        default: 'nextjs',
-        describe: 'The type of application',
+        choices: getRegisteredTypes(),
+        describe: 'The type of application (auto-detected if omitted)',
       },
       projectDir: {
         flag: 'project-dir',
@@ -300,23 +296,14 @@ export const COMMANDS: Record<string, CommandNode> = {
       projectDir,
       vcs,
     }) => {
-      const appsDir =
-        type === 'nestjs'
-          ? NEST_DIR
-          : type === 'dotnet'
-            ? DOTNET_DIR
-            : type === 'static'
-              ? STATIC_DIR
-              : NEXT_DIR;
       await init({
         name,
         repo,
         branch,
         port,
-        type,
-        appsDir,
+        type: type ?? undefined,
         projectDir,
-        vcsType: vcs ?? 'git',
+        vcsType: vcs ?? undefined,
       });
     },
   },
@@ -1304,10 +1291,14 @@ export const COMMANDS: Record<string, CommandNode> = {
 
 // Ensure boot-time app directories exist. Both cli.ts and repl.ts call this
 // once at startup instead of each repeating the same four existsSync/mkdirSync
-// calls.
+// calls. Directories are derived from the registry so adding a new app type
+// automatically creates its directory without touching this file.
 export async function ensureAppDirectories(): Promise<void> {
   const { existsSync, mkdirSync } = await import('fs');
-  for (const dir of [APP_DIR, NEXT_DIR, NEST_DIR, DOTNET_DIR, STATIC_DIR]) {
+  const { getRegisteredTypes, getHandler } = await import('./app-types/index.js');
+  const dirs = [APP_DIR, ...getRegisteredTypes().map((t) => getHandler(t).getAppsDir())];
+  const unique = [...new Set(dirs)];
+  for (const dir of unique) {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   }
 }

@@ -214,3 +214,18 @@ export const changeRemoteUrl = async (
     throw error;
   }
 };
+
+/**
+ * Probes a remote URL to check if it's a valid git repository.
+ * Uses `git ls-remote` via simple-git which works without cloning.
+ * Returns true if the remote responds as a git repo, false otherwise.
+ */
+export const isGitRepo = async (url: string): Promise<boolean> => {
+  try {
+    const git = simpleGit();
+    await git.listRemote([url]);
+    return true;
+  } catch {
+    return false;
+  }
+};

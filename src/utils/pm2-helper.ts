@@ -1,18 +1,8 @@
 import pm2 from 'pm2';
-import path from 'path';
 import fs from 'fs';
 import { Logger } from './logger.js';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
+import { getHandler } from '../app-types/index.js';
 import type { AppConfig } from '../db/model.js';
-
-const _dirname = dirname(fileURLToPath(import.meta.url));
-const STATIC_SERVER_SCRIPT = resolve(
-  _dirname,
-  '..',
-  'static-server',
-  'serve.js'
-);
 
 type Status =
   | 'online'
@@ -153,104 +143,17 @@ function _pm2Flush(name: string): Promise<void> {
 const getPM2Config = (
   dir: string,
   config: Omit<pm2.StartOptions, 'exec_mode' | 'script' | 'args'> & {
-    projectType: 'nextjs' | 'nestjs' | 'dotnet' | 'static';
+    projectType: string;
     name: string;
     port: number;
     status: Status;
     config: AppConfig;
   }
 ): pm2.StartOptions => {
-  const { port, projectType, config: appConfig, ...rest } = config;
-
-  const baseConfig: pm2.StartOptions = {
-    ...rest,
-    cwd: dir,
-    instances: appConfig.instances,
-    max_memory_restart: appConfig.maxMemory,
-    // Only add optional PM2 fields if explicitly set (not null/undefined)
-    ...(appConfig.autorestart !== null && appConfig.autorestart !== undefined
-      ? { autorestart: appConfig.autorestart }
-      : {}),
-    ...(appConfig.maxRestarts !== null && appConfig.maxRestarts !== undefined
-      ? { max_restarts: appConfig.maxRestarts }
-      : {}),
-    ...(appConfig.minUptime ? { min_uptime: appConfig.minUptime as any } : {}),
-    ...(appConfig.restartDelay !== null && appConfig.restartDelay !== undefined
-      ? { restart_delay: appConfig.restartDelay }
-      : {}),
-    ...(appConfig.killTimeout !== null && appConfig.killTimeout !== undefined
-      ? { kill_timeout: appConfig.killTimeout }
-      : {}),
-    ...(appConfig.nodeArgs ? { node_args: appConfig.nodeArgs } : {}),
-  };
-
-  switch (projectType) {
-    case 'nestjs': {
-      const nestjsMain = path.join(dir, 'dist', 'main.js');
-      if (!fs.existsSync(nestjsMain))
-        throw new Error(`NestJS main file not found at ${nestjsMain}`);
-      return {
-        ...baseConfig,
-        exec_mode: 'cluster',
-        script: nestjsMain,
-        args: undefined,
-        env: {
-          NODE_ENV: 'production',
-          PORT: port.toString(),
-        },
-      };
-    }
-
-    case 'dotnet': {
-      const dllPath = path.join(dir, `${config.name}.dll`);
-      if (!fs.existsSync(dllPath))
-        throw new Error(`DLL not found at ${dllPath}`);
-      // Force single instance for .NET
-      if (appConfig.instances > 1) {
-        throw new Error(
-          '.NET apps do not support multiple instances (cluster mode)'
-        );
-      }
-      return {
-        ...rest,
-        exec_mode: 'fork',
-        cwd: dir,
-        instances: 1,
-        max_memory_restart: appConfig.maxMemory,
-        script: 'dotnet',
-        args: dllPath,
-        env: {
-          ASPNETCORE_ENVIRONMENT: 'Production',
-          ASPNETCORE_URLS: `http://0.0.0.0:${port}`,
-        },
-      };
-    }
-
-    case 'static':
-      return {
-        ...baseConfig,
-        exec_mode: 'cluster',
-        script: STATIC_SERVER_SCRIPT,
-        args: undefined,
-        env: {
-          NODE_ENV: 'production',
-          PORT: port.toString(),
-        },
-      };
-
-    case 'nextjs':
-    default:
-      return {
-        ...baseConfig,
-        exec_mode: 'cluster',
-        script: path.join(dir, 'node_modules', 'next', 'dist', 'bin', 'next'),
-        args: `start -p ${port}`,
-        env: {
-          NODE_ENV: 'production',
-          PORT: port.toString(),
-        },
-      };
-  }
+  const { port, projectType, name, status, config: appConfig } = config;
+  const handler = getHandler(projectType);
+  const pm2Config = handler.buildPm2Config({ dir, name, port, status, config: appConfig });
+  return { ...pm2Config, exec_mode: handler.getExecMode() };
 };
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -261,7 +164,7 @@ export const runApp = async (
     name: string;
     port: number;
     status: Status;
-    projectType: 'nextjs' | 'nestjs' | 'dotnet' | 'static';
+    projectType: string;
     config: AppConfig;
   }
 ): Promise<void> => {

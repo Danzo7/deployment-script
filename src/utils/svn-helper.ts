@@ -188,3 +188,21 @@ export const relocateSvnRepo = async (
     throw error;
   }
 };
+
+/**
+ * Probes a remote URL to check if it's a valid SVN repository.
+ * Uses `svn info` against the URL which works without checking out.
+ * Returns true if SVN responds with valid repo info, false otherwise.
+ */
+export const isSvnRepo = (url: string): boolean => {
+  if (!checkSvn(false)) return false;
+  try {
+    execSync(`svn info "${url}" --non-interactive`, {
+      stdio: 'pipe',
+      timeout: 15000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+};

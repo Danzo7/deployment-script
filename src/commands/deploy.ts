@@ -1,27 +1,16 @@
 import path from 'path';
 import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
-import {
-  createBuildDirByType,
-  ensureDirectories,
-  hasPackageJson,
-} from '../utils/file-utils.js';
-import { prepare } from '../utils/npm-helper.js';
+import { ensureDirectories } from '../utils/file-utils.js';
 import { getAppStatus, runApp } from '../utils/pm2-helper.js';
 import {
   handleRepo,
   getLastRevision,
   pushVcsChanges,
 } from '../utils/vcs-helper.js';
-import { checkEnv } from '../utils/env-heper.js';
-import {
-  checkDotnetSdk,
-  ensureAssemblyName,
-  checkAppSettings,
-  prepareDotnet,
-} from '../utils/dotnet-helper.js';
 import { pruneOldBuilds } from '../utils/build-pruner.js';
 import { requireSymlinkPermission } from '../utils/os-helper.js';
+import { getHandler } from '../app-types/index.js';
 
 export const deploy = async ({
   name,
@@ -42,43 +31,27 @@ export const deploy = async ({
   }
   Logger.info(`Deploying ${Logger.highlight(name)}...`);
 
+  const handler = getHandler(app.projectType);
+
   const { relDir, envDir, logDir } = ensureDirectories(app.appDir);
   const buildRelDir = app.projectDir
     ? path.join(relDir, app.projectDir)
     : relDir;
+
   Logger.info('Checking repository...');
   await handleRepo(app, relDir);
   const currentRevision = await getLastRevision(app, relDir);
-  const isGitChanged = currentRevision?.hash !== app.lastDeployedCommit?.hash;
+  const isRepoChanged = currentRevision?.hash !== app.lastDeployedCommit?.hash;
 
   Logger.info('Checking app status...');
   const appStatus = await getAppStatus(name);
   Logger.advice(`App Status: ${Logger.highlight(appStatus)}`);
   const isRunning = appStatus == 'online';
 
-  Logger.info('Checking environment variables...');
-  const isEnvChanged =
-    app.projectType === 'static'
-      ? false
-      : await checkEnv(
-          buildRelDir,
-          envDir,
-          app.projectType === 'nextjs' ? '.env.local' : '.env'
-        );
+  Logger.info('Checking environment variables and config...');
+  const isConfigChanged = await handler.syncConfig(buildRelDir, envDir);
 
-  let isAppSettingsChanged = false;
-  if (app.projectType === 'dotnet') {
-    await checkDotnetSdk(buildRelDir);
-    await ensureAssemblyName(buildRelDir, app.name);
-    isAppSettingsChanged = await checkAppSettings(buildRelDir, envDir);
-  }
-
-  if (
-    !isEnvChanged &&
-    !isAppSettingsChanged &&
-    !isGitChanged &&
-    !isFirstDeploy
-  ) {
+  if (!isConfigChanged && !isRepoChanged && !isFirstDeploy) {
     Logger.info(`Everything is up to date`);
     if (isRunning) {
       Logger.info(
@@ -90,33 +63,20 @@ export const deploy = async ({
     }
   }
 
-  if (app.projectType === 'dotnet') {
-    await prepareDotnet(buildRelDir, { logDir });
-  } else if (app.projectType === 'static') {
-    if (hasPackageJson(buildRelDir)) {
-      throw new Error(
-        `Static apps with a package.json build step are not yet supported.\n` +
-          `Commit the pre-built output (dist/ or build/) to your repository and redeploy.`
-      );
-    }
-    // No package.json — pure static files, nothing to prepare
-  } else {
-    await prepare(buildRelDir, {
-      withInstall: force || isFirstDeploy || isGitChanged || !isRunning,
-      withBuild:
-        force || !isRunning || isFirstDeploy || isGitChanged || isEnvChanged,
-      withFix: lint,
-      logDir,
-    });
-  }
-  Logger.info('Creating build version...');
+  await handler.prepareRelease(buildRelDir, {
+    withDependencies: force || isFirstDeploy || isRepoChanged || !isRunning,
+    withBuild: force || !isRunning || isFirstDeploy || isRepoChanged || isConfigChanged,
+    withLint: lint,
+    logDir,
+    appName: app.name,
+  });
 
-  const buildDir = createBuildDirByType(
-    app.appDir,
-    app.projectType,
-    app.projectDir,
-    app.storages
-  );
+  Logger.info('Creating build version...');
+  const buildDir = handler.createBuildDir({
+    appDir: app.appDir,
+    projectDir: app.projectDir,
+    storages: app.storages,
+  });
 
   await runApp(buildDir, {
     name: app.name,
@@ -127,6 +87,10 @@ export const deploy = async ({
     projectType: app.projectType,
     config: app.config,
   });
+  if (handler.afterDeploy) {
+    Logger.info('Running post-deploy hook...');
+    await handler.afterDeploy({ appDir: app.appDir, port: app.port, appName: app.name });
+  }
   await AppRepo.addBuild(name, buildDir);
   if (currentRevision) {
     await AppRepo.updateDeployedCommit(name, currentRevision);

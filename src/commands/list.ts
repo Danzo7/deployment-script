@@ -10,19 +10,7 @@ import {
 import { supportsUnicode } from '../utils/terminal-capabilities.js';
 import { formatRelative } from '../utils/date-helper.js';
 import { CERT_EXPIRY_WARNING_DAYS } from '../utils/ssl-helper.js';
-
-/**
- * Centralised display labels for project types.
- * Emoji are gated behind supportsUnicode so legacy Windows consoles
- * (conhost.exe, build < 17763) see clean plain-text fallbacks instead of
- * blank boxes — emoji rendering is a hard OS-level limitation on those hosts
- * and cannot be fixed via chcp or registry.
- */
-const TYPE_MAP: Record<string, string> = {
-  nextjs: supportsUnicode ? '⚡ Next.js' : 'Next.js',
-  nestjs: supportsUnicode ? '🦁 NestJS' : 'NestJS',
-  dotnet: supportsUnicode ? '🔷 .NET' : '.NET',
-};
+import { getHandler } from '../app-types/index.js';
 
 /**
  * Format routes for display (extracted from domain.ts getAppRouteLines logic)
@@ -173,7 +161,13 @@ export const listApps = async (
             ? chalk.yellow
             : chalk.gray;
 
-    const typeDisplay = TYPE_MAP[app.projectType] ?? app.projectType ?? 'N/A';
+    const typeDisplay = (() => {
+      try {
+        return getHandler(app.projectType).getDisplayName(supportsUnicode);
+      } catch {
+        return app.projectType ?? 'N/A';
+      }
+    })();
 
     const row: any[] = [
       chalk.white(app.name),
