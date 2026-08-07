@@ -65,6 +65,7 @@ import {
   remoteKeyRemove,
   remoteKeyList,
   remoteStatus,
+  remoteConnect,
 } from './commands/remote.js';
 import { logClear } from './commands/log-clear.js';
 
@@ -281,9 +282,8 @@ export const COMMANDS: Record<string, CommandNode> = {
       vcs: {
         type: 'string',
         choices: ['git', 'svn', 'local'],
-        default: 'git',
         describe:
-          'Version control system to use (use "local" for a local folder path)',
+          'Version control system to use (auto-detected if omitted; use "local" for a local folder path)',
       },
     },
     lockArg: 'name',
@@ -509,7 +509,7 @@ export const COMMANDS: Record<string, CommandNode> = {
       type: {
         alias: 't',
         type: 'string',
-        describe: 'Filter by project type (e.g. nextjs, nestjs, dotnet)',
+        describe: 'Filter by project type (e.g. nextjs, nestjs, dotnet, static)',
       },
       storages: {
         alias: 's',
@@ -1283,6 +1283,36 @@ export const COMMANDS: Record<string, CommandNode> = {
         group: 'Remote',
         handler: async () => {
           await remoteStatus();
+        },
+      },
+
+      connect: {
+        kind: 'leaf',
+        usage: 'connect <host>',
+        describe: 'Connect to a dm remote server over SSH',
+        group: 'Remote',
+        positionals: [
+          {
+            name: 'host',
+            demandOption: true,
+            describe: 'Host to connect to (e.g. user@example.com or just example.com)',
+          },
+        ],
+        options: {
+          port: {
+            alias: 'p',
+            type: 'number',
+            default: REMOTE_PORT,
+            describe: 'SSH port (default: REMOTE_PORT env var or 2022)',
+          },
+          identity: {
+            alias: 'i',
+            type: 'string',
+            describe: 'Key type to use: ed25519, ed25519_sk, ecdsa, ecdsa_sk, rsa (default: auto-resolve)',
+          },
+        },
+        handler: async ({ host, port, identity }) => {
+          await remoteConnect(host, port, identity);
         },
       },
     },

@@ -52,14 +52,46 @@ Copy `.env.example` to `.env` in the dm root and edit as needed before use.
 
 ## Project types
 
-| Type     | Build tool     | PM2 mode | Entry point                        |
-| -------- | -------------- | -------- | ---------------------------------- |
-| `nextjs` | npm run build  | cluster  | next start                         |
-| `nestjs` | npm run build  | cluster  | dist/main.js                       |
-| `dotnet` | dotnet publish | fork     | dotnet \<app\>.dll                 |
-| `static` | none           | cluster  | sirv (built-in static file server) |
+| Type     | Build tool     | PM2 mode | Entry point                          |
+| -------- | -------------- | -------- | ------------------------------------ |
+| `nextjs` | npm run build  | cluster  | next start                           |
+| `nestjs` | npm run build  | cluster  | dist/main.js                         |
+| `dotnet` | dotnet publish | fork     | dotnet \<app\>.dll                   |
+| `static` | none           | cluster  | built-in static file server (sirv)   |
 
-Static apps must have pre-built files committed to the repo. A `package.json` with a build step is not supported for the static type.
+Project types are implemented as self-registering handlers in a central registry. Each handler defines its own key, PM2 config, build steps, detection logic, and Nginx directives. New types can be added by creating a handler and calling `registerHandler()` — no changes required anywhere else.
+
+### Next.js
+
+- Runs via `next start` in **cluster** mode (supports multiple instances)
+- Build creates a snapshot directory containing: the `.next` folder (copied), `node_modules` (symlinked), `next.config.*`, `.env.local`, and optionally `public/`
+- A `content/` folder at the project root is detected and preserved across builds (useful for CMS-managed content committed to the repo)
+- Nginx gets WebSocket upgrade headers (`proxy_http_version 1.1`, `Upgrade`, `Connection`, `proxy_buffering off`)
+- Config file sync: `env/.env.local`
+
+### NestJS
+
+- Runs `dist/main.js` directly in **cluster** mode
+- Build creates a snapshot with: `dist/` (copied), `node_modules` (symlinked), `package.json`, `.env`, `.env.production`
+- Requires `dist/main.js` to exist before starting — throws if missing
+- Config file sync: `env/.env` (triggers redeploy if changed)
+
+### .NET
+
+- Runs in **fork** mode (single instance only; `--instances` is ignored)
+- `dotnet publish` outputs to a `publish/` subfolder which is copied entirely into the build snapshot
+- The DLL is expected at `<buildDir>/<appName>.dll`; `ensureAssemblyName` validates this at build time
+- SDK version is checked against the project's `global.json` before building
+- `node_args` is not supported (has no effect on a dotnet process)
+- Config file sync: `appsettings.json` / `appsettings.Production.json`
+- Prerequisite check at `dm init` time: `dotnet` must be on PATH
+
+### Static
+
+- No build step — static output must be **pre-built and committed** to the repo. If a `package.json` is found, dm throws rather than silently running a build
+- Looks for a `dist/` or `build/` folder containing an `index.html`; copies the first match into the build snapshot
+- Served by a built-in Node.js static file server in **cluster** mode (supports multiple instances)
+- No environment file sync (returns `false` always)
 
 ---
 
@@ -93,14 +125,41 @@ dm init <name> --repo <url> [options]
 
 Registers a new application and records it in the database. Does not deploy — run `dm deploy <name>` afterwards.
 
-| Option              | Default  | Description                                   |
-| ------------------- | -------- | --------------------------------------------- |
-| `--repo, -r`        | required | Repository URL (git/svn) or local folder path |
-| `--branch, -b`      | main     | Branch to track                               |
-| `--port, -p`        | auto     | Port; auto-discovered if omitted              |
-| `--type, -t`        | nextjs   | nextjs, nestjs, dotnet, static                |
-| `--project-dir, -d` | —        | Subdirectory within repo (monorepo)           |
-| `--vcs`             | git      | git, svn, or local                            |
+| Option              | Default      | Description                                   |
+| ------------------- | ------------ | --------------------------------------------- |
+| `--repo, -r`        | required     | Repository URL (git/svn) or local folder path |
+| `--branch, -b`      | main         | Branch to track                               |
+| `--port, -p`        | auto         | Port; auto-discovered if omitted              |
+| `--type, -t`        | auto-detect  | nextjs, nestjs, dotnet, static                |
+| `--project-dir, -d` | —            | Subdirectory within repo (monorepo)           |
+| `--vcs`             | auto-detect  | git, svn, or local                            |
+
+#### Auto-detection
+
+**VCS type** — if `--vcs` is omitted, dm inspects the repo URL/path:
+- A local path that exists on disk → `local`
+- URL hints (`git@`, `.git`, `svn://`, `/trunk/`, etc.) narrow it down first; then dm probes the remote to confirm
+- If detection fails (unreachable or unrecognised), dm **throws an error** — pass `--vcs` explicitly to resolve it
+
+**Project type** — if `--type` is omitted, dm clones the repo into a temporary staging directory and runs all registered handlers' `detect()` methods, each returning a confidence score 0–100:
+
+| Signal                              | Type     | Score |
+| ----------------------------------- | -------- | ----- |
+| `next.config.*` present             | nextjs   | 95    |
+| `next` in package.json deps         | nextjs   | 80    |
+| `@nestjs/core` dep + `nest-cli.json`| nestjs   | 95    |
+| `@nestjs/core` dep only             | nestjs   | 90    |
+| `.csproj` file present              | dotnet   | 95    |
+| `global.json` present               | dotnet   | 60    |
+| `dist/index.html` or `build/index.html` | static | 85  |
+| `index.html` at root                | static   | 70    |
+
+- Score > 50 wins. If the top two scores are both > 50 and within 10 points of each other the result is **ambiguous**
+- Ambiguous result + interactive TTY → dm **prompts** you to pick from the top candidates
+- No confident match + interactive TTY → dm **prompts** you to choose from all registered types
+- Either case in a non-TTY (pipe/CI) → dm **throws** with a message to pass `--type` explicitly
+
+The staging clone is cleaned up automatically after detection.
 
 ### deploy
 
@@ -463,7 +522,6 @@ These commands are blocked inside a remote session.
 ```bash
 dm remote connect <host> [--port 2022] [--identity ed25519]
 ```
-
 Shells out to the system `ssh` binary. Key resolution order (strongest first): `id_ed25519` → `id_ed25519_sk` → `id_ecdsa` → `id_ecdsa_sk` → `id_rsa` in `~/.ssh/`. If no key is found, dm offers to generate one via `ssh-keygen` and prints the public key to be authorized on the server.
 
 Effective ssh invocation:
