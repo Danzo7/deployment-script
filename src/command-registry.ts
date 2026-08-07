@@ -68,6 +68,7 @@ import {
   remoteConnect,
 } from './commands/remote.js';
 import { logClear } from './commands/log-clear.js';
+import { nginxLogs } from './commands/nginx-logs.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -551,6 +552,24 @@ export const COMMANDS: Record<string, CommandNode> = {
     handler: async ({ name }) => {
       const { logs } = await import('./commands/logs.js');
       logs({ name });
+    },
+  },
+
+  'nginx-logs': {
+    kind: 'leaf',
+    usage: 'nginx-logs',
+    describe: 'Stream live Nginx access logs',
+    group: 'Info & monitoring',
+    streaming: true,
+    options: {
+      path: {
+        alias: 'p',
+        type: 'string',
+        describe: 'Path to the Nginx access log file (default: /var/log/nginx/access.log)',
+      },
+    },
+    handler: async ({ path }) => {
+      await nginxLogs({ path });
     },
   },
 
