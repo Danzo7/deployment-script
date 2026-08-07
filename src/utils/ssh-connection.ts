@@ -1,6 +1,6 @@
 import fs from 'fs';
 import ssh2 from 'ssh2';
-import type { Client as ClientType, ConnectConfig } from 'ssh2';
+import type { Client as ClientType, ClientChannel, ConnectConfig } from 'ssh2';
 import { validateSshCredentials } from './security-validation.js';
 
 const { Client } = ssh2;
@@ -29,6 +29,7 @@ export interface ExecResult {
 export class SshConnection {
   private client: ClientType = new Client();
   private connected = false;
+  private connectPromise?: Promise<void>;
   private readonly host: string;
   private readonly username: string;
 
@@ -44,11 +45,14 @@ export class SshConnection {
     this.host = remoteHost.includes('@')
       ? remoteHost.split('@')[1]
       : remoteHost;
+  }
 
-    // Default sudo password to the SSH password if not explicitly set.
-    if (!this.creds.sudoPassword && this.creds.sshPassword) {
-      this.creds.sudoPassword = this.creds.sshPassword;
-    }
+  /**
+   * Effective sudo password: explicit sudoPassword takes priority, falls back
+   * to sshPassword. Avoids mutating the credentials object.
+   */
+  private get effectiveSudoPassword(): string | undefined {
+    return this.creds.sudoPassword ?? this.creds.sshPassword;
   }
 
   get hostLabel(): string {
@@ -56,12 +60,29 @@ export class SshConnection {
   }
 
   get hasSudoPassword(): boolean {
-    return !!this.creds.sudoPassword;
+    return !!this.effectiveSudoPassword;
+  }
+
+  /** Whether the connection is currently established. */
+  get isConnected(): boolean {
+    return this.connected;
   }
 
   async connect(): Promise<void> {
     if (this.connected) return;
 
+    // Prevent concurrent connect() calls from racing — reuse the in-flight promise.
+    if (this.connectPromise) return this.connectPromise;
+
+    this.connectPromise = this.doConnect();
+    try {
+      await this.connectPromise;
+    } finally {
+      this.connectPromise = undefined;
+    }
+  }
+
+  private async doConnect(): Promise<void> {
     const config: ConnectConfig = {
       host: this.host,
       username: this.username,
@@ -112,7 +133,7 @@ export class SshConnection {
         .connect({
           ...config,
           keepaliveInterval: 10000, // send keepalive every 10s
-          keepaliveCountMax: 3, // 3 missed keepalives → connection dead
+          keepaliveCountMax: 3,     // 3 missed keepalives → connection dead
         });
     });
   }
@@ -129,11 +150,6 @@ export class SshConnection {
    * non-zero exit; callers decide what failure means for their use case.
    * Use `exec()` for the common "throw on non-zero exit" case instead.
    */
-  /** Whether the connection is currently established. */
-  get isConnected(): boolean {
-    return this.connected;
-  }
-
   private async run(
     command: string,
     stdin?: string,
@@ -150,10 +166,16 @@ export class SshConnection {
     }
     return new Promise((resolve, reject) => {
       let timedOut = false;
+      let channel: ClientChannel | undefined;
+
+      const abort = (reason: Error) => {
+        channel?.destroy();
+        reject(reason);
+      };
+
       const timer = setTimeout(() => {
         timedOut = true;
-        this.connected = false;
-        reject(new Error(`SSH command timed out after ${timeoutMs}ms`));
+        abort(new Error(`SSH command timed out after ${timeoutMs}ms`));
       }, timeoutMs);
 
       const abortHandler = () => {
@@ -161,7 +183,7 @@ export class SshConnection {
           clearTimeout(timer);
           const err = new Error('Operation aborted');
           err.name = 'AbortError';
-          reject(err);
+          abort(err);
         }
       };
 
@@ -170,6 +192,7 @@ export class SshConnection {
       this.client.exec(command, (err, stream) => {
         if (timedOut || signal?.aborted) {
           signal?.removeEventListener('abort', abortHandler);
+          stream?.destroy();
           return;
         }
         if (err) {
@@ -181,6 +204,8 @@ export class SshConnection {
           reject(err);
           return;
         }
+
+        channel = stream;
 
         let stdout = '';
         let stderr = '';
@@ -225,29 +250,27 @@ export class SshConnection {
   }
 
   /**
-   * Execute a command that may require root, trying three strategies in
-   * order and stopping at the first that succeeds:
-   *   1. Plain execution (works if already root or passwordless sudo is configured oddly)
-   *   2. `sudo -S <command>` with the sudo password piped to stdin
-   *   3. `sudo -n <command>` (non-interactive — relies on a NOPASSWD sudoers rule)
+   * Execute a command that may require root, trying strategies in order and
+   * stopping at the first that succeeds:
+   *   1. Plain execution (already root, or passwordless sudo)
+   *   2. `sudo -S -p '' <command>` with password piped to stdin
+   *   3. `sudo -n <command>` (NOPASSWD sudoers rule)
    *
-   * This collapses what was previously three near-identical try/catch
-   * blocks (one each for mkdir, validate, reload, plus rollback's inline
-   * copy) into a single, reusable path.
+   * If every strategy fails, throws the first (plain-exec) error as it's
+   * usually the most diagnostic (e.g. "no such file" vs. a generic sudo failure).
    *
-   * If every strategy fails, throws the *first* (plain-exec) error rather
-   * than the last, since the plain-exec failure is usually the most
-   * diagnostic one (e.g. "no such file" vs. a generic sudo auth failure).
+   * Prefer `execWithSudo()` when you know root is required — use this only
+   * when the privilege requirement is genuinely uncertain.
    */
   async execWithSudoFallback(command: string): Promise<string> {
     try {
       return await this.exec(command);
     } catch (plainErr: any) {
       try {
-        if (this.creds.sudoPassword) {
+        if (this.effectiveSudoPassword) {
           return await this.exec(
-            `sudo -S ${command}`,
-            this.creds.sudoPassword + '\n'
+            `sudo -S -p '' ${command}`,
+            this.effectiveSudoPassword + '\n'
           );
         }
         return await this.exec(`sudo -n ${command}`);
@@ -262,13 +285,14 @@ export class SshConnection {
   /**
    * Execute a command with sudo, without attempting a plain execution first.
    * Use this when you know the command requires root privileges.
-   * Tries `sudo -S` (with password) first if available, otherwise `sudo -n` (non-interactive).
+   * Tries `sudo -S -p ''` (with password) first if available, otherwise `sudo -n`.
+   * The `-p ''` flag suppresses the password prompt on stderr entirely.
    */
   async execWithSudo(command: string, signal?: AbortSignal): Promise<string> {
-    if (this.creds.sudoPassword) {
+    if (this.effectiveSudoPassword) {
       return await this.exec(
-        `sudo -S ${command}`,
-        this.creds.sudoPassword + '\n',
+        `sudo -S -p '' ${command}`,
+        this.effectiveSudoPassword + '\n',
         signal
       );
     }
@@ -277,10 +301,13 @@ export class SshConnection {
 
   /**
    * Open a persistent exec channel and stream stdout line-by-line via `onLine`.
-   * Intended for long-running commands like `tail -f`. Returns a `stop` function
-   * that closes the channel and ends the connection.
-   * If `sudoPassword` is provided the command is run via `sudo -S` with the
-   * password written to stdin — same approach as `execWithSudo`.
+   * Intended for long-running commands like `tail -f`.
+   *
+   * Returns a `stop()` function that destroys only the exec channel — not the
+   * whole SSH connection — so other concurrent operations (SFTP, exec) are unaffected.
+   *
+   * If `sudoPassword` is available the command is run via `sudo -S -p ''` with
+   * the password written to stdin.
    */
   execStream(
     command: string,
@@ -293,17 +320,18 @@ export class SshConnection {
     }
 
     let stopped = false;
+    let channel: ClientChannel | undefined;
 
-    const fullCommand = this.creds.sudoPassword
-      ? `sudo -S ${command}`
-      : command;
+    const sudoPassword = this.effectiveSudoPassword;
+    const fullCommand = sudoPassword ? `sudo -S -p '' ${command}` : command;
 
     this.client.exec(fullCommand, (err, stream) => {
       if (err) { onError(err); return; }
 
-      // Feed sudo password via stdin then close stdin
-      if (this.creds.sudoPassword) {
-        stream.write(this.creds.sudoPassword + '\n');
+      channel = stream;
+
+      if (sudoPassword) {
+        stream.write(sudoPassword + '\n');
         stream.end();
       }
 
@@ -317,23 +345,22 @@ export class SshConnection {
         for (const line of lines) onLine(line);
       });
 
-      stream.stderr.on('data', (chunk: Buffer) => {
-        if (stopped) return;
-        const text = chunk.toString().trim();
-        // suppress sudo password prompts on stderr
-        if (text && !text.includes('[sudo]') && !text.toLowerCase().includes('password')) {
-          onError(new Error(text));
-        }
+      stream.stderr.on('data', () => {
+        // stderr suppressed: `-p ''` eliminates sudo password prompts, and
+        // streaming commands (tail -f) routinely write harmless status to stderr.
       });
 
       stream.on('close', () => {
+        // Flush any partial line left in the buffer.
+        if (buf.length > 0) onLine(buf);
         if (!stopped) onError(new Error('Remote stream closed unexpectedly'));
       });
     });
 
     return () => {
       stopped = true;
-      this.disconnect();
+      // Destroy only this channel, not the whole SSH connection.
+      channel?.destroy();
     };
   }
 
@@ -352,13 +379,13 @@ export class SshConnection {
           reject(new Error(`Failed to start SFTP: ${err.message}`));
           return;
         }
-        sftp.fastPut(localPath, remotePath, (err) => {
+        sftp.fastPut(localPath, remotePath, (putErr) => {
           if (timedOut) return;
           clearTimeout(timer);
-          if (err) {
+          if (putErr) {
             reject(
               new Error(
-                `Failed to transfer ${localPath} to ${this.creds.remoteHost}: ${err.message}`
+                `Failed to transfer ${localPath} to ${this.creds.remoteHost}: ${putErr.message}`
               )
             );
           } else {
@@ -384,14 +411,14 @@ export class SshConnection {
           reject(err);
           return;
         }
-        sftp.readFile(remotePath, (err, data) => {
+        sftp.readFile(remotePath, (readErr, data) => {
           if (timedOut) return;
           clearTimeout(timer);
-          if (err) {
-            if (err.message.includes('No such file')) {
+          if (readErr) {
+            if (readErr.message.includes('No such file')) {
               resolve(null);
             } else {
-              reject(err);
+              reject(readErr);
             }
           } else {
             resolve(data);
@@ -403,7 +430,8 @@ export class SshConnection {
 
   /**
    * Read a chunk of a remote file via SFTP starting at `offset`, up to `maxBytes`.
-   * Also returns the file's current total size.
+   * Also returns the file's current total size so callers can detect rotation:
+   *   if (offset > result.size) → file was rotated/truncated; reset offset to 0.
    * Returns null if the file does not exist.
    */
   async sftpReadChunk(
@@ -502,13 +530,13 @@ export class SshConnection {
   }
 
   /**
-   * Strip the sudo password out of a string before it's allowed into an
-   * Error message. A misbehaving remote shell could in principle echo
-   * stdin back on stderr; this is a defense-in-depth measure so a secret
-   * never ends up in logs even if that happens.
+   * Strip the sudo/ssh password out of a string before it's used in an Error
+   * message. Defense-in-depth: a misbehaving remote shell could echo stdin
+   * back on stderr; this ensures secrets never end up in logs.
    */
   private redact(text: string): string {
-    if (!this.creds.sudoPassword) return text;
-    return text.split(this.creds.sudoPassword).join('[redacted]');
+    const password = this.effectiveSudoPassword;
+    if (!password) return text;
+    return text.split(password).join('[redacted]');
   }
 }
