@@ -125,8 +125,6 @@ export const metrics = async ({ name }: { name: string }) => {
 
   const poll = async () => {
     if (stopped) return;
-    // Reconnect SSH if the connection dropped — tailers use a provider so they
-    // pick up the fresh instance automatically on the next poll() call.
     if (isRemote) await getOrReconnectSsh();
     for (const { label, tailer } of tailers) {
       await tailer.poll();
@@ -135,24 +133,24 @@ export const metrics = async ({ name }: { name: string }) => {
       const prev = printedCount.get(label) ?? 0;
 
       if (recent.length > prev) {
-        // New entries appended to the tail — print only the new ones
         for (const entry of recent.slice(prev)) {
           printEntry(entry, tailers.length > 1 ? label : undefined);
         }
         printedCount.set(label, recent.length);
       } else if (recent.length < prev) {
-        // recentEntries slid (>200 total) or log rotated — print the full new tail
         for (const entry of recent) {
           printEntry(entry, tailers.length > 1 ? label : undefined);
         }
         printedCount.set(label, recent.length);
       }
-      // recent.length === prev → nothing new
     }
     if (!stopped) setTimeout(poll, POLL_INTERVAL_MS);
   };
 
-  setTimeout(poll, POLL_INTERVAL_MS);
+  // Keep the process alive until Ctrl+C — same pattern as logs.ts
+  await new Promise<void>(() => {
+    setTimeout(poll, POLL_INTERVAL_MS);
+  });
 };
 
 function printEntry(entry: LogEntry, label?: string) {
