@@ -100,7 +100,7 @@ export const metrics = async ({ name }: { name: string }) => {
   }
 
   const cleanup = () => {
-    clearInterval(timer);
+    stopped = true;
     ssh?.disconnect?.();
     process.exit(0);
   };
@@ -108,7 +108,10 @@ export const metrics = async ({ name }: { name: string }) => {
   process.on('SIGINT', cleanup);
   process.on('SIGTERM', cleanup);
 
-  const timer = setInterval(async () => {
+  let stopped = false;
+
+  const poll = async () => {
+    if (stopped) return;
     for (const { label, tailer } of tailers) {
       await tailer.poll();
       const window = tailer.getWindow();
@@ -120,11 +123,13 @@ export const metrics = async ({ name }: { name: string }) => {
         }
         lastCounts.set(label, total);
       } else if (total < prev) {
-        // log rotated
         lastCounts.set(label, total);
       }
     }
-  }, POLL_INTERVAL_MS);
+    if (!stopped) setTimeout(poll, POLL_INTERVAL_MS);
+  };
+
+  setTimeout(poll, POLL_INTERVAL_MS);
 };
 
 function printEntry(entry: LogEntry, label?: string) {
