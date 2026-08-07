@@ -1,14 +1,31 @@
-import { AppRepo, RouteRepo, DomainRepo } from '../db/repos.js';
+import { AppRepo, RouteRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 import { NginxLogTailer } from '../utils/nginx-log-tailer.js';
 import type { LogEntry } from '../utils/nginx-log-tailer.js';
+import { SshConnection } from '../utils/ssh-connection.js';
+import {
+  NGINX_REMOTE_HOST,
+  NGINX_REMOTE_KEY,
+  NGINX_REMOTE_PASSWORD,
+  NGINX_SUDO_PASSWORD,
+} from '../constants.js';
 
 const POLL_INTERVAL_MS = 500;
 
+async function getSshConnection(): Promise<SshConnection | undefined> {
+  if (!NGINX_REMOTE_HOST) return undefined;
+  const conn = new SshConnection({
+    remoteHost: NGINX_REMOTE_HOST,
+    sshKeyPath: NGINX_REMOTE_KEY,
+    sshPassword: NGINX_REMOTE_PASSWORD,
+    sudoPassword: NGINX_SUDO_PASSWORD,
+  });
+  await conn.connect();
+  return conn;
+}
+
 export const metrics = async ({ name }: { name: string }) => {
   const app = await AppRepo.findByName(name);
-
-  // Find all routes for this app and resolve their log paths
   const routes = await RouteRepo.getAllByAppIdWithAppAndDomain(app.id);
 
   if (routes.length === 0) {
@@ -16,42 +33,63 @@ export const metrics = async ({ name }: { name: string }) => {
     process.exit(1);
   }
 
-  // Build one tailer per route log file (deduplicated by path)
+  const isRemote = !!NGINX_REMOTE_HOST;
+  let ssh: SshConnection | undefined;
+
+  if (isRemote) {
+    try {
+      ssh = await getSshConnection();
+    } catch (err: any) {
+      Logger.error(`Failed to connect to remote SSH (${NGINX_REMOTE_HOST}): ${err.message}`);
+      process.exit(1);
+    }
+  }
+
+  // Build one tailer per unique log file
   const tailers: Array<{ label: string; tailer: NginxLogTailer }> = [];
   const seen = new Set<string>();
 
   for (const route of routes) {
-    const domain = await DomainRepo.findByName(route.domain.name);
-    const logPath = NginxLogTailer.accessLogPath(domain.name, route.path);
+    const routePath = route.path === '' ? '/' : route.path;
+    const logPath = NginxLogTailer.accessLogPath(route.domain.name, routePath, isRemote);
     if (seen.has(logPath)) continue;
     seen.add(logPath);
-    tailers.push({
-      label: `${domain.name}${route.path}`,
-      tailer: new NginxLogTailer(logPath),
-    });
+
+    const tailer = ssh
+      ? new NginxLogTailer(logPath, ssh)
+      : new NginxLogTailer(logPath);
+
+    tailers.push({ label: `${route.domain.name}${routePath}`, tailer });
   }
 
   Logger.info(
-    `Streaming nginx logs for "${Logger.highlight(name)}" (Ctrl+C to stop)...\n`
+    `Streaming nginx logs for "${Logger.highlight(name)}"${isRemote ? ` via ${NGINX_REMOTE_HOST}` : ''} (Ctrl+C to stop)...\n`
   );
 
-  // Seed each tailer and print existing tail
-  for (const { tailer } of tailers) {
+  // Seed historical entries
+  for (const { label, tailer } of tailers) {
     await tailer.poll();
     const window = tailer.getWindow();
+    if (window.error) {
+      Logger.warn(`[${label}] ${window.error}`);
+    }
     for (const entry of window.recentEntries) {
-      printEntry(entry, tailers.length > 1 ? tailers.find(t => t.tailer === tailer)!.label : undefined);
+      printEntry(entry, tailers.length > 1 ? label : undefined);
     }
   }
 
-  const lastCounts = new Map(tailers.map(({ label, tailer }) => [label, tailer.getWindow().recentEntries.length]));
+  const lastCounts = new Map(
+    tailers.map(({ label, tailer }) => [label, tailer.getWindow().recentEntries.length])
+  );
 
-  const sigintHandler = () => {
+  const cleanup = () => {
     clearInterval(timer);
+    ssh?.disconnect?.();
     process.exit(0);
   };
-  process.on('SIGINT', sigintHandler);
-  process.on('SIGTERM', sigintHandler);
+
+  process.on('SIGINT', cleanup);
+  process.on('SIGTERM', cleanup);
 
   const timer = setInterval(async () => {
     for (const { label, tailer } of tailers) {
@@ -65,7 +103,6 @@ export const metrics = async ({ name }: { name: string }) => {
         }
         lastCounts.set(label, entries.length);
       } else if (entries.length < prev) {
-        // log rotated
         lastCounts.set(label, entries.length);
       }
     }
