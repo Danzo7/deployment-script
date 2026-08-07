@@ -83,8 +83,10 @@ export const metrics = async ({ name }: { name: string }) => {
     `Streaming nginx logs for "${Logger.highlight(name)}"${isRemote ? ` via ${NGINX_REMOTE_HOST}` : ''} (Ctrl+C to stop)...\n`
   );
 
-  // Seed historical entries — track against full entries array, not recentEntries (capped at 200)
-  const lastCounts = new Map<string, number>();
+  // Track the timestamp of the last printed entry per tailer so new entries
+  // are detected by timestamp rather than array index (which can shift when
+  // trimWindow evicts old entries).
+  const lastSeenTs = new Map<string, number>();
 
   for (const { label, tailer } of tailers) {
     await tailer.poll();
@@ -95,8 +97,8 @@ export const metrics = async ({ name }: { name: string }) => {
     for (const entry of window.recentEntries) {
       printEntry(entry, tailers.length > 1 ? label : undefined);
     }
-    // Track total entries, not recentEntries (recentEntries is capped at 200 and shifts on overflow)
-    lastCounts.set(label, window.entries.length);
+    const last = window.recentEntries.at(-1);
+    lastSeenTs.set(label, last ? last.ts.getTime() : Date.now());
   }
 
   const cleanup = () => {
@@ -115,15 +117,13 @@ export const metrics = async ({ name }: { name: string }) => {
     for (const { label, tailer } of tailers) {
       await tailer.poll();
       const window = tailer.getWindow();
-      const total = window.entries.length;
-      const prev = lastCounts.get(label) ?? 0;
-      if (total > prev) {
-        for (const entry of window.entries.slice(prev)) {
+      const prev = lastSeenTs.get(label) ?? 0;
+      const newEntries = window.entries.filter((e) => e.ts.getTime() > prev);
+      if (newEntries.length > 0) {
+        for (const entry of newEntries) {
           printEntry(entry, tailers.length > 1 ? label : undefined);
         }
-        lastCounts.set(label, total);
-      } else if (total < prev) {
-        lastCounts.set(label, total);
+        lastSeenTs.set(label, newEntries.at(-1)!.ts.getTime());
       }
     }
     if (!stopped) setTimeout(poll, POLL_INTERVAL_MS);
