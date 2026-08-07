@@ -275,6 +275,56 @@ export class SshConnection {
     return await this.exec(`sudo -n ${command}`, undefined, signal);
   }
 
+  /**
+   * Open a persistent exec channel and stream stdout line-by-line via `onLine`.
+   * Intended for long-running commands like `tail -f`. Returns a `stop` function
+   * that closes the channel and ends the connection.
+   */
+  execStream(
+    command: string,
+    onLine: (line: string) => void,
+    onError: (err: Error) => void
+  ): () => void {
+    if (!this.connected) {
+      onError(new Error('(SSH) Not connected'));
+      return () => {};
+    }
+
+    let stopped = false;
+
+    this.client.exec(command, (err, stream) => {
+      if (err) { onError(err); return; }
+
+      let buf = '';
+
+      stream.on('data', (chunk: Buffer) => {
+        if (stopped) return;
+        buf += chunk.toString('utf8');
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) onLine(line);
+      });
+
+      stream.stderr.on('data', (chunk: Buffer) => {
+        if (stopped) return;
+        const text = chunk.toString().trim();
+        // suppress sudo password prompts on stderr
+        if (text && !text.includes('[sudo]') && !text.toLowerCase().includes('password')) {
+          onError(new Error(text));
+        }
+      });
+
+      stream.on('close', () => {
+        if (!stopped) onError(new Error('Remote stream closed unexpectedly'));
+      });
+    });
+
+    return () => {
+      stopped = true;
+      this.disconnect();
+    };
+  }
+
   async sftpFastPut(localPath: string, remotePath: string): Promise<void> {
     return new Promise((resolve, reject) => {
       let timedOut = false;
