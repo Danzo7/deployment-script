@@ -279,6 +279,8 @@ export class SshConnection {
    * Open a persistent exec channel and stream stdout line-by-line via `onLine`.
    * Intended for long-running commands like `tail -f`. Returns a `stop` function
    * that closes the channel and ends the connection.
+   * If `sudoPassword` is provided the command is run via `sudo -S` with the
+   * password written to stdin — same approach as `execWithSudo`.
    */
   execStream(
     command: string,
@@ -292,8 +294,18 @@ export class SshConnection {
 
     let stopped = false;
 
-    this.client.exec(command, (err, stream) => {
+    const fullCommand = this.creds.sudoPassword
+      ? `sudo -S ${command}`
+      : command;
+
+    this.client.exec(fullCommand, (err, stream) => {
       if (err) { onError(err); return; }
+
+      // Feed sudo password via stdin then close stdin
+      if (this.creds.sudoPassword) {
+        stream.write(this.creds.sudoPassword + '\n');
+        stream.end();
+      }
 
       let buf = '';
 

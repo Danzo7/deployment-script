@@ -121,9 +121,7 @@ async function tailRemote(
 
   await conn.connect();
 
-  const cmd = conn.hasSudoPassword
-    ? `echo '${NGINX_SUDO_PASSWORD}' | sudo -S tail -f -n 50 '${logPath}'`
-    : `tail -f -n 50 '${logPath}'`;
+  const cmd = `tail -f -n 50 '${logPath}'`;
 
   const stop = conn.execStream(
     cmd,
