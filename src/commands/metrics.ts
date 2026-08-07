@@ -12,16 +12,28 @@ import {
 
 const POLL_INTERVAL_MS = 500;
 
-async function getSshConnection(): Promise<SshConnection | undefined> {
-  if (!NGINX_REMOTE_HOST) return undefined;
-  const conn = new SshConnection({
-    remoteHost: NGINX_REMOTE_HOST,
-    sshKeyPath: NGINX_REMOTE_KEY,
-    sshPassword: NGINX_REMOTE_PASSWORD,
-    sudoPassword: NGINX_SUDO_PASSWORD,
-  });
-  await conn.connect();
-  return conn;
+// Shared connection reference — replaced on reconnect so tailer provider
+// always hands the current live instance to each poll() call.
+let _ssh: SshConnection | null = null;
+
+async function getOrReconnectSsh(): Promise<SshConnection | null> {
+  if (!NGINX_REMOTE_HOST) return null;
+  if (_ssh?.isConnected) return _ssh;
+  // Connection is dead or never established — (re)connect
+  try {
+    const conn = new SshConnection({
+      remoteHost: NGINX_REMOTE_HOST,
+      sshKeyPath: NGINX_REMOTE_KEY,
+      sshPassword: NGINX_REMOTE_PASSWORD,
+      sudoPassword: NGINX_SUDO_PASSWORD,
+    });
+    await conn.connect();
+    _ssh = conn;
+    return _ssh;
+  } catch {
+    _ssh = null;
+    return null;
+  }
 }
 
 export const metrics = async ({ name }: { name: string }) => {
@@ -34,11 +46,11 @@ export const metrics = async ({ name }: { name: string }) => {
   }
 
   const isRemote = !!NGINX_REMOTE_HOST;
-  let ssh: SshConnection | undefined;
 
   if (isRemote) {
     try {
-      ssh = await getSshConnection();
+      const conn = await getOrReconnectSsh();
+      if (!conn) throw new Error('connection returned null');
     } catch (err: any) {
       Logger.error(`Failed to connect to remote SSH (${NGINX_REMOTE_HOST}): ${err.message}`);
       process.exit(1);
@@ -58,7 +70,7 @@ export const metrics = async ({ name }: { name: string }) => {
   const pushedRoutes = routes.filter((r) => r.domain.lastPushedAt);
   if (pushedRoutes.length === 0) {
     Logger.error('No pushed domains found for this app. Run dm domain push <domain> first.');
-    ssh?.disconnect?.();
+    _ssh?.disconnect?.();
     process.exit(1);
   }
 
@@ -72,8 +84,8 @@ export const metrics = async ({ name }: { name: string }) => {
     if (seen.has(logPath)) continue;
     seen.add(logPath);
 
-    const tailer = ssh
-      ? new NginxLogTailer(logPath, ssh)
+    const tailer = isRemote
+      ? new NginxLogTailer(logPath, () => _ssh ?? undefined)
       : new NginxLogTailer(logPath);
 
     tailers.push({ label: `${route.domain.name}${routePath}`, tailer });
@@ -83,10 +95,10 @@ export const metrics = async ({ name }: { name: string }) => {
     `Streaming nginx logs for "${Logger.highlight(name)}"${isRemote ? ` via ${NGINX_REMOTE_HOST}` : ''} (Ctrl+C to stop)...\n`
   );
 
-  // Track the timestamp of the last printed entry per tailer so new entries
-  // are detected by timestamp rather than array index (which can shift when
-  // trimWindow evicts old entries).
-  const lastSeenTs = new Map<string, number>();
+  // Seed: print the current recentEntries snapshot (last 200), same source
+  // as the MetricsTab logs view. Track how many we've printed so on each
+  // subsequent poll we only print the newly appended tail.
+  const printedCount = new Map<string, number>();
 
   for (const { label, tailer } of tailers) {
     await tailer.poll();
@@ -97,13 +109,12 @@ export const metrics = async ({ name }: { name: string }) => {
     for (const entry of window.recentEntries) {
       printEntry(entry, tailers.length > 1 ? label : undefined);
     }
-    const last = window.recentEntries.at(-1);
-    lastSeenTs.set(label, last ? last.ts.getTime() : Date.now());
+    printedCount.set(label, window.recentEntries.length);
   }
 
   const cleanup = () => {
     stopped = true;
-    ssh?.disconnect?.();
+    _ssh?.disconnect?.();
     process.exit(0);
   };
 
@@ -114,17 +125,29 @@ export const metrics = async ({ name }: { name: string }) => {
 
   const poll = async () => {
     if (stopped) return;
+    // Reconnect SSH if the connection dropped — tailers use a provider so they
+    // pick up the fresh instance automatically on the next poll() call.
+    if (isRemote) await getOrReconnectSsh();
     for (const { label, tailer } of tailers) {
       await tailer.poll();
       const window = tailer.getWindow();
-      const prev = lastSeenTs.get(label) ?? 0;
-      const newEntries = window.entries.filter((e) => e.ts.getTime() > prev);
-      if (newEntries.length > 0) {
-        for (const entry of newEntries) {
+      const recent = window.recentEntries;
+      const prev = printedCount.get(label) ?? 0;
+
+      if (recent.length > prev) {
+        // New entries appended to the tail — print only the new ones
+        for (const entry of recent.slice(prev)) {
           printEntry(entry, tailers.length > 1 ? label : undefined);
         }
-        lastSeenTs.set(label, newEntries.at(-1)!.ts.getTime());
+        printedCount.set(label, recent.length);
+      } else if (recent.length < prev) {
+        // recentEntries slid (>200 total) or log rotated — print the full new tail
+        for (const entry of recent) {
+          printEntry(entry, tailers.length > 1 ? label : undefined);
+        }
+        printedCount.set(label, recent.length);
       }
+      // recent.length === prev → nothing new
     }
     if (!stopped) setTimeout(poll, POLL_INTERVAL_MS);
   };
