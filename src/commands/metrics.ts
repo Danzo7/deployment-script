@@ -66,7 +66,9 @@ export const metrics = async ({ name }: { name: string }) => {
     `Streaming nginx logs for "${Logger.highlight(name)}"${isRemote ? ` via ${NGINX_REMOTE_HOST}` : ''} (Ctrl+C to stop)...\n`
   );
 
-  // Seed historical entries
+  // Seed historical entries — track against full entries array, not recentEntries (capped at 200)
+  const lastCounts = new Map<string, number>();
+
   for (const { label, tailer } of tailers) {
     await tailer.poll();
     const window = tailer.getWindow();
@@ -76,11 +78,9 @@ export const metrics = async ({ name }: { name: string }) => {
     for (const entry of window.recentEntries) {
       printEntry(entry, tailers.length > 1 ? label : undefined);
     }
+    // Track total entries, not recentEntries (recentEntries is capped at 200 and shifts on overflow)
+    lastCounts.set(label, window.entries.length);
   }
-
-  const lastCounts = new Map(
-    tailers.map(({ label, tailer }) => [label, tailer.getWindow().recentEntries.length])
-  );
 
   const cleanup = () => {
     clearInterval(timer);
@@ -95,15 +95,16 @@ export const metrics = async ({ name }: { name: string }) => {
     for (const { label, tailer } of tailers) {
       await tailer.poll();
       const window = tailer.getWindow();
-      const entries = window.recentEntries;
+      const total = window.entries.length;
       const prev = lastCounts.get(label) ?? 0;
-      if (entries.length > prev) {
-        for (const entry of entries.slice(prev)) {
+      if (total > prev) {
+        for (const entry of window.entries.slice(prev)) {
           printEntry(entry, tailers.length > 1 ? label : undefined);
         }
-        lastCounts.set(label, entries.length);
-      } else if (entries.length < prev) {
-        lastCounts.set(label, entries.length);
+        lastCounts.set(label, total);
+      } else if (total < prev) {
+        // log rotated
+        lastCounts.set(label, total);
       }
     }
   }, POLL_INTERVAL_MS);
