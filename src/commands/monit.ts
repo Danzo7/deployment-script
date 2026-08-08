@@ -35,8 +35,8 @@ const formatUptime = (pmUptime?: number) => {
 
 const renderTable = (list: pm2.ProcessDescription[]) => {
   process.stdout.write('\x1b[2J\x1b[H'); // clear screen
-  console.log(`${chalk.bold('PM2 Monitor')}  (Ctrl+C to exit)\n`);
-  console.log(
+  Logger.print(`${chalk.bold('PM2 Monitor')}  (Ctrl+C to exit)\n`);
+  Logger.print(
     'ID'.padEnd(5) +
       'Name'.padEnd(25) +
       'Status'.padEnd(12) +
@@ -45,7 +45,7 @@ const renderTable = (list: pm2.ProcessDescription[]) => {
       'Uptime'.padEnd(15) +
       'Restarts'
   );
-  console.log('-'.repeat(85));
+  Logger.print('-'.repeat(85));
 
   for (const proc of list) {
     const env = proc.pm2_env as any;
@@ -57,7 +57,7 @@ const renderTable = (list: pm2.ProcessDescription[]) => {
     const mem = formatMem(proc.monit?.memory).padEnd(12);
     const uptime = formatUptime(env?.pm_uptime).padEnd(15);
     const restarts = String(env?.restart_time ?? 0);
-    console.log(`${id}${name}${status}${cpu}${mem}${uptime}${restarts}`);
+    Logger.print(`${id}${name}${status}${cpu}${mem}${uptime}${restarts}`);
   }
 };
 

@@ -139,12 +139,50 @@ export class Logger {
   }
 
   /**
+   * Prints a raw message to stdout with no timestamp, icon, or styling.
+   * Respects isMuted. Use for pre-styled strings, table output, or blank lines.
+   */
+  static print(message: any = '') {
+    if (Logger.isMuted) return this;
+    process.stdout.write(String(message) + '\n');
+    return this;
+  }
+
+  /**
+   * Prints a pre-rendered table string (e.g. from cli-table3).
+   * Alias for print() with clearer intent at call sites.
+   */
+  static table(tableString: string) {
+    return this.print(tableString);
+  }
+
+  /**
+   * Prints a labeled key/value detail row, matching the pattern used across
+   * info, domain, and cert-status commands.
+   * Example output:  "  Name               my-app"
+   */
+  static row(label: string, value: string, labelWidth = 18) {
+    if (Logger.isMuted) return this;
+    process.stdout.write(`  ${chalk.gray(label.padEnd(labelWidth))} ${value}\n`);
+    return this;
+  }
+
+  /**
+   * Prints a horizontal gray divider line.
+   */
+  static divider(width = 40) {
+    if (Logger.isMuted) return this;
+    process.stdout.write(chalk.gray('  ' + '─'.repeat(width)) + '\n');
+    return this;
+  }
+
+  /**
    * Private helper for consistent logging.
    */
   private static log(formattedMessage: string, ...optionalParams: any[]) {
-    process.stdout.write(this.withTimestamp(formattedMessage));
+    process.stdout.write(this.withTimestamp(formattedMessage) + '\n');
     if (optionalParams.length) {
-      console.log(...optionalParams);
+      process.stdout.write(optionalParams.map(String).join(' ') + '\n');
     }
   }
 }

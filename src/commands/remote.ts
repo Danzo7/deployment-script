@@ -84,7 +84,7 @@ export async function remoteKeyList(): Promise<void> {
   }
   const table = new Table({ head: ['Fingerprint', 'Comment'] });
   for (const k of keys) table.push([k.fingerprint, k.comment || '—']);
-  console.log(table.toString());
+  Logger.table(table.toString());
 }
 
 export async function remoteStatus(): Promise<void> {

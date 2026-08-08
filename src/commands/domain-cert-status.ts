@@ -26,9 +26,6 @@ export async function domainCertStatus(name: string): Promise<void> {
     throw new Error(`Domain "${normalized}" not found`);
   }
 
-  const row = (label: string, value: string) =>
-    console.log(`  ${chalk.gray(label.padEnd(18))} ${value}`);
-
   const { ssl } = domain;
 
   if (ssl.mode === 'none') {
@@ -43,11 +40,11 @@ export async function domainCertStatus(name: string): Promise<void> {
 
   // mode === 'custom'
   if (!ssl.certPath) {
-    console.log();
-    console.log(chalk.bold.cyan(`  ${domain.name}`));
-    console.log(chalk.gray('  ' + '─'.repeat(40)));
-    row('SSL Mode', chalk.yellow('custom (no cert uploaded)'));
-    console.log();
+    Logger.nl();
+    Logger.print(chalk.bold.cyan(`  ${domain.name}`));
+    Logger.divider();
+    Logger.row('SSL Mode', chalk.yellow('custom (no cert uploaded)'));
+    Logger.nl();
     return;
   }
 
@@ -55,14 +52,14 @@ export async function domainCertStatus(name: string): Promise<void> {
     Logger.warn(`Certificate file missing from disk: ${ssl.certPath}`);
   }
 
-  console.log();
-  console.log(chalk.bold.cyan(`  ${domain.name}`));
-  console.log(chalk.gray('  ' + '─'.repeat(40)));
-  row('SSL Mode', chalk.white(ssl.mode));
-  row('Issued To', chalk.white(ssl.issuedTo ?? '—'));
-  row('Issuer', chalk.white(ssl.issuer ?? '—'));
-  row('SANs', chalk.white(ssl.sanDomains?.join(', ') ?? '—'));
-  row('Uploaded At', chalk.yellow(formatDate(ssl.uploadedAt)));
-  row('Expires', expiryColored(ssl.expiresAt));
-  console.log();
+  Logger.nl();
+  Logger.print(chalk.bold.cyan(`  ${domain.name}`));
+  Logger.divider();
+  Logger.row('SSL Mode', chalk.white(ssl.mode));
+  Logger.row('Issued To', chalk.white(ssl.issuedTo ?? '—'));
+  Logger.row('Issuer', chalk.white(ssl.issuer ?? '—'));
+  Logger.row('SANs', chalk.white(ssl.sanDomains?.join(', ') ?? '—'));
+  Logger.row('Uploaded At', chalk.yellow(formatDate(ssl.uploadedAt)));
+  Logger.row('Expires', expiryColored(ssl.expiresAt));
+  Logger.nl();
 }

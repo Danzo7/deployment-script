@@ -257,7 +257,7 @@ async function runStreamingInRepl(
       (process as any).exit = origExit;
       process.removeAllListeners('SIGINT');
       for (const l of existingSigInt) process.on('SIGINT', l);
-      console.log('');
+      Logger.nl();
       if (node.onStreamEnd) await node.onStreamEnd();
       resolveDone();
     };
@@ -303,7 +303,7 @@ async function runNode(
     args = resolveLeafArgs(node, positional, flags);
   } catch (err: any) {
     Logger.error(err?.message ?? String(err));
-    console.log(buildLeafHelp(node));
+    Logger.print(buildLeafHelp(node));
     return;
   }
 
@@ -325,14 +325,14 @@ async function dispatch(tokens: string[]): Promise<void> {
 
   switch (cmdKey) {
     case 'help':
-      console.log(buildHelp());
+      Logger.print(buildHelp());
       return;
     case 'clear':
       process.stdout.write('\x1b[2J\x1b[H');
       return;
     case 'exit':
     case 'quit':
-      console.log(chalk.gray('Goodbye.'));
+      Logger.print(chalk.gray('Goodbye.'));
       process.exit(0);
   }
 
@@ -402,8 +402,8 @@ export async function startRepl(version: string): Promise<void> {
 
   // Clear screen and move cursor to top-left
   process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
-  console.log(chalk.bold(`Deployment Manager v${version}`));
-  console.log(chalk.gray('Type "help" for available commands.\n'));
+  Logger.print(chalk.bold(`Deployment Manager v${version}`));
+  Logger.print(chalk.gray('Type "help" for available commands.\n'));
 
   let resolveExit: () => void;
   const exited = new Promise<void>((resolve) => {

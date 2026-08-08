@@ -34,26 +34,26 @@ function assertSshAvailable(): void {
   const result = spawnSync('ssh', ['-V'], { stdio: 'pipe' });
   if (result.error) {
     Logger.error('ssh not found on PATH.');
-    console.log('');
-    console.log(chalk.white('  OpenSSH client is required.'));
+    Logger.nl();
+    Logger.print(chalk.white('  OpenSSH client is required.'));
     if (process.platform === 'win32') {
-      console.log(
+      Logger.print(
         chalk.gray('  Settings -> Apps -> Optional Features -> OpenSSH Client')
       );
-      console.log(chalk.gray('  Or run in PowerShell (as Admin):'));
-      console.log(
+      Logger.print(chalk.gray('  Or run in PowerShell (as Admin):'));
+      Logger.print(
         chalk.yellow(
           '    Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0'
         )
       );
     } else {
-      console.log(chalk.gray('  Install via your package manager, e.g.:'));
-      console.log(
+      Logger.print(chalk.gray('  Install via your package manager, e.g.:'));
+      Logger.print(
         chalk.yellow('    apt install openssh-client   # Debian/Ubuntu')
       );
-      console.log(chalk.yellow('    brew install openssh         # macOS'));
+      Logger.print(chalk.yellow('    brew install openssh         # macOS'));
     }
-    console.log('');
+    Logger.nl();
     process.exit(1);
   }
 }
@@ -86,7 +86,7 @@ export async function ensureClientKey(
     const keyPath = join(sshDir, filename);
     if (fs.existsSync(keyPath)) return keyPath;
     Logger.error(`No key found at ${keyPath}.`);
-    console.log('');
+    Logger.nl();
     Logger.info(
       `Generate one with:  ssh-keygen -t ${algorithm} -f "${keyPath}"`
     );
@@ -102,9 +102,9 @@ export async function ensureClientKey(
   }
 
   // Default key not found — offer to generate it.
-  console.log('');
+  Logger.nl();
   Logger.warn(`No key found at ${defaultPath}.`);
-  console.log('');
+  Logger.nl();
 
   const confirmed = await new Promise<boolean>((resolve) => {
     const rl = readline.createInterface({
@@ -123,10 +123,10 @@ export async function ensureClientKey(
   });
 
   if (!confirmed) {
-    console.log('');
+    Logger.nl();
     Logger.info('To generate a key manually, run:');
-    console.log(chalk.yellow(`    ssh-keygen -t ed25519 -f "${defaultPath}"`));
-    console.log('');
+    Logger.print(chalk.yellow(`    ssh-keygen -t ed25519 -f "${defaultPath}"`));
+    Logger.nl();
     Logger.info(
       `Then share the public key (${defaultPath}.pub) with your server admin.`
     );
@@ -136,7 +136,7 @@ export async function ensureClientKey(
   if (!fs.existsSync(sshDir))
     fs.mkdirSync(sshDir, { recursive: true, mode: 0o700 });
 
-  console.log('');
+  Logger.nl();
   Logger.info('Generating ed25519 key pair...');
   const gen = spawnSync(
     'ssh-keygen',
@@ -182,16 +182,12 @@ export function showPublicKey(privateKeyPath: string): void {
   const pubPath = privateKeyPath + '.pub';
   if (!fs.existsSync(pubPath)) return;
   const pubKey = fs.readFileSync(pubPath, 'utf8').trim();
-  console.log('');
-  console.log(chalk.white('  Your public key:'));
-  console.log(
-    chalk.gray('  ─────────────────────────────────────────────────────')
-  );
-  console.log(chalk.cyan(`  ${pubKey}`));
-  console.log(
-    chalk.gray('  ─────────────────────────────────────────────────────')
-  );
-  console.log('');
+  Logger.nl();
+  Logger.print(chalk.white('  Your public key:'));
+  Logger.divider(53);
+  Logger.print(chalk.cyan(`  ${pubKey}`));
+  Logger.divider(53);
+  Logger.nl();
 }
 
 // ── Main connect entry point ──────────────────────────────────────────────────
@@ -211,9 +207,9 @@ export async function connectRemote(
   const keyPath = await ensureClientKey(identity);
   if (!keyPath) process.exit(0);
 
-  console.log('');
+  Logger.nl();
   Logger.info(`Connecting to ${cleanHost}:${targetPort} ...`);
-  console.log('');
+  Logger.nl();
 
   const result = spawnSync(
     'ssh',
@@ -240,15 +236,15 @@ export async function connectRemote(
   const exitCode = result.status ?? 1;
 
   if (exitCode === 255) {
-    console.log('');
+    Logger.nl();
     Logger.error('Connection failed. Possible causes:');
-    console.log(
+    Logger.print(
       chalk.gray(`  - Server is not reachable at ${cleanHost}:${targetPort}`)
     );
-    console.log(
+    Logger.print(
       chalk.gray('  - Your public key is not authorized on the server')
     );
-    console.log('');
+    Logger.nl();
     showPublicKey(keyPath);
     Logger.info(
       'Share the public key above with your server admin, then try again.'

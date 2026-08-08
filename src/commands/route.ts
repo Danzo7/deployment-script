@@ -89,5 +89,5 @@ export async function routeList(domainName: string): Promise<void> {
     ]);
   });
 
-  console.log(table.toString());
+  Logger.table(table.toString());
 }

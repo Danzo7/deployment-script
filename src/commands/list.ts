@@ -11,6 +11,7 @@ import { supportsUnicode } from '../utils/terminal-capabilities.js';
 import { formatRelative } from '../utils/date-helper.js';
 import { CERT_EXPIRY_WARNING_DAYS } from '../utils/ssl-helper.js';
 import { getHandler } from '../app-types/index.js';
+import { Logger } from '../utils/logger.js';
 
 /**
  * Format routes for display (extracted from domain.ts getAppRouteLines logic)
@@ -69,7 +70,7 @@ export const listApps = async (
     const normalized = filterType.toLowerCase();
     apps = apps.filter((a) => a.projectType.toLowerCase() === normalized);
     if (apps.length === 0) {
-      console.log(chalk.yellow(`No apps found with type "${filterType}".`));
+      Logger.warn(`No apps found with type "${filterType}".`);
       return;
     }
   }
@@ -195,5 +196,5 @@ export const listApps = async (
     table.push(row);
   }
 
-  console.log(table.toString());
+  Logger.table(table.toString());
 };

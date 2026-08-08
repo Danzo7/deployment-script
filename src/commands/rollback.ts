@@ -63,13 +63,13 @@ export const rollback = async ({ name, to }: { name: string; to?: number }) => {
     `${Logger.highlight(name)} rolled back to build ${to} successfully.`
   );
 
-  console.log();
-  console.log(chalk.bold.cyan(`  Builds for ${name}:`));
+  Logger.nl();
+  Logger.print(chalk.bold.cyan(`  Builds for ${name}:`));
   builds.forEach((b, i) => {
     let tag = '';
     if (i === to) tag = chalk.green(' ← active');
     else if (i === currentIndex) tag = chalk.gray(' ← previous');
-    console.log(`  ${chalk.gray(i)}  ${path.basename(b)}${tag}`);
+    Logger.print(`  ${chalk.gray(i)}  ${path.basename(b)}${tag}`);
   });
-  console.log();
+  Logger.nl();
 };

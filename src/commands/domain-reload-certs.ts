@@ -42,9 +42,9 @@ export async function domainReloadCerts(name?: string): Promise<void> {
       return;
     }
 
-    console.log();
+    Logger.nl();
     Logger.info(`Reloading certificates for ${domains.length} domain(s)...`);
-    console.log();
+    Logger.nl();
 
     let updated = 0;
     let added = 0;
@@ -59,14 +59,14 @@ export async function domainReloadCerts(name?: string): Promise<void> {
       else skipped++;
     }
 
-    console.log();
+    Logger.nl();
     Logger.success(`Certificate reload complete.`);
-    console.log(
+    Logger.print(
       chalk.gray(
         `  Added: ${added}, Updated: ${updated}, Removed: ${removed}, Skipped: ${skipped}`
       )
     );
-    console.log();
+    Logger.nl();
   }
 }
 

@@ -152,55 +152,52 @@ export async function domainList(): Promise<void> {
     ]);
   });
 
-  console.log(table.toString());
+  Logger.table(table.toString());
 }
 
 export async function domainShow(name: string): Promise<void> {
   const normalized = normalizeDomainName(name);
   const domain = await DomainRepo.findByNameWithRoutes(normalized);
 
-  const row = (label: string, value: string) =>
-    console.log(`  ${chalk.gray(label.padEnd(18))} ${value}`);
-
-  console.log();
-  console.log(chalk.bold.cyan(`  ${domain.name}`));
-  console.log(chalk.gray('  ' + '─'.repeat(40)));
-  row('Name', chalk.white(domain.name));
-  row('SSL Mode', chalk.white(domain.ssl.mode));
+  Logger.nl();
+  Logger.print(chalk.bold.cyan(`  ${domain.name}`));
+  Logger.divider();
+  Logger.row('Name', chalk.white(domain.name));
+  Logger.row('SSL Mode', chalk.white(domain.ssl.mode));
   if (domain.ssl.mode === 'custom') {
     if (!domain.ssl.certPath) {
-      row('SSL', chalk.yellow('custom (no cert uploaded)'));
+      Logger.row('SSL', chalk.yellow('custom (no cert uploaded)'));
     } else {
-      row('Issued To', chalk.white(domain.ssl.issuedTo ?? '—'));
-      row('Expires', expiryColored(domain.ssl.expiresAt));
-      row('Uploaded', chalk.yellow(formatDate(domain.ssl.uploadedAt)));
+      Logger.row('Issued To', chalk.white(domain.ssl.issuedTo ?? '—'));
+      Logger.row('Expires', expiryColored(domain.ssl.expiresAt));
+      Logger.row('Uploaded', chalk.yellow(formatDate(domain.ssl.uploadedAt)));
     }
   }
-  row('Created', chalk.yellow(formatDate(domain.createdAt)));
-  row('Updated', chalk.yellow(formatDate(domain.updatedAt)));
+  Logger.row('Created', chalk.yellow(formatDate(domain.createdAt)));
+  Logger.row('Updated', chalk.yellow(formatDate(domain.updatedAt)));
 
   // Push metadata section
-  console.log(chalk.gray('  ' + '─'.repeat(40)));
+  Logger.divider();
   if (domain.lastPushedAt) {
-    row(
+    Logger.row(
       'Last pushed',
       chalk.yellow(
         `${formatDate(domain.lastPushedAt)} (${formatRelative(domain.lastPushedAt)})`
       )
     );
   } else {
-    row('Last pushed', chalk.gray('—'));
+    Logger.row('Last pushed', chalk.gray('—'));
   }
   if (domain.configPath) {
-    row('Config path', chalk.white(domain.configPath));
+    Logger.row('Config path', chalk.white(domain.configPath));
   } else {
-    row('Config path', chalk.gray('—'));
+    Logger.row('Config path', chalk.gray('—'));
   }
 
   // Staleness warnings
   if (domain.lastCompiledAt && !domain.lastPushedAt) {
-    console.log();
-    console.log(
+    Logger.nl();
+    Logger.print(
       `  ${chalk.yellow('⚠')} Config has been compiled but not yet pushed. Run ${chalk.cyan(`'dm domain push ${name}'`)} to deploy.`
     );
   } else if (
@@ -208,23 +205,23 @@ export async function domainShow(name: string): Promise<void> {
     domain.lastPushedAt &&
     new Date(domain.lastCompiledAt) > new Date(domain.lastPushedAt)
   ) {
-    console.log();
-    console.log(
+    Logger.nl();
+    Logger.print(
       `  ${chalk.yellow('⚠')} Config is stale — recompiled since last push. Run ${chalk.cyan(`'dm domain push ${name}'`)} to update.`
     );
   }
 
-  console.log(chalk.gray('  ' + '─'.repeat(40)));
+  Logger.divider();
 
   if (domain.routes.length === 0) {
-    console.log(`  ${chalk.gray('No routes configured')}`);
+    Logger.print(`  ${chalk.gray('No routes configured')}`);
   } else {
     for (const route of domain.routes) {
-      console.log(
+      Logger.print(
         `  ${chalk.white('/' + route.path)}  →  ${chalk.whiteBright(route.app.name)}`
       );
     }
   }
 
-  console.log();
+  Logger.nl();
 }

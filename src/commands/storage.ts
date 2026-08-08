@@ -273,5 +273,6 @@ export const storageLs = async (): Promise<void> => {
     chalk.green(formatSize(totalBytes)),
   ]);
 
-  console.log(table.toString());
+  Logger.table(table.toString());
 };
+
