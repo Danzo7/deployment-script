@@ -1,5 +1,4 @@
 import { launchDashboard } from '../tui/launch-dashboard.js';
-import { Logger } from '../utils/logger.js';
 
 /**
  * dm dashboard  — launches the Ink-based operational dashboard.
@@ -9,7 +8,6 @@ export const dashboard = async (): Promise<void> => {
   try {
     await launchDashboard();
   } catch (err: any) {
-    Logger.error('Dashboard error:', err);
-    process.exit(1);
+    throw new Error(`Dashboard error: ${err?.message ?? err}`);
   }
 };

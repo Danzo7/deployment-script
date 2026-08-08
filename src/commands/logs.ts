@@ -85,12 +85,12 @@ export const logs = async ({ name }: { name: string }) => {
 
         sigintHandler = () => {
           cleanup();
-          process.exit(0);
+          resolve();
         };
 
         sigtermHandler = () => {
           cleanup();
-          process.exit(0);
+          resolve();
         };
 
         process.on('SIGINT', sigintHandler);
@@ -101,7 +101,6 @@ export const logs = async ({ name }: { name: string }) => {
     });
   } catch (err) {
     cleanup();
-    Logger.error('Failed to stream logs:', err);
-    process.exit(1);
+    throw err;
   }
 };

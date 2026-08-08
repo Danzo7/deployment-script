@@ -65,7 +65,7 @@ export const monit = () => {
   pm2.connect((connectErr) => {
     if (connectErr) {
       Logger.error('Failed to connect to pm2:', connectErr);
-      process.exit(1);
+      throw new Error(`Failed to connect to pm2: ${connectErr}`);
     }
 
     const refresh = () => {
@@ -85,7 +85,6 @@ export const monit = () => {
       clearInterval(interval);
       pm2.disconnect();
       process.stdout.write('\x1b[2J\x1b[H');
-      process.exit(0);
     });
   });
 };

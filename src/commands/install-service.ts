@@ -34,8 +34,7 @@ export async function installService(
   const platform = process.platform;
 
   if (platform !== 'win32' && platform !== 'linux') {
-    Logger.error('Service management is only supported on Windows and Linux.');
-    process.exit(1);
+    throw new Error('Service management is only supported on Windows and Linux.');
   }
 
   if (options.uninstall) {
@@ -89,9 +88,7 @@ async function installLinux(): Promise<void> {
   try {
     writeFileSync(SYSTEMD_UNIT_PATH, unitContent, { encoding: 'utf-8' });
   } catch (err: any) {
-    Logger.error(`Failed to write unit file: ${err.message}`);
-    Logger.info(chalk.yellow('Tip: run this command with sudo.'));
-    process.exit(1);
+    throw new Error(`Failed to write unit file: ${err.message}\nTip: run this command with sudo.`);
   }
 
   Logger.info(chalk.green(`Written: ${SYSTEMD_UNIT_PATH}`));
@@ -142,8 +139,7 @@ async function uninstallLinux(): Promise<void> {
       unlinkSync(SYSTEMD_UNIT_PATH);
       Logger.info(chalk.green(`Removed: ${SYSTEMD_UNIT_PATH}`));
     } catch (err: any) {
-      Logger.error(`Could not remove unit file: ${err.message}`);
-      process.exit(1);
+      throw new Error(`Could not remove unit file: ${err.message}`);
     }
   } else {
     Logger.warn(
@@ -178,11 +174,9 @@ WantedBy=multi-user.target
 
 function assertLinuxPrivileges(): void {
   if (process.getuid?.() !== 0) {
-    Logger.error('This command must be run as root.');
-    Logger.info(
-      chalk.yellow(`  Re-run with: ${chalk.cyan('sudo dm install-service')}`)
+    throw new Error(
+      `This command must be run as root.\n  Re-run with: ${chalk.cyan('sudo dm install-service')}`
     );
-    process.exit(1);
   }
 }
 
@@ -256,16 +250,12 @@ async function uninstallWindows(): Promise<void> {
 }
 
 function assertWindowsPrivileges(): void {
-  // On Windows, check for admin by attempting to read a protected path.
-  // A cleaner runtime check without shelling out.
   try {
     execSync('net session', { stdio: 'ignore' });
   } catch {
-    Logger.error('Administrator privileges are required.');
-    Logger.info(
-      chalk.yellow('  Re-run this terminal as Administrator and try again.')
+    throw new Error(
+      `Administrator privileges are required.\n  Re-run this terminal as Administrator and try again.`
     );
-    process.exit(1);
   }
 }
 
@@ -303,6 +293,6 @@ async function runCommand(
       Logger.error(chalk.gray(err.stderr.trim()));
     }
 
-    process.exit(1);
+    throw new Error(`${description} failed: ${err.shortMessage ?? err.message}`);
   }
 }

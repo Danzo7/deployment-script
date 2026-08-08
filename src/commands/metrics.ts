@@ -139,8 +139,7 @@ export const metrics = async ({ name }: { name: string }) => {
   const routes = await RouteRepo.getAllByAppIdWithAppAndDomain(app.id);
 
   if (routes.length === 0) {
-    Logger.error(`No routes found for "${name}". Add a domain route first.`);
-    process.exit(1);
+    throw new Error(`No routes found for "${name}". Add a domain route first.`);
   }
 
   const isRemote = !!NGINX_REMOTE_HOST;
@@ -154,8 +153,7 @@ export const metrics = async ({ name }: { name: string }) => {
 
   const pushedRoutes = routes.filter((r) => r.domain.lastPushedAt);
   if (pushedRoutes.length === 0) {
-    Logger.error('No pushed domains found for this app. Run dm domain push <domain> first.');
-    process.exit(1);
+    throw new Error('No pushed domains found for this app. Run dm domain push <domain> first.');
   }
 
   // Deduplicate by log file path
@@ -177,7 +175,7 @@ export const metrics = async ({ name }: { name: string }) => {
 
   const stopFns: Array<() => void> = [];
 
-  await new Promise<void>((_, reject) => {
+  await new Promise<void>((resolve, reject) => {
     const onError = (err: Error) => reject(err);
 
     const start = async () => {
@@ -196,7 +194,7 @@ export const metrics = async ({ name }: { name: string }) => {
 
     const cleanup = () => {
       for (const stop of stopFns) stop();
-      process.exit(0);
+      resolve();
     };
 
     process.on('SIGINT', cleanup);
