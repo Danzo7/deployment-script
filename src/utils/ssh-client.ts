@@ -215,6 +215,7 @@ export async function connectRemote(
   }
 
   const sshArgs = [
+    '-tt', // Force PTY allocation for proper ANSI handling
     '-p',
     String(targetPort),
     '-i',

@@ -59,6 +59,7 @@ internal static class SshSession
     /// <summary>
     /// Runs ssh.exe and returns its exit code.
     /// Exit code 255 means connection/auth failure.
+    /// Forces PTY allocation (-tt) to ensure ANSI sequences work properly.
     /// </summary>
     /// <param name="host">Remote host to connect to</param>
     /// <param name="port">SSH port</param>
@@ -79,8 +80,10 @@ internal static class SshSession
 
         // Mirror the exact ssh args from dm-connect.ps1
         // Explicitly exclude ssh-rsa (RSA+SHA-1) from both host key and pubkey algorithms.
+        // Use -tt to force PTY allocation even for exec mode, which ensures ANSI sequences work.
         foreach (var arg in new[]
         {
+            "-tt",  // Force PTY allocation for proper ANSI handling
             "-p", port.ToString(),
             "-i", keyPath,
             "-o", "StrictHostKeyChecking=ask",
