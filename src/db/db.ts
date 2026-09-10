@@ -64,6 +64,8 @@ export const initializeDB = async () => {
         appDir TEXT NOT NULL,
         createdAt INTEGER NOT NULL,
         updatedAt INTEGER NOT NULL,
+        createdBy TEXT NOT NULL DEFAULT 'system',
+        updatedBy TEXT NOT NULL DEFAULT 'system',
         port INTEGER NOT NULL,
         repo TEXT NOT NULL,
         branch TEXT NOT NULL,
@@ -83,7 +85,8 @@ export const initializeDB = async () => {
         name TEXT NOT NULL UNIQUE,
         linkName TEXT,
         path TEXT NOT NULL,
-        createdAt INTEGER NOT NULL
+        createdAt INTEGER NOT NULL,
+        createdBy TEXT NOT NULL DEFAULT 'system'
       );
       CREATE INDEX IF NOT EXISTS storages_name_idx ON storages(name);
 
@@ -92,6 +95,8 @@ export const initializeDB = async () => {
         name TEXT NOT NULL UNIQUE,
         createdAt INTEGER NOT NULL,
         updatedAt INTEGER NOT NULL,
+        createdBy TEXT NOT NULL DEFAULT 'system',
+        updatedBy TEXT NOT NULL DEFAULT 'system',
         ssl TEXT NOT NULL,
         headers TEXT,
         lastPushedAt INTEGER,
@@ -107,6 +112,8 @@ export const initializeDB = async () => {
         appId INTEGER NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
         createdAt INTEGER NOT NULL,
         updatedAt INTEGER NOT NULL,
+        createdBy TEXT NOT NULL DEFAULT 'system',
+        updatedBy TEXT NOT NULL DEFAULT 'system',
         headers TEXT
       );
       CREATE INDEX IF NOT EXISTS routes_domain_id_idx ON routes(domainId);
@@ -134,7 +141,9 @@ export const initializeDB = async () => {
         nodeArgs TEXT,
         killTimeout INTEGER,
         createdAt INTEGER NOT NULL,
-        updatedAt INTEGER NOT NULL
+        updatedAt INTEGER NOT NULL,
+        createdBy TEXT NOT NULL DEFAULT 'system',
+        updatedBy TEXT NOT NULL DEFAULT 'system'
       );
       CREATE INDEX IF NOT EXISTS app_config_app_id_idx ON app_config(appId);
     `);
@@ -147,6 +156,8 @@ export const initializeDB = async () => {
         app_dir VARCHAR(500) NOT NULL,
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        created_by VARCHAR(255) NOT NULL DEFAULT 'system',
+        updated_by VARCHAR(255) NOT NULL DEFAULT 'system',
         port INTEGER NOT NULL,
         repo TEXT NOT NULL,
         branch VARCHAR(255) NOT NULL,
@@ -166,7 +177,8 @@ export const initializeDB = async () => {
         name VARCHAR(255) NOT NULL UNIQUE,
         link_name VARCHAR(255),
         path VARCHAR(500) NOT NULL,
-        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        created_by VARCHAR(255) NOT NULL DEFAULT 'system'
       );
       CREATE INDEX IF NOT EXISTS storages_name_idx ON storages(name);
 
@@ -175,6 +187,8 @@ export const initializeDB = async () => {
         name VARCHAR(255) NOT NULL UNIQUE,
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        created_by VARCHAR(255) NOT NULL DEFAULT 'system',
+        updated_by VARCHAR(255) NOT NULL DEFAULT 'system',
         ssl JSONB NOT NULL,
         headers JSONB,
         last_pushed_at TIMESTAMP,
@@ -190,6 +204,8 @@ export const initializeDB = async () => {
         app_id UUID NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        created_by VARCHAR(255) NOT NULL DEFAULT 'system',
+        updated_by VARCHAR(255) NOT NULL DEFAULT 'system',
         headers JSONB
       );
       CREATE INDEX IF NOT EXISTS routes_domain_id_idx ON routes(domain_id);
@@ -217,7 +233,9 @@ export const initializeDB = async () => {
         node_args TEXT,
         kill_timeout INTEGER,
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        created_by VARCHAR(255) NOT NULL DEFAULT 'system',
+        updated_by VARCHAR(255) NOT NULL DEFAULT 'system'
       );
       CREATE INDEX IF NOT EXISTS app_config_app_id_idx ON app_config(app_id);
     `);

@@ -21,38 +21,48 @@ interface LegacyDatabaseSchema {
 async function ensureAppConfigs() {
   Logger.info(chalk.blue('🔄 Ensuring all apps have config entries...'));
   
-  const apps = await AppRepo.getAll();
-  let created = 0;
-  let skipped = 0;
+  try {
+    const apps = await AppRepo.getAll();
+    let created = 0;
+    let skipped = 0;
 
-  for (const app of apps) {
-    try {
-      const existingConfig = await AppConfigRepo.findByAppId(app.id);
-      
-      if (existingConfig) {
-        skipped++;
-        continue;
+    for (const app of apps) {
+      try {
+        const existingConfig = await AppConfigRepo.findByAppId(app.id);
+        
+        if (existingConfig) {
+          skipped++;
+          continue;
+        }
+
+        // Create default config for apps without one
+        await AppConfigRepo.create({
+          appId: app.id,
+          instances: 1,
+          maxMemory: '250M',
+        });
+
+        Logger.info(chalk.gray(`  → Created config for: ${app.name} (instances: 1, memory: 250M)`));
+        created++;
+      } catch (error) {
+        Logger.warn(`  ⚠ Failed to create config for app ${app.name}:`, error);
       }
-
-      // Create default config for apps without one
-      await AppConfigRepo.create({
-        appId: app.id,
-        instances: 1,
-        maxMemory: '250M',
-      });
-
-      Logger.info(chalk.gray(`  → Created config for: ${app.name} (instances: 1, memory: 250M)`));
-      created++;
-    } catch (error) {
-      Logger.warn(`  ⚠ Failed to create config for app ${app.name}:`, error);
     }
-  }
 
-  if (created > 0) {
-    Logger.info(chalk.green(`✓ Created ${created} new app config(s)`));
-  }
-  if (skipped > 0) {
-    Logger.info(chalk.gray(`  ${skipped} app(s) already had configs`));
+    if (created > 0) {
+      Logger.info(chalk.green(`✓ Created ${created} new app config(s)`));
+    }
+    if (skipped > 0) {
+      Logger.info(chalk.gray(`  ${skipped} app(s) already had configs`));
+    }
+  } catch (error: any) {
+    // If we can't query apps (e.g., missing columns), skip this step
+    // The traceability migration will run next and fix the schema
+    if (error.message?.includes('no such column') || error.message?.includes('createdBy')) {
+      Logger.info(chalk.yellow('  ⚠ Skipping config check - database schema needs migration first'));
+    } else {
+      throw error;
+    }
   }
 }
 
@@ -68,15 +78,19 @@ export async function migrateFromJSON() {
   const jsonPath = path.resolve(APP_DIR, 'db.json');
   const hasJsonToMigrate = existsSync(jsonPath);
 
-  // If no JSON file exists, just ensure all apps have configs and add traceability
+  // If no JSON file exists, add traceability fields first, then ensure configs
   if (!hasJsonToMigrate) {
     Logger.info(chalk.blue('No legacy JSON database found.'));
-    await ensureAppConfigs();
     
-    // Add traceability fields to existing database
+    // Add traceability fields to existing database (if they don't exist)
     await closeDB();
     Logger.info('');
     await addTraceabilityFields();
+    
+    // Re-initialize and ensure app configs
+    await initNewDB();
+    await ensureAppConfigs();
+    await closeDB();
     return;
   }
   Logger.info(chalk.blue('🔄 Starting database migration from JSON to SQL...'));
@@ -379,8 +393,15 @@ export async function migrateFromJSON() {
       )
     );
 
-    // Ensure all apps have configs (in case any were missed or added later)
+    // Close DB before running schema migration
+    await closeDB();
+    
+    // Add traceability fields to the newly migrated database
     Logger.info('');
+    await addTraceabilityFields();
+
+    // Re-initialize DB and ensure all apps have configs
+    await initNewDB();
     await ensureAppConfigs();
   } catch (error) {
     Logger.error('Migration failed:', error);
@@ -388,10 +409,6 @@ export async function migrateFromJSON() {
   } finally {
     await closeDB();
   }
-
-  // Add traceability fields to the newly migrated database
-  Logger.info('');
-  await addTraceabilityFields();
 }
 
 /**
