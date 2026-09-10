@@ -195,7 +195,8 @@ export function showPublicKey(privateKeyPath: string): void {
 export async function connectRemote(
   host: string,
   port?: number,
-  identity?: string
+  identity?: string,
+  command?: string[]
 ): Promise<void> {
   assertSshAvailable();
 
@@ -207,31 +208,36 @@ export async function connectRemote(
   const keyPath = await ensureClientKey(identity);
   if (!keyPath) process.exit(0);
 
-  Logger.nl();
-  Logger.info(`Connecting to ${cleanHost}:${targetPort} ...`);
-  Logger.nl();
+  if (!command || command.length === 0) {
+    Logger.nl();
+    Logger.info(`Connecting to ${cleanHost}:${targetPort} ...`);
+    Logger.nl();
+  }
 
-  const result = spawnSync(
-    'ssh',
-    [
-      '-p',
-      String(targetPort),
-      '-i',
-      keyPath,
-      '-o',
-      'StrictHostKeyChecking=ask',
-      '-o',
-      'BatchMode=no',
-      '-o',
-      'IdentitiesOnly=yes',
-      '-o',
-      'ServerAliveInterval=30',
-      '-o',
-      'ServerAliveCountMax=3',
-      `dm@${cleanHost}`,
-    ],
-    { stdio: 'inherit' }
-  );
+  const sshArgs = [
+    '-p',
+    String(targetPort),
+    '-i',
+    keyPath,
+    '-o',
+    'StrictHostKeyChecking=ask',
+    '-o',
+    'BatchMode=no',
+    '-o',
+    'IdentitiesOnly=yes',
+    '-o',
+    'ServerAliveInterval=30',
+    '-o',
+    'ServerAliveCountMax=3',
+    `dm@${cleanHost}`,
+  ];
+
+  // Append command args if provided for exec mode
+  if (command && command.length > 0) {
+    sshArgs.push(...command);
+  }
+
+  const result = spawnSync('ssh', sshArgs, { stdio: 'inherit' });
 
   const exitCode = result.status ?? 1;
 
