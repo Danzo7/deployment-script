@@ -28,13 +28,20 @@ A CLI + interactive shell for deploying and managing Next.js, NestJS, .NET, and 
 
 | Concern               | Requirement                                        |
 | --------------------- | -------------------------------------------------- |
-| Runtime (server)      | Node.js 18+                                        |
+| Runtime (server)      | Node.js 22+                                        |
 | Process manager       | PM2 (global)                                       |
 | Version control       | git, svn, or a local folder path                   |
 | Nginx (reverse proxy) | Linux machine with nginx installed and sudo access |
 | .NET apps             | .NET 8 SDK on the build machine                    |
 | Remote SSH client     | OpenSSH client (`ssh` on PATH)                     |
 | PFX cert extraction   | `openssl` on PATH                                  |
+| Windows users         | Windows Build Tools (for native module compilation)|
+
+**Windows Installation Note:** If you encounter errors during installation related to `better-sqlite3`, you may need to install Windows Build Tools:
+```bash
+npm install --global windows-build-tools
+```
+Or use Node.js 22+ which has better prebuilt binary support.
 
 Nginx operations require Linux. dm can be installed on any OS for app management (deploy, env, logs, etc.), but `domain push` only succeeds when nginx is reachable — either locally on Linux, or via a remote Linux host over SSH.
 
@@ -43,7 +50,7 @@ Nginx operations require Linux. dm can be installed on any OS for app management
 ## Installation
 
 ```bash
-npm install -g @malopan/deployment-manager
+npm install -g https://github.com/Danzo7/deployment-script
 ```
 
 On first run, dm automatically creates its data directory structure:
