@@ -66,6 +66,7 @@ import {
   remoteKeyList,
   remoteStatus,
   remoteConnect,
+  remoteRenameUser,
 } from './commands/remote.js';
 import { logClear } from './commands/log-clear.js';
 import { metrics } from './commands/metrics.js';
@@ -1328,6 +1329,28 @@ export const COMMANDS: Record<string, CommandNode> = {
         },
         handler: async ({ host, port, identity }) => {
           await remoteConnect(host, port, identity);
+        },
+      },
+
+      rename: {
+        kind: 'leaf',
+        usage: 'rename <old-username> <new-username>',
+        describe: 'Rename a user (updates the username in the authorized keys)',
+        group: 'Remote',
+        positionals: [
+          {
+            name: 'old-username',
+            demandOption: true,
+            describe: 'Current username to rename',
+          },
+          {
+            name: 'new-username',
+            demandOption: true,
+            describe: 'New username',
+          },
+        ],
+        handler: async ({ oldUsername, newUsername }) => {
+          await remoteRenameUser(oldUsername, newUsername);
         },
       },
     },

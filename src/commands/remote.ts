@@ -93,3 +93,29 @@ export async function remoteStatus(): Promise<void> {
   Logger.info(`Default port    : ${chalk.bold(String(REMOTE_PORT))}`);
   Logger.info(`Auth            : public key only`);
 }
+
+export async function remoteRenameUser(oldUsername: string, newUsername: string): Promise<void> {
+  assertNotRemoteSession();
+  
+  if (!oldUsername || !newUsername) {
+    throw new Error('Both old and new usernames are required');
+  }
+
+  if (oldUsername === newUsername) {
+    throw new Error('Old and new usernames must be different');
+  }
+
+  const keys = listAuthorizedKeys();
+  const keyToRename = keys.find(k => k.comment === oldUsername);
+  
+  if (!keyToRename) {
+    Logger.error(`User "${oldUsername}" not found`);
+    return;
+  }
+
+  // Remove old key and add with new username
+  removeAuthorizedKeyByUsername(oldUsername);
+  addAuthorizedKey(keyToRename.raw, newUsername);
+  
+  Logger.success(`Renamed user "${oldUsername}" to "${newUsername}"`);
+}
