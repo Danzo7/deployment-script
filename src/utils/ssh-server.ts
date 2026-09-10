@@ -582,19 +582,21 @@ export async function startRemoteServer(port: number): Promise<void> {
     // doesn't linger after a network drop.
     client.on('error', (err) => {
       slog('error', `[remote] client error (${ip}): ${err.message}`);
-      for (const s of activeSessions) {
-        if (s.ip === ip) {
-          unregisterSession(s);
-          try {
-            s.child.kill();
-          } catch {
-            /* ignore */
-          }
-          try {
-            s.channel.end();
-          } catch {
-            /* ignore */
-          }
+      // Create a snapshot of sessions to avoid modifying Set during iteration
+      const sessionsToCleanup = Array.from(activeSessions).filter(
+        (s) => s.ip === ip
+      );
+      for (const s of sessionsToCleanup) {
+        unregisterSession(s);
+        try {
+          s.child.kill();
+        } catch {
+          /* ignore */
+        }
+        try {
+          s.channel.end();
+        } catch {
+          /* ignore */
         }
       }
     });
