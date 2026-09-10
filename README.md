@@ -43,10 +43,25 @@ Nginx operations require Linux. dm can be installed on any OS for app management
 ## Installation
 
 ```bash
-npm install -g deployment-manager
+npm install -g @malopan/deployment-manager
 ```
 
-Copy `.env.example` to `.env` in the dm root and edit as needed before use.
+On first run, dm automatically creates its data directory structure:
+
+**Linux/Mac:** `~/.dm/`  
+**Windows:** `C:\Users\<username>\.dm\`
+
+The directory structure:
+```
+~/.dm/
+├── .env              # Configuration file (auto-created from .env.example)
+├── applications/     # Deployed apps and builds
+├── domains/          # Nginx configs and SSL certificates
+├── locks/            # Runtime lock files
+└── remote/           # SSH server keys and audit logs
+```
+
+All paths are customizable via the `.env` file. See [Configuration reference](#configuration-reference) for details.
 
 ---
 
