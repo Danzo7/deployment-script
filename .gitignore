@@ -5,4 +5,5 @@ db.json
 /.locks
 /.kiro
 /build
-/dm-connect
+/dm-connect/bin
+/dm-connect/obj

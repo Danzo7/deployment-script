@@ -91,20 +91,18 @@ for (int i = 0; i < args.Length; i++)
             break;
 
         default:
-            if (!args[i].StartsWith('-') && host is null)
+            if (args[i].StartsWith('-'))
+            {
+                UI.Error($"Unknown argument: {args[i]}");
+                PrintUsage();
+                return 1;
+            }
+            
+            if (host is null)
                 host = args[i];
             else
-            {
                 // After host is set, remaining args are the remote command
-                if (host is not null)
-                    command.Add(args[i]);
-                else
-                {
-                    UI.Error($"Unknown argument: {args[i]}");
-                    PrintUsage();
-                    return 1;
-                }
-            }
+                command.Add(args[i]);
             break;
     }
 }
