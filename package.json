@@ -1,5 +1,5 @@
 {
-  "name": "@malopan/deployment-manager",
+  "name": "deployment-manager",
   "version": "2.0.0",
   "description": "A command-line tool for managing application deployments.",
   "type": "module",
@@ -14,7 +14,8 @@
     "build": "tsc",
     "build:dm-connect": "dotnet publish dm-connect/dm-connect.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o releases/dm-connect-windows",
     "setup": "node dist/setup.js",
-    "postinstall": "npm run setup",
+    "prepare": "npm run build",
+    "postinstall": "node dist/setup.js",
     "prepublishOnly": "npm run build",
     "deploy": "node dist/cli.js",
     "lint": "eslint .",
