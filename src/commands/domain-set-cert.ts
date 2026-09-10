@@ -12,6 +12,7 @@ import {
 } from '../utils/ssl-helper.js';
 import { DomainRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
+import { getCurrentUser } from '../utils/user-context.js';
 
 export async function domainSetCert(
   name: string,
@@ -111,7 +112,8 @@ async function _pemPath(
       certPath,
       keyPath,
       metadata,
-    })
+    }),
+    getCurrentUser()
   );
 
   // 13. Log success
@@ -203,7 +205,8 @@ async function _pfxPath(
       certPath,
       keyPath,
       metadata,
-    })
+    }),
+    getCurrentUser()
   );
 
   // 17. Log success

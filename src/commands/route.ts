@@ -9,6 +9,7 @@ import {
   assertAppUniqueOnDomain,
   assertAppNotRoutedElsewhere,
 } from '../utils/route-validation.js';
+import { getCurrentUser } from '../utils/user-context.js';
 
 export async function routeAdd(
   appName: string,
@@ -36,7 +37,7 @@ export async function routeAdd(
     domainId: domain.id,
     path: normalizedPath,
     appId: app.id,
-  });
+  }, getCurrentUser());
 
   Logger.success(
     `App ${Logger.highlight(appName)} routed to ${Logger.highlight(normalizedDomain)} at ${Logger.highlight('/' + normalizedPath)}.`

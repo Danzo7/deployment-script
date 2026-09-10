@@ -37,6 +37,8 @@ export const appsTableSqlite = sqliteTable(
       .notNull()
       .default(sql`(unixepoch())`)
       .$onUpdate(() => new Date()),
+    createdBy: text('createdBy').notNull().default('system'),
+    updatedBy: text('updatedBy').notNull().default('system'),
     port: integer('port').notNull(),
     repo: text('repo').notNull(),
     branch: text('branch').notNull(),
@@ -64,6 +66,7 @@ export const storagesTableSqlite = sqliteTable(
     createdAt: integer('createdAt', { mode: 'timestamp' })
       .notNull()
       .default(sql`(unixepoch())`),
+    createdBy: text('createdBy').notNull().default('system'),
   },
   (table) => [sqliteIndex('storages_name_idx').on(table.name)]
 );
@@ -80,6 +83,8 @@ export const domainsTableSqlite = sqliteTable(
       .notNull()
       .default(sql`(unixepoch())`)
       .$onUpdate(() => new Date()),
+    createdBy: text('createdBy').notNull().default('system'),
+    updatedBy: text('updatedBy').notNull().default('system'),
     ssl: text('ssl').notNull(), // JSON object
     headers: text('headers'), // JSON object
     lastPushedAt: integer('lastPushedAt', { mode: 'timestamp' }),
@@ -107,6 +112,8 @@ export const routesTableSqlite = sqliteTable(
       .notNull()
       .default(sql`(unixepoch())`)
       .$onUpdate(() => new Date()),
+    createdBy: text('createdBy').notNull().default('system'),
+    updatedBy: text('updatedBy').notNull().default('system'),
     headers: text('headers'), // JSON object
   },
   (table) => [
@@ -159,6 +166,8 @@ export const appConfigTableSqlite = sqliteTable(
       .notNull()
       .default(sql`(unixepoch())`)
       .$onUpdate(() => new Date()),
+    createdBy: text('createdBy').notNull().default('system'),
+    updatedBy: text('updatedBy').notNull().default('system'),
   },
   (table) => [sqliteIndex('app_config_app_id_idx').on(table.appId)]
 );
@@ -178,6 +187,8 @@ export const appsTablePostgres = pgTable(
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
+    createdBy: varchar('created_by', { length: 255 }).notNull().default('system'),
+    updatedBy: varchar('updated_by', { length: 255 }).notNull().default('system'),
     port: pgInteger('port').notNull(),
     repo: pgText('repo').notNull(),
     branch: varchar('branch', { length: 255 }).notNull(),
@@ -206,6 +217,7 @@ export const storagesTablePostgres = pgTable(
     linkName: varchar('link_name', { length: 255 }),
     path: varchar('path', { length: 500 }).notNull(),
     createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+    createdBy: varchar('created_by', { length: 255 }).notNull().default('system'),
   },
   (table) => [pgIndex('storages_name_idx').on(table.name)]
 );
@@ -220,6 +232,8 @@ export const domainsTablePostgres = pgTable(
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
+    createdBy: varchar('created_by', { length: 255 }).notNull().default('system'),
+    updatedBy: varchar('updated_by', { length: 255 }).notNull().default('system'),
     ssl: jsonb('ssl').notNull(), // JSON object
     headers: jsonb('headers'), // JSON object
     lastPushedAt: timestamp('last_pushed_at', { mode: 'date' }),
@@ -245,6 +259,8 @@ export const routesTablePostgres = pgTable(
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
+    createdBy: varchar('created_by', { length: 255 }).notNull().default('system'),
+    updatedBy: varchar('updated_by', { length: 255 }).notNull().default('system'),
     headers: jsonb('headers'), // JSON object
   },
   (table) => [
@@ -293,6 +309,8 @@ export const appConfigTablePostgres = pgTable(
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
+    createdBy: varchar('created_by', { length: 255 }).notNull().default('system'),
+    updatedBy: varchar('updated_by', { length: 255 }).notNull().default('system'),
   },
   (table) => [pgIndex('app_config_app_id_idx').on(table.appId)]
 );

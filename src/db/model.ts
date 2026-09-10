@@ -4,6 +4,8 @@ export interface App {
   appDir: string; // Directory path for the app
   createdAt: Date; // Database-generated creation timestamp
   updatedAt: Date; // Last update timestamp
+  createdBy: string; // User who created this app
+  updatedBy: string; // User who last updated this app
   port: number; // Unique port number for the app
   repo: string; // Repository URL or path
   branch: string; // Branch name or SVN path suffix (e.g. trunk, branches/x)
@@ -40,6 +42,8 @@ export interface AppConfig {
   
   createdAt: Date;
   updatedAt: Date;
+  createdBy: string; // User who created this config
+  updatedBy: string; // User who last updated this config
 }
 
 // Extended app with config eagerly loaded
@@ -70,6 +74,7 @@ export interface Storage {
   linkName?: string | null; // Symlink name created inside each build directory (defaults to name if not provided)
   path: string; // Absolute path: STORAGE_DIR/name
   createdAt: Date; // Database-generated creation timestamp
+  createdBy: string; // User who created this storage
 }
 
 // Extended storage with apps eagerly loaded
@@ -93,6 +98,8 @@ export interface Domain {
   name: string; // Normalized hostname, unique
   createdAt: Date; // Database-generated creation timestamp
   updatedAt: Date; // Last update timestamp
+  createdBy: string; // User who created this domain
+  updatedBy: string; // User who last updated this domain
   ssl: DomainSsl;
   headers?: Record<string, string>; // HTTP response headers applied to all routes under this domain
   lastPushedAt?: Date; // Timestamp of most recent successful Nginx push
@@ -107,6 +114,8 @@ export interface Route {
   appId: string | number; // References App.id
   createdAt: Date; // Database-generated creation timestamp
   updatedAt: Date; // Last update timestamp
+  createdBy: string; // User who created this route
+  updatedBy: string; // User who last updated this route
   headers?: Record<string, string>; // HTTP response headers for this location block only
 }
 

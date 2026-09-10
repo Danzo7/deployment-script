@@ -1,6 +1,7 @@
 import { normalizeDomainName } from '../utils/route-validation.js';
 import { DomainRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
+import { getCurrentUser } from '../utils/user-context.js';
 
 export async function domainRemoveHeader(
   name: string,
@@ -25,7 +26,7 @@ export async function domainRemoveHeader(
   await DomainRepo.update(normalized, {
     headers,
     updatedAt: new Date(),
-  });
+  }, getCurrentUser());
 
   // 6. Log success
   Logger.success(`Header "${key}" removed from domain "${normalized}".`);

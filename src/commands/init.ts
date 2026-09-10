@@ -9,6 +9,7 @@ import { checkLocalFolder } from '../utils/local-folder-helper.js';
 import { getHandler } from '../app-types/index.js';
 import { detectProjectType } from '../utils/app-type-detector.js';
 import { detectVcsType } from '../utils/vcs-helper.js';
+import { getCurrentUser } from '../utils/user-context.js';
 import type { ProjectType } from '../app-types/index.js';
 import type { VcsType } from '../utils/vcs-helper.js';
 
@@ -79,9 +80,9 @@ export const init = async ({
     projectType: resolvedType,
     vcsType: resolvedVcsType,
     ...(projectDir ? { projectDir } : {}),
-  });
+  }, getCurrentUser());
 
-  await AppConfigRepo.create({ appId: app.id, instances: 1, maxMemory: '250M' });
+  await AppConfigRepo.create({ appId: app.id, instances: 1, maxMemory: '250M' }, getCurrentUser());
 
   Logger.success(`The app "${Logger.highlight(name)}" (${resolvedType}) was successfully added!`);
   Logger.advice(

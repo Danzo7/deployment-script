@@ -63,6 +63,8 @@ function mapToApp(row: any): App {
     appDir: row.appDir,
     createdAt: toDate(row.createdAt)!,
     updatedAt: toDate(row.updatedAt)!,
+    createdBy: row.createdBy || 'system',
+    updatedBy: row.updatedBy || 'system',
     port: row.port,
     repo: row.repo,
     branch: row.branch,
@@ -86,6 +88,7 @@ function mapToStorage(row: any): Storage {
     linkName: row.linkName ?? null,
     path: row.path,
     createdAt: toDate(row.createdAt)!,
+    createdBy: row.createdBy || 'system',
   };
 }
 
@@ -96,6 +99,8 @@ function mapToDomain(row: any): Domain {
     name: row.name,
     createdAt: toDate(row.createdAt)!,
     updatedAt: toDate(row.updatedAt)!,
+    createdBy: row.createdBy || 'system',
+    updatedBy: row.updatedBy || 'system',
     ssl: deserializeJSON<DomainSsl>(row.ssl) || { mode: 'none' },
     headers: deserializeJSON<Record<string, string>>(row.headers),
     lastPushedAt: toDate(row.lastPushedAt),
@@ -113,6 +118,8 @@ function mapToRoute(row: any): Route {
     appId: row.appId,
     createdAt: toDate(row.createdAt)!,
     updatedAt: toDate(row.updatedAt)!,
+    createdBy: row.createdBy || 'system',
+    updatedBy: row.updatedBy || 'system',
     headers: deserializeJSON<Record<string, string>>(row.headers),
   };
 }
@@ -319,7 +326,8 @@ export const AppRepo = {
   },
 
   add: async (
-    data: Omit<App, 'id' | 'createdAt' | 'updatedAt' | 'lastDeploy'>
+    data: Omit<App, 'id' | 'createdAt' | 'updatedAt' | 'lastDeploy' | 'createdBy' | 'updatedBy'>,
+    createdBy?: string
   ): Promise<App> => {
     const db: any = getDB();
 
@@ -344,6 +352,7 @@ export const AppRepo = {
       );
     }
 
+    const user = createdBy || 'system';
     const insertData = {
       name: data.name,
       appDir: data.appDir,
@@ -356,6 +365,8 @@ export const AppRepo = {
       projectType: data.projectType,
       projectDir: data.projectDir,
       lastDeployedCommit: serializeJSON(data.lastDeployedCommit),
+      createdBy: user,
+      updatedBy: user,
     };
 
     await db.insert(appsTable).values(insertData);
@@ -373,7 +384,8 @@ export const AppRepo = {
 
   update: async function (
     name: string,
-    updatedData: Partial<App>
+    updatedData: Partial<App>,
+    updatedBy?: string
   ): Promise<App> {
     const db: any = getDB();
     const app = await this.findByName(name);
@@ -386,6 +398,10 @@ export const AppRepo = {
     delete updateFields.id;
     delete updateFields.createdAt;
     delete updateFields.updatedAt; // DB will handle this automatically
+    delete updateFields.createdBy; // Cannot change creator
+
+    // Set updatedBy
+    updateFields.updatedBy = updatedBy || 'system';
 
     // Serialize JSON fields
     if (updateFields.builds) {
@@ -405,7 +421,7 @@ export const AppRepo = {
     return await this.findByName(name);
   },
 
-  addBuild: async function (name: string, buildPath: string): Promise<App> {
+  addBuild: async function (name: string, buildPath: string, updatedBy?: string): Promise<App> {
     const app = await this.findByName(name);
     const builds = app.builds || [];
     builds.push(buildPath);
@@ -414,7 +430,7 @@ export const AppRepo = {
       lastDeploy: new Date(),
       builds,
       activeBuild: buildPath,
-    });
+    }, updatedBy);
   },
 
   resolveActiveBuild: async function (
@@ -435,17 +451,18 @@ export const AppRepo = {
 
   updateDeployedCommit: async function (
     name: string,
-    commit: { hash: string; message: string; author: string; date: string }
+    commit: { hash: string; message: string; author: string; date: string },
+    updatedBy?: string
   ): Promise<App> {
     return await this.update(name, {
       lastDeployedCommit: commit,
-    });
+    }, updatedBy);
   },
 
-  removeBuild: async function (name: string, buildPath: string): Promise<App> {
+  removeBuild: async function (name: string, buildPath: string, updatedBy?: string): Promise<App> {
     const app = await this.findByName(name);
     const builds = (app.builds || []).filter((build) => build !== buildPath);
-    return await this.update(name, { builds });
+    return await this.update(name, { builds }, updatedBy);
   },
 
   /**
@@ -600,7 +617,7 @@ export const StorageRepo = {
     name: string;
     linkName: string | null;
     path: string;
-  }): Promise<Storage> => {
+  }, createdBy?: string): Promise<Storage> => {
     const db: any = getDB();
 
     // Check if storage exists
@@ -616,6 +633,7 @@ export const StorageRepo = {
       name: data.name,
       linkName: data.linkName ?? null,
       path: data.path,
+      createdBy: createdBy || 'system',
     });
 
     // Fetch the newly inserted storage to get the DB-generated id and timestamps
@@ -738,7 +756,7 @@ export const DomainRepo = {
     return { ...domain, routes };
   },
 
-  add: async (data: { name: string }): Promise<Domain> => {
+  add: async (data: { name: string }, createdBy?: string): Promise<Domain> => {
     const db: any = getDB();
 
     const existing = await db
@@ -749,6 +767,7 @@ export const DomainRepo = {
       throw new Error(`Domain "${data.name}" already exists`);
     }
 
+    const user = createdBy || 'system';
     await db.insert(domainsTable).values({
       name: data.name,
       ssl: serializeJSON({ mode: 'none' }),
@@ -756,6 +775,8 @@ export const DomainRepo = {
       lastPushedAt: null,
       configPath: null,
       lastCompiledAt: null,
+      createdBy: user,
+      updatedBy: user,
     });
 
     // Fetch the newly inserted domain to get the DB-generated id and timestamps
@@ -769,7 +790,8 @@ export const DomainRepo = {
 
   update: async function (
     name: string,
-    data: Partial<Domain>
+    data: Partial<Domain>,
+    updatedBy?: string
   ): Promise<Domain> {
     const db: any = getDB();
     const domain = await this.findByName(name);
@@ -782,6 +804,10 @@ export const DomainRepo = {
     delete updateFields.id;
     delete updateFields.createdAt;
     delete updateFields.updatedAt; // DB will handle this automatically
+    delete updateFields.createdBy; // Cannot change creator
+
+    // Set updatedBy
+    updateFields.updatedBy = updatedBy || 'system';
 
     // Serialize JSON fields
     if (updateFields.ssl) {
@@ -935,9 +961,10 @@ export const RouteRepo = {
     domainId: string | number;
     path: string;
     appId: string | number;
-  }): Promise<Route> => {
+  }, createdBy?: string): Promise<Route> => {
     const db: any = getDB();
 
+    const user = createdBy || 'system';
     const result = await db
       .insert(routesTable)
       .values({
@@ -945,6 +972,8 @@ export const RouteRepo = {
         path: data.path,
         appId: data.appId,
         headers: null,
+        createdBy: user,
+        updatedBy: user,
       })
       .returning();
 
@@ -971,7 +1000,7 @@ export const RouteRepo = {
     await db.delete(routesTable).where(eq(routesTable.domainId, domainId));
   },
 
-  update: async (id: string | number, data: Partial<Route>): Promise<Route> => {
+  update: async (id: string | number, data: Partial<Route>, updatedBy?: string): Promise<Route> => {
     const db: any = getDB();
 
     const updateFields: any = {
@@ -982,6 +1011,10 @@ export const RouteRepo = {
     delete updateFields.id;
     delete updateFields.createdAt;
     delete updateFields.updatedAt; // DB will handle this automatically
+    delete updateFields.createdBy; // Cannot change creator
+
+    // Set updatedBy
+    updateFields.updatedBy = updatedBy || 'system';
 
     // Serialize JSON fields
     if (updateFields.headers) {
@@ -1024,6 +1057,8 @@ function mapToAppConfig(row: any): AppConfig {
     killTimeout: row.killTimeout ?? null,
     createdAt: toDate(row.createdAt)!,
     updatedAt: toDate(row.updatedAt)!,
+    createdBy: row.createdBy || 'system',
+    updatedBy: row.updatedBy || 'system',
   };
 }
 
@@ -1048,9 +1083,10 @@ export const AppConfigRepo = {
     restartDelay?: number | null;
     nodeArgs?: string | null;
     killTimeout?: number | null;
-  }): Promise<AppConfig> => {
+  }, createdBy?: string): Promise<AppConfig> => {
     const db: any = getDB();
 
+    const user = createdBy || 'system';
     const insertData: any = {
       appId: data.appId,
       instances: data.instances ?? 1,
@@ -1063,6 +1099,8 @@ export const AppConfigRepo = {
       restartDelay: data.restartDelay ?? null,
       nodeArgs: data.nodeArgs ?? null,
       killTimeout: data.killTimeout ?? null,
+      createdBy: user,
+      updatedBy: user,
     };
 
     await db.insert(appConfigTable).values(insertData);
@@ -1073,7 +1111,8 @@ export const AppConfigRepo = {
 
   update: async (
     appId: string | number,
-    data: Partial<Omit<AppConfig, 'id' | 'appId' | 'createdAt' | 'updatedAt'>>
+    data: Partial<Omit<AppConfig, 'id' | 'appId' | 'createdAt' | 'updatedAt'>>,
+    updatedBy?: string
   ): Promise<AppConfig> => {
     const db: any = getDB();
 
@@ -1094,6 +1133,9 @@ export const AppConfigRepo = {
     if ('restartDelay' in data) updateFields.restartDelay = data.restartDelay ?? null;
     if ('nodeArgs' in data) updateFields.nodeArgs = data.nodeArgs ?? null;
     if ('killTimeout' in data) updateFields.killTimeout = data.killTimeout ?? null;
+
+    // Set updatedBy
+    updateFields.updatedBy = updatedBy || 'system';
 
     await db
       .update(appConfigTable)

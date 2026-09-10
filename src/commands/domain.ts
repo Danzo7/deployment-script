@@ -8,6 +8,7 @@ import {
   validateHostname,
 } from '../utils/route-validation.js';
 import { CERT_EXPIRY_WARNING_DAYS } from '../utils/ssl-helper.js';
+import { getCurrentUser } from '../utils/user-context.js';
 import type { Domain } from '../db/model.js';
 
 export async function domainAdd(name: string): Promise<void> {
@@ -15,7 +16,7 @@ export async function domainAdd(name: string): Promise<void> {
   if (!validateHostname(normalized)) {
     throw new Error(`"${normalized}" is not a valid hostname`);
   }
-  await DomainRepo.add({ name: normalized });
+  await DomainRepo.add({ name: normalized }, getCurrentUser());
   Logger.success(`Domain ${Logger.highlight(normalized)} added.`);
 }
 

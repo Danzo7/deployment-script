@@ -8,6 +8,7 @@ import { STORAGE_DIR } from '../constants.js';
 import { AppRepo, StorageRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 import { requireSymlinkPermission } from '../utils/os-helper.js';
+import { getCurrentUser } from '../utils/user-context.js';
 
 export const storageNew = async (
   name: string,
@@ -19,7 +20,7 @@ export const storageNew = async (
     name,
     linkName: linkName ?? null,
     path: storagePath,
-  });
+  }, getCurrentUser());
   const effectiveLinkName = linkName ?? name;
   Logger.success(
     `Storage ${Logger.highlight(name)} created at ${Logger.highlight(storagePath)} (symlink name: ${Logger.highlight(effectiveLinkName)}).`

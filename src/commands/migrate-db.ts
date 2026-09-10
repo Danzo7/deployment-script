@@ -4,6 +4,7 @@ import { APP_DIR } from '../constants.js';
 import { Logger } from '../utils/logger.js';
 import { initializeDB as initNewDB, closeDB } from '../db/db.js';
 import { AppRepo, StorageRepo, DomainRepo, RouteRepo, AppConfigRepo } from '../db/repos.js';
+import { addTraceabilityFields } from '../db/add-traceability-migration.js';
 import chalk from 'chalk';
 
 interface LegacyDatabaseSchema {
@@ -57,7 +58,7 @@ async function ensureAppConfigs() {
 
 /**
  * Migrate from legacy lowdb JSON file to Drizzle (SQLite or PostgreSQL)
- * Also ensures all apps have app_config entries
+ * Also ensures all apps have app_config entries and adds traceability fields
  */
 export async function migrateFromJSON() {
   Logger.info('Initializing database...');
@@ -67,11 +68,15 @@ export async function migrateFromJSON() {
   const jsonPath = path.resolve(APP_DIR, 'db.json');
   const hasJsonToMigrate = existsSync(jsonPath);
 
-  // If no JSON file exists, just ensure all apps have configs
+  // If no JSON file exists, just ensure all apps have configs and add traceability
   if (!hasJsonToMigrate) {
     Logger.info(chalk.blue('No legacy JSON database found.'));
     await ensureAppConfigs();
+    
+    // Add traceability fields to existing database
     await closeDB();
+    Logger.info('');
+    await addTraceabilityFields();
     return;
   }
   Logger.info(chalk.blue('🔄 Starting database migration from JSON to SQL...'));
@@ -383,6 +388,10 @@ export async function migrateFromJSON() {
   } finally {
     await closeDB();
   }
+
+  // Add traceability fields to the newly migrated database
+  Logger.info('');
+  await addTraceabilityFields();
 }
 
 /**

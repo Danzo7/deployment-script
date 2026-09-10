@@ -11,6 +11,7 @@ import {
 import { pruneOldBuilds } from '../utils/build-pruner.js';
 import { requireSymlinkPermission } from '../utils/os-helper.js';
 import { getHandler } from '../app-types/index.js';
+import { getCurrentUser } from '../utils/user-context.js';
 
 export const deploy = async ({
   name,
@@ -25,8 +26,9 @@ export const deploy = async ({
 
   const app = await AppRepo.findByNameWithConfigAndStorages(name);
   const isFirstDeploy = app.lastDeploy == undefined;
+  const currentUser = getCurrentUser();
   if (!app.projectType) {
-    await AppRepo.update(app.name, { projectType: 'nextjs' });
+    await AppRepo.update(app.name, { projectType: 'nextjs' }, currentUser);
     app.projectType = 'nextjs';
   }
   Logger.info(`Deploying ${Logger.highlight(name)}...`);
@@ -91,9 +93,9 @@ export const deploy = async ({
     Logger.info('Running post-deploy hook...');
     await handler.afterDeploy({ appDir: app.appDir, port: app.port, appName: app.name });
   }
-  await AppRepo.addBuild(name, buildDir);
+  await AppRepo.addBuild(name, buildDir, currentUser);
   if (currentRevision) {
-    await AppRepo.updateDeployedCommit(name, currentRevision);
+    await AppRepo.updateDeployedCommit(name, currentRevision, currentUser);
   }
   await pruneOldBuilds(name);
   if (lint) {
