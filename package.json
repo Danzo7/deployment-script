@@ -15,7 +15,7 @@
     "build:dm-connect": "dotnet publish dm-connect/dm-connect.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o releases/dm-connect-windows",
     "setup": "node dist/setup.js",
     "prepare": "npm run build",
-    "postinstall": "npm run setup",
+    "postinstall": "npm run build && node dist/setup.js",
     "prepublishOnly": "npm run build",
     "prepack": "npm run build",
     "deploy": "node dist/cli.js",
