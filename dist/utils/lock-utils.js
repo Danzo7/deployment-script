@@ -1,0 +1,84 @@
+import fs from 'fs';
+import path from 'path';
+import { LOCK_DIR } from '../constants.js';
+import { Logger } from './logger.js';
+/**
+ * Ensures the lock directory exists.
+ */
+const ensureLockDir = () => {
+    if (!fs.existsSync(LOCK_DIR)) {
+        fs.mkdirSync(LOCK_DIR);
+    }
+};
+/**
+ * Acquires a lock for a specific app.
+ * @param {string} appName - The name of the app.
+ * @throws {Error} If the lock already exists.
+ */
+export const acquireLock = (appName) => {
+    ensureLockDir();
+    const lockFile = path.join(LOCK_DIR, `${appName}.lock`);
+    if (fs.existsSync(lockFile)) {
+        throw new Error(`CLI for ${appName} is already running.`);
+    }
+    fs.writeFileSync(lockFile, String(process.pid));
+};
+/**
+ * Releases a lock for a specific app.
+ * @param {string} appName - The name of the app.
+ */
+export const releaseLock = (appName) => {
+    const lockFile = path.join(LOCK_DIR, `${appName}.lock`);
+    if (fs.existsSync(lockFile)) {
+        fs.unlinkSync(lockFile);
+    }
+};
+// Helper function to forcibly release the lock
+export const forceReleaseLock = (appName) => {
+    const lockFile = path.join(LOCK_DIR, `${appName}.lock`);
+    // Check if the lock file exists
+    if (!fs.existsSync(lockFile)) {
+        Logger.info(`No lock found for application "${appName}".`);
+        return; // ✅ Exit early if no lock exists
+    }
+    try {
+        // Read the PID from the lock file
+        const pid = parseInt(fs.readFileSync(lockFile, 'utf8'), 10);
+        if (isNaN(pid)) {
+            // ✅ Delete corrupt lock file even if PID is invalid
+            Logger.warn(`Invalid PID in lock file for application "${appName}". Removing lock file.`);
+            fs.unlinkSync(lockFile);
+            return;
+        }
+        // Check if the process is still running and kill it
+        try {
+            process.kill(pid, 'SIGTERM'); // Attempt a graceful shutdown
+            Logger.info(`Process with PID ${pid} terminated.`);
+        }
+        catch (err) {
+            if (err.code === 'ESRCH') {
+                Logger.warn(`Process with PID ${pid} is not running.`);
+            }
+            else {
+                // ✅ Still remove lock file even if kill fails with unexpected error
+                Logger.warn(`Failed to kill process ${pid}: ${err.message}. Removing lock file anyway.`);
+            }
+        }
+        // ✅ Always remove the lock file
+        fs.unlinkSync(lockFile);
+        Logger.success(`Lock for application "${appName}" has been released.`);
+    }
+    catch (err) {
+        // ✅ Attempt to remove lock file even on error
+        try {
+            if (fs.existsSync(lockFile)) {
+                fs.unlinkSync(lockFile);
+                Logger.warn(`Lock file removed despite error: ${err.message}`);
+            }
+        }
+        catch {
+            // Ignore cleanup errors
+        }
+        throw new Error(`Failed to release lock for application "${appName}": ${err.message}`);
+    }
+};

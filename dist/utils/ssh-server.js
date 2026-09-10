@@ -1,0 +1,490 @@
+// ─── dm remote SSH server ────────────────────────────────────────────────────
+//
+// Starts a locked-down SSH server that only ever exposes the `dm` REPL.
+// No port forwarding, no SFTP, no arbitrary shell — only `dm`'s own
+// command surface.
+//
+// Each session spawns a new `dm` child process (no args → REPL mode) inside
+// a real pty via node-pty. This means readline, chalk, Ink, tab-completion,
+// and Ctrl+C all work exactly as they do locally because the child genuinely
+// has a TTY. Concurrent sessions are fully isolated — separate processes,
+// separate DB connections, separate signal handlers.
+//
+// Security properties:
+//  - Binds to 127.0.0.1 by default; opt in to wider exposure via REMOTE_BIND.
+//  - Max concurrent sessions capped at REMOTE_MAX_SESSIONS (default 10).
+//  - Idle sessions terminated after REMOTE_IDLE_TIMEOUT_MS (default 30 min).
+//  - SIGTERM handler drains active sessions gracefully before exit.
+//  - client 'error' events kill the associated PTY child to prevent leaks.
+// ─────────────────────────────────────────────────────────────────────────────
+import ssh2 from 'ssh2';
+import { createRequire } from 'module';
+import { EventEmitter } from 'events';
+const { Server } = ssh2;
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { Logger } from './logger.js';
+const _require = createRequire(import.meta.url);
+const pty = _require('node-pty');
+import { loadOrCreateHostKey, fingerprintHostKey } from './ssh-host-key.js';
+import { findAuthorizedKeyByPublicSSH, isLockedOut, recordFailedAttempt, clearAttempts, auditLog, } from './remote-auth.js';
+class TypedEmitter extends EventEmitter {
+    emit(event, ...args) {
+        return super.emit(event, ...args);
+    }
+    on(event, listener) {
+        return super.on(event, listener);
+    }
+    off(event, listener) {
+        return super.off(event, listener);
+    }
+}
+export const serverEvents = new TypedEmitter();
+// ── Config ───────────────────────────────────────────────────────────────────
+const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+/** Bind address: localhost by default, overridden by REMOTE_BIND env var. */
+const BIND_ADDRESS = process.env.REMOTE_BIND ?? 'localhost';
+/** Hard cap on simultaneous SSH sessions (all keys combined). */
+const MAX_SESSIONS = parseInt(process.env.REMOTE_MAX_SESSIONS ?? '10', 10);
+/** Hard cap on simultaneous SSH sessions per authenticated key fingerprint. */
+const MAX_SESSIONS_PER_KEY = parseInt(process.env.REMOTE_MAX_SESSIONS_PER_KEY ?? '3', 10);
+/** Idle session timeout in milliseconds (default 30 minutes). */
+const IDLE_TIMEOUT_MS = parseInt(process.env.REMOTE_IDLE_TIMEOUT_MS ?? String(30 * 60 * 1000), 10);
+const activeSessions = new Set();
+/** Count of active sessions per key fingerprint. */
+const sessionsByKey = new Map();
+let _sessionCounter = 0;
+export function generateSessionId() {
+    return `s${++_sessionCounter}`;
+}
+export function getActiveSessions() {
+    return Array.from(activeSessions).map((s) => ({
+        id: s.id,
+        identity: s.identity,
+        ip: s.ip,
+        keyFingerprint: s.keyFingerprint,
+        connectedAt: s.connectedAt,
+        sessionType: s.sessionType,
+    }));
+}
+export function disconnectSession(sessionId) {
+    for (const s of activeSessions) {
+        if (s.id === sessionId) {
+            auditLog({
+                event: 'session-force-disconnect',
+                ip: s.ip,
+                identity: s.identity,
+            });
+            s.child.kill();
+            try {
+                s.channel.end();
+            }
+            catch {
+                /* ignore */
+            }
+            return true;
+        }
+    }
+    return false;
+}
+function registerSession(session) {
+    activeSessions.add(session);
+    sessionsByKey.set(session.keyFingerprint, (sessionsByKey.get(session.keyFingerprint) ?? 0) + 1);
+    serverEvents.emit('session-open', {
+        id: session.id,
+        identity: session.identity,
+        ip: session.ip,
+        keyFingerprint: session.keyFingerprint,
+        connectedAt: session.connectedAt,
+        sessionType: session.sessionType,
+    });
+}
+function unregisterSession(session) {
+    clearTimeout(session.idleTimer);
+    activeSessions.delete(session);
+    const prev = sessionsByKey.get(session.keyFingerprint) ?? 1;
+    if (prev <= 1)
+        sessionsByKey.delete(session.keyFingerprint);
+    else
+        sessionsByKey.set(session.keyFingerprint, prev - 1);
+    serverEvents.emit('session-close', session.id);
+}
+function resetIdleTimer(session) {
+    clearTimeout(session.idleTimer);
+    session.idleTimer = setTimeout(() => {
+        auditLog({
+            event: 'session-idle-timeout',
+            ip: session.ip,
+            identity: session.identity,
+        });
+        session.child.kill();
+        try {
+            session.channel.end();
+        }
+        catch {
+            /* ignore */
+        }
+    }, IDLE_TIMEOUT_MS);
+}
+// ── PTY helpers ───────────────────────────────────────────────────────────────
+function resolveDmEntrypoint() {
+    return resolve(ROOT_DIR, 'dist/cli.js');
+}
+// ── Logging helpers ───────────────────────────────────────────────────────────
+function slog(level, message) {
+    serverEvents.emit('log', level, message);
+    Logger[level](message);
+}
+function spawnReplSession(cols, rows, term, identity) {
+    return pty.spawn(process.execPath, [resolveDmEntrypoint()], {
+        name: term || 'xterm-256color',
+        cols: cols || 80,
+        rows: rows || 24,
+        cwd: ROOT_DIR,
+        env: {
+            ...process.env,
+            DM_REMOTE_USER: identity,
+        },
+    });
+}
+// ── Graceful shutdown ─────────────────────────────────────────────────────────
+function drainAndExit() {
+    if (activeSessions.size === 0) {
+        process.exit(0);
+    }
+    Logger.info(`[remote] SIGTERM received — draining ${activeSessions.size} active session(s)…`);
+    for (const s of activeSessions) {
+        try {
+            s.child.kill();
+        }
+        catch {
+            /* ignore */
+        }
+        try {
+            s.channel.end();
+        }
+        catch {
+            /* ignore */
+        }
+    }
+    // Give sessions 5 s to flush, then hard exit.
+    setTimeout(() => process.exit(0), 5000).unref();
+}
+// ── Server ────────────────────────────────────────────────────────────────────
+export async function startRemoteServer(port) {
+    const hostKey = loadOrCreateHostKey();
+    const fingerprint = fingerprintHostKey(hostKey);
+    process.on('SIGTERM', drainAndExit);
+    process.on('SIGINT', drainAndExit);
+    const server = new Server({ hostKeys: [hostKey] }, (client, info) => {
+        const ip = info.ip ?? 'unknown';
+        let authedAs;
+        Logger.info(`[remote] connection attempt from ${ip}`);
+        // ── Lockout check ────────────────────────────────────────────────────────
+        const lockRemaining = isLockedOut(ip);
+        if (lockRemaining > 0) {
+            auditLog({ event: 'auth-throttled', ip, retryInMs: lockRemaining });
+            slog('warn', `[remote] ${ip} is rate-limited — rejected`);
+            client.end();
+            return;
+        }
+        // ── Concurrent session cap ───────────────────────────────────────────────
+        if (activeSessions.size >= MAX_SESSIONS) {
+            auditLog({ event: 'session-limit-reached', ip, limit: MAX_SESSIONS });
+            client.end();
+            return;
+        }
+        client.on('authentication', (ctx) => {
+            if (ctx.method === 'publickey') {
+                const match = findAuthorizedKeyByPublicSSH(ctx.key.data);
+                if (!match) {
+                    recordFailedAttempt(ip);
+                    auditLog({ event: 'auth-fail', ip, method: 'publickey' });
+                    return ctx.reject();
+                }
+                // Client probing whether the key is acceptable — no signature yet.
+                if (!ctx.signature)
+                    return ctx.accept();
+                const ok = match.parsed.verify(ctx.blob, ctx.signature) ===
+                    true;
+                if (ok) {
+                    clearAttempts(ip);
+                    authedAs = {
+                        method: 'publickey',
+                        identity: match.comment || match.fingerprint,
+                        fingerprint: match.fingerprint,
+                    };
+                    auditLog({
+                        event: 'auth-ok',
+                        ip,
+                        method: 'publickey',
+                        fingerprint: match.fingerprint,
+                        user: match.comment || match.fingerprint,
+                    });
+                    slog('success', `[remote] authenticated: ${authedAs.identity} from ${ip}`);
+                    return ctx.accept();
+                }
+                recordFailedAttempt(ip);
+                auditLog({ event: 'auth-fail', ip, method: 'publickey' });
+                return ctx.reject();
+            }
+            // Reject anything other than publickey — password auth is disabled.
+            return ctx.reject(['publickey']);
+        });
+        client.on('ready', () => {
+            client.on('request', (_accept, reject) => reject && reject());
+            client.on('session', (acceptSession) => {
+                const session = acceptSession();
+                let ptyCols = 80;
+                let ptyRows = 24;
+                let ptyTerm = 'xterm-256color';
+                let activeSession;
+                session.on('pty', (acceptPty, _reject, info) => {
+                    ptyCols = info.cols;
+                    ptyRows = info.rows;
+                    ptyTerm = info.term ?? 'xterm-256color';
+                    if (acceptPty)
+                        acceptPty();
+                });
+                session.on('window-change', (_accept, _reject, info) => {
+                    activeSession?.child.resize(info.cols, info.rows);
+                });
+                // ── Interactive REPL session ─────────────────────────────────────────
+                session.on('shell', (acceptShell) => {
+                    const channel = acceptShell();
+                    const identity = authedAs?.identity ?? 'unknown';
+                    const keyFingerprint = authedAs?.fingerprint ?? 'unknown';
+                    // Per-key session limit check.
+                    const keySessions = sessionsByKey.get(keyFingerprint) ?? 0;
+                    if (keySessions >= MAX_SESSIONS_PER_KEY) {
+                        auditLog({
+                            event: 'per-key-limit-reached',
+                            ip,
+                            fingerprint: keyFingerprint,
+                            limit: MAX_SESSIONS_PER_KEY,
+                        });
+                        channel.stderr?.write(`Session limit reached for this key (max ${MAX_SESSIONS_PER_KEY}).\n`);
+                        channel.exit(1);
+                        channel.end();
+                        return;
+                    }
+                    auditLog({ event: 'shell-open', ip, ...authedAs });
+                    const child = spawnReplSession(ptyCols, ptyRows, ptyTerm, identity);
+                    const sess = {
+                        id: generateSessionId(),
+                        child,
+                        channel,
+                        ip,
+                        identity,
+                        keyFingerprint,
+                        connectedAt: new Date(),
+                        sessionType: 'shell',
+                        idleTimer: setTimeout(() => { }, 0), // placeholder; set properly below
+                    };
+                    registerSession(sess);
+                    resetIdleTimer(sess);
+                    slog('info', `[remote] session opened — user: ${identity}  ip: ${ip}  active sessions: ${activeSessions.size}`);
+                    child.onData((data) => {
+                        channel.write(data);
+                        resetIdleTimer(sess);
+                    });
+                    channel.on('data', (data) => {
+                        child.write(data.toString('utf8'));
+                        resetIdleTimer(sess);
+                    });
+                    let childExited = false;
+                    child.onExit(({ exitCode }) => {
+                        childExited = true;
+                        unregisterSession(sess);
+                        channel.exit(exitCode);
+                        channel.end();
+                        auditLog({ event: 'shell-close', ip, ...authedAs, exitCode });
+                        slog('info', `[remote] session closed — user: ${identity}  ip: ${ip}  active sessions: ${activeSessions.size}`);
+                    });
+                    channel.on('close', () => {
+                        unregisterSession(sess);
+                        if (!childExited) {
+                            try {
+                                child.kill();
+                            }
+                            catch {
+                                /* already gone */
+                            }
+                        }
+                    });
+                    activeSession = sess;
+                });
+                // ── One-shot exec: `ssh -p 2022 host deploy myapp` ──────────────────
+                session.on('exec', (acceptExec, rejectExec, info) => {
+                    const args = tokeniseShell(info.command);
+                    const identity = authedAs?.identity ?? 'unknown';
+                    const keyFingerprint = authedAs?.fingerprint ?? 'unknown';
+                    // Block remote-management commands from exec sessions — same set
+                    // enforced by the REPL dispatcher for interactive sessions.
+                    const BLOCKED_EXEC_COMMANDS = new Set([
+                        'remote',
+                        'update',
+                        'install-service',
+                        'migrate-db',
+                    ]);
+                    const topLevelCmd = args[0];
+                    if (topLevelCmd && BLOCKED_EXEC_COMMANDS.has(topLevelCmd)) {
+                        const channel = acceptExec();
+                        auditLog({
+                            event: 'exec-blocked',
+                            ip,
+                            ...authedAs,
+                            command: info.command,
+                        });
+                        channel.stderr.write(`Command "${topLevelCmd}" is not allowed in a remote session.\n`);
+                        channel.exit(1);
+                        channel.end();
+                        return;
+                    }
+                    // Per-key session limit check.
+                    const keySessions = sessionsByKey.get(keyFingerprint) ?? 0;
+                    if (keySessions >= MAX_SESSIONS_PER_KEY) {
+                        const channel = acceptExec();
+                        auditLog({
+                            event: 'per-key-limit-reached',
+                            ip,
+                            fingerprint: keyFingerprint,
+                            limit: MAX_SESSIONS_PER_KEY,
+                        });
+                        channel.stderr.write(`Session limit reached for this key (max ${MAX_SESSIONS_PER_KEY}).\n`);
+                        channel.exit(1);
+                        channel.end();
+                        return;
+                    }
+                    const channel = acceptExec();
+                    auditLog({ event: 'exec', ip, ...authedAs, command: info.command });
+                    const child = pty.spawn(process.execPath, [resolveDmEntrypoint(), ...args], {
+                        name: ptyTerm || 'xterm-256color',
+                        cols: ptyCols || 80,
+                        rows: ptyRows || 24,
+                        cwd: ROOT_DIR,
+                        env: {
+                            ...process.env,
+                            DM_REMOTE_USER: identity,
+                        },
+                    });
+                    const sess = {
+                        id: generateSessionId(),
+                        child,
+                        channel,
+                        ip,
+                        identity,
+                        keyFingerprint,
+                        connectedAt: new Date(),
+                        sessionType: 'exec',
+                        idleTimer: setTimeout(() => { }, 0),
+                    };
+                    registerSession(sess);
+                    resetIdleTimer(sess);
+                    child.onData((data) => {
+                        channel.write(data);
+                        resetIdleTimer(sess);
+                    });
+                    channel.on('data', (data) => {
+                        child.write(data.toString('utf8'));
+                        resetIdleTimer(sess);
+                    });
+                    let execChildExited = false;
+                    child.onExit(({ exitCode }) => {
+                        execChildExited = true;
+                        unregisterSession(sess);
+                        channel.exit(exitCode);
+                        channel.end();
+                    });
+                    channel.on('close', () => {
+                        unregisterSession(sess);
+                        if (!execChildExited) {
+                            try {
+                                child.kill();
+                            }
+                            catch {
+                                /* already gone */
+                            }
+                        }
+                    });
+                    activeSession = sess;
+                });
+            });
+        });
+        client.on('close', () => {
+            if (authedAs) {
+                auditLog({ event: 'disconnect', ip, ...authedAs });
+                slog('info', `[remote] disconnected — user: ${authedAs.identity}  ip: ${ip}`);
+            }
+            else {
+                slog('info', `[remote] unauthenticated connection closed from ${ip}`);
+            }
+        });
+        // Kill the associated PTY on any client-level error so the process
+        // doesn't linger after a network drop.
+        client.on('error', (err) => {
+            slog('error', `[remote] client error (${ip}): ${err.message}`);
+            // Create a snapshot of sessions to avoid modifying Set during iteration
+            const sessionsToCleanup = Array.from(activeSessions).filter((s) => s.ip === ip);
+            for (const s of sessionsToCleanup) {
+                unregisterSession(s);
+                try {
+                    s.child.kill();
+                }
+                catch {
+                    /* ignore */
+                }
+                try {
+                    s.channel.end();
+                }
+                catch {
+                    /* ignore */
+                }
+            }
+        });
+    });
+    await new Promise((res, rej) => {
+        server.listen(port, BIND_ADDRESS, res);
+        server.on('error', rej);
+    });
+    const addr = server.address();
+    slog('success', `dm remote server listening on ${BIND_ADDRESS}:${addr.port}`);
+    if (BIND_ADDRESS !== '127.0.0.1' && BIND_ADDRESS !== 'localhost') {
+        slog('warn', `WARNING: server is bound to ${BIND_ADDRESS} — reachable beyond localhost. Ensure firewall rules restrict access.`);
+    }
+    slog('info', `Host key fingerprint: ${fingerprint}`);
+    slog('info', 'Share this fingerprint with anyone connecting for the first time.');
+    slog('info', `Max sessions: ${MAX_SESSIONS}  |  Idle timeout: ${IDLE_TIMEOUT_MS / 1000}s`);
+    serverEvents.emit('listening', BIND_ADDRESS, addr.port, fingerprint);
+    // Keep alive — process is managed by PM2.
+    await new Promise(() => { });
+}
+// ── Shell tokeniser ──────────────────────────────────────────────────────────
+function tokeniseShell(command) {
+    const tokens = [];
+    let cur = '';
+    let inSingle = false;
+    let inDouble = false;
+    for (let i = 0; i < command.length; i++) {
+        const ch = command[i];
+        if (ch === "'" && !inDouble) {
+            inSingle = !inSingle;
+            continue;
+        }
+        if (ch === '"' && !inSingle) {
+            inDouble = !inDouble;
+            continue;
+        }
+        if (ch === ' ' && !inSingle && !inDouble) {
+            if (cur.length) {
+                tokens.push(cur);
+                cur = '';
+            }
+            continue;
+        }
+        cur += ch;
+    }
+    if (cur.length)
+        tokens.push(cur);
+    return tokens;
+}
