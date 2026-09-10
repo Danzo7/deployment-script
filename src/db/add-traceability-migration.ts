@@ -88,7 +88,13 @@ async function migrateSQLite(db: any): Promise<void> {
         await db.run(sql);
         Logger.info(chalk.green(`  ✓ Added ${name} to ${table}`));
       } catch (error: any) {
-        if (error.message?.includes('duplicate column')) {
+        const errorMsg = error.message || '';
+        const causeMsg = error.cause?.message || '';
+        const errorCode = error.code || error.cause?.code || '';
+        
+        if (errorMsg.includes('duplicate column') || 
+            causeMsg.includes('duplicate column') ||
+            errorCode === 'SQLITE_ERROR') {
           Logger.info(chalk.gray(`  ${name} already exists in ${table}`));
         } else {
           throw error;

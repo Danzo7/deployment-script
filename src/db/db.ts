@@ -7,6 +7,7 @@ import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Database from 'better-sqlite3';
 import pg from 'pg';
 import path from 'path';
+import { existsSync, mkdirSync } from 'fs';
 import { APP_DIR, DATABASE_TYPE, DATABASE_URL } from '../constants.js';
 import * as schema from './schema.js';
 
@@ -36,7 +37,11 @@ function getConnection(): DrizzleDB {
     postgresInstance.connect();
     db = drizzlePostgres(postgresInstance, { schema }) as DrizzleDB;
   } else {
-    // SQLite
+    // SQLite - ensure directory exists before creating database
+    if (!existsSync(APP_DIR)) {
+      mkdirSync(APP_DIR, { recursive: true });
+    }
+    
     const dbPath = path.resolve(APP_DIR, 'db.sqlite');
     sqliteInstance = new Database(dbPath);
     db = drizzleSqlite(sqliteInstance, { schema }) as DrizzleDB;

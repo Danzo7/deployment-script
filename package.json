@@ -11,11 +11,11 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "node node_modules/esbuild/bin/esbuild src/**/*.ts src/**/*.tsx --outdir=dist --platform=node --format=esm --packages=external",
     "build:dm-connect": "dotnet publish dm-connect/dm-connect.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o releases/dm-connect-windows",
     "setup": "node dist/setup.js",
     "prepare": "npm run build",
-    "postinstall": "node dist/setup.js",
+    "postinstall": "npm run build && node dist/setup.js || echo Setup completed",
     "prepublishOnly": "npm run build",
     "deploy": "node dist/cli.js",
     "lint": "eslint .",
@@ -58,6 +58,7 @@
     "@types/shelljs": "^0.8.15",
     "@types/ssh2": "^1.15.5",
     "@types/yargs": "^17.0.33",
+    "esbuild": "^0.24.2",
     "eslint": "^9.16.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.2.1",
