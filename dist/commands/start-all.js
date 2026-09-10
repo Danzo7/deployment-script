@@ -1,0 +1,36 @@
+import path from "path";
+import { AppRepo } from "../db/repos.js";
+import { ensureDirectories } from "../utils/file-utils.js";
+import { getAppStatus, runApp } from "../utils/pm2-helper.js";
+import { Logger } from "../utils/logger.js";
+async function startAllApplications() {
+  const apps = await AppRepo.getAll();
+  for (const app of apps) {
+    const appStatus = await getAppStatus(app.name);
+    if (appStatus !== "online") {
+      const { logDir } = ensureDirectories(app.appDir);
+      const buildDir = await AppRepo.resolveActiveBuild(app.name) ?? app.builds?.[app.builds.length - 1];
+      if (!buildDir) {
+        Logger.warn(`No build found for ${app.name}`);
+        continue;
+      } else {
+        const appWithConfig = await AppRepo.findByNameWithConfig(app.name);
+        await runApp(buildDir, {
+          name: app.name,
+          port: app.port,
+          status: appStatus,
+          output: path.join(logDir, "pm2.out.log"),
+          error: path.join(logDir, "pm2.error.log"),
+          projectType: app.projectType ?? "nextjs",
+          config: appWithConfig.config
+        });
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1e3));
+    } else {
+      Logger.info(`${app.name} is already running.`);
+    }
+  }
+}
+export {
+  startAllApplications
+};
