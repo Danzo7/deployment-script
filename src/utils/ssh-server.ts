@@ -232,7 +232,8 @@ function spawnReplSession(
   cols: number,
   rows: number,
   term: string,
-  identity: string
+  identity: string,
+  sessionType: 'shell' | 'exec'
 ): IPty {
   return pty.spawn(process.execPath, [resolveDmEntrypoint()], {
     name: term || 'xterm-256color',
@@ -242,6 +243,7 @@ function spawnReplSession(
     env: {
       ...(process.env as Record<string, string>),
       DM_REMOTE_USER: identity,
+      DM_REMOTE_SESSION_TYPE: sessionType,
     },
   });
 }
@@ -392,7 +394,7 @@ export async function startRemoteServer(port: number): Promise<void> {
 
           auditLog({ event: 'shell-open', ip, ...authedAs });
 
-          const child = spawnReplSession(ptyCols, ptyRows, ptyTerm, identity);
+          const child = spawnReplSession(ptyCols, ptyRows, ptyTerm, identity, 'shell');
 
           const sess: ActiveSession = {
             id: generateSessionId(),
@@ -513,6 +515,7 @@ export async function startRemoteServer(port: number): Promise<void> {
               env: {
                 ...(process.env as Record<string, string>),
                 DM_REMOTE_USER: identity,
+                DM_REMOTE_SESSION_TYPE: 'exec',
               },
             }
           );

@@ -1,4 +1,4 @@
-import { launchDashboard } from '../tui/launch-dashboard.js';
+import { launchDashboard } from '../tui/pages/Dashboard/launch.js';
 
 /**
  * dm dashboard  — launches the Ink-based operational dashboard.

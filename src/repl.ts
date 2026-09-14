@@ -380,6 +380,7 @@ const REMOTE_BLOCKED_COMMANDS = new Set([
 // dispatched command is appended to the audit log so it's attributable to the
 // connecting key — distinguishable from local usage.
 const REMOTE_USER = process.env.DM_REMOTE_USER;
+const REMOTE_SESSION_TYPE = process.env.DM_REMOTE_SESSION_TYPE || 'shell';
 
 function auditCommand(line: string): void {
   if (!REMOTE_USER) return;
@@ -388,6 +389,7 @@ function auditCommand(line: string): void {
       ts: new Date().toISOString(),
       event: 'repl-command',
       identity: REMOTE_USER,
+      sessionType: REMOTE_SESSION_TYPE,
       command: line,
     });
     fs.appendFileSync(REMOTE_AUDIT_LOG_PATH, entry + '\n');

@@ -958,7 +958,7 @@ export const COMMANDS: Record<string, CommandNode> = {
         ],
         handler: async ({ name }) => {
           const { launchDomainHeaderEditor } = await import(
-            './tui/launch-header-editor.js'
+            './tui/pages/HeaderEditor/launch.js'
           );
           await launchDomainHeaderEditor(name);
         },
@@ -1130,7 +1130,7 @@ export const COMMANDS: Record<string, CommandNode> = {
         },
         handler: async ({ domainName, location }) => {
           const { launchRouteHeaderEditor } = await import(
-            './tui/launch-header-editor.js'
+            './tui/pages/HeaderEditor/launch.js'
           );
           await launchRouteHeaderEditor(domainName, location ?? '');
         },

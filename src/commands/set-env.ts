@@ -32,6 +32,6 @@ export const setEnvForApp = async ({
  * Imported lazily so the ink/React dependencies only load when needed.
  */
 export const launchEnvEditorForApp = async (name: string): Promise<void> => {
-  const { launchEnvEditor } = await import('../tui/launch-env-editor.js');
+  const { launchEnvEditor } = await import('../tui/pages/EnvEditor/launch.js');
   await launchEnvEditor(name);
 };

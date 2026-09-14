@@ -9,7 +9,7 @@ import {
   listAuthorizedKeys,
 } from '../utils/remote-auth.js';
 import { REMOTE_PORT } from '../constants.js';
-import { launchRemoteServe } from '../tui/launch-remote-serve.js';
+import { launchRemoteServe } from '../tui/pages/RemoteServe/launch.js';
 
 /** Blocks key-management commands from running inside a remote session. */
 function assertNotRemoteSession(): void {
