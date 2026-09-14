@@ -66,8 +66,9 @@ function App({
     };
   }, [addLog]);
 
-  // Tail the audit log file for repl-command entries from child PTY sessions.
+  // Tail the audit log file for command entries from child PTY sessions.
   // Those run in a separate process so they can't emit to serverEvents directly.
+  // Handles both 'exec' (direct SSH commands) and 'repl-command' (interactive shell commands).
   useEffect(() => {
     if (!fs.existsSync(REMOTE_AUDIT_LOG_PATH)) return;
 
@@ -91,6 +92,9 @@ function App({
               const sessionType = entry.sessionType || 'shell';
               const typeLabel = sessionType === 'exec' ? '[exec]' : '[shell]';
               addLog('info', `${typeLabel} [${entry.identity}] $ ${entry.command}`);
+            } else if (entry.event === 'exec') {
+              // Log exec commands from SSH direct exec sessions
+              addLog('info', `[exec] [${entry.identity}] $ ${entry.command}`);
             }
           } catch {
             /* malformed line */
