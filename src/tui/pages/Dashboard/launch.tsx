@@ -6,8 +6,8 @@ import {
   openSharedPm2,
   closeSharedPm2,
 } from '../../../utils/pm2-helper.js';
-import { Dashboard } from './Dashboard.js';
-import type { DashboardAction } from './Dashboard.js';
+import { Dashboard } from './index.js';
+import type { DashboardAction } from './index.js';
 import {
   listApps,
   fetchAppDetail,
