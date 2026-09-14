@@ -31,17 +31,11 @@ function getDmDataDir(): string {
   return path.join(homedir(), '.dm');
 }
 
-/**
- * Finds the .env file in priority order:
- * 1. Current working directory
- * 2. User data directory (~/.dm/)
- * 3. Installation directory (dev/legacy fallback)
- */
 function findEnvFile(): string {
   const candidates = [
+    path.join(INSTALL_DIR, '.env'),
     path.join(process.cwd(), '.env'),
     path.join(getDmDataDir(), '.env'),
-    path.join(INSTALL_DIR, '.env'),
   ];
 
   return candidates.find((p) => {
