@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
-import TextInput from 'ink-text-input';
+import { ControlledTextInput as TextInput } from '../../../components/ControlledTextInput.js';
 import { PlanReviewScreenProps } from '../types.js';
 import { DB_COLORS } from '../../../utils/colors.js';
 import { PlanStep } from '../../../../db-migration/plan-types.js';

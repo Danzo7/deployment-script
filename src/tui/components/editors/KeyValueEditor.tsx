@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
-import TextInput from 'ink-text-input';
+import { ControlledTextInput as TextInput } from '../ControlledTextInput.js';
 import { TABLE_BOX_WIDTH, TABLE_KEY_COL, TABLE_VAL_COL } from '../../utils/constants.js';
 import { countChanges } from '../../utils/editor-helpers.js';
 import { useCursor } from '../../hooks/useCursor.js';
