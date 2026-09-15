@@ -4,7 +4,14 @@ export interface PlanStep {
   sql: string;
   hazardLevel: 'none' | 'warning' | 'destructive';
   transactional: boolean;
+  hazards?: Array<{
+    type: string;
+    message: string;
+  }>;
+  timeoutMs?: number;
+  lockTimeoutMs?: number;
 }
+
 
 export interface Plan {
   steps: PlanStep[];

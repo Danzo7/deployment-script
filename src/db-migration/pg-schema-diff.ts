@@ -76,13 +76,9 @@ function mapSchemaDiffPlan(output: PgSchemaDiffPlan): Plan {
     // Determine if transactional (concurrent operations cannot be in transactions)
     const transactional = !sql.toUpperCase().includes('CONCURRENTLY');
 
-    // Create description from the first hazard message or SQL
-    let description = '';
-    if (stmt.hazards && stmt.hazards.length > 0) {
-      description = stmt.hazards[0].message || sql.substring(0, 50);
-    } else {
-      description = sql.substring(0, 50);
-    }
+    // Create description from the SQL command
+    const firstLine = sql.split('\n')[0].trim();
+    const description = firstLine.length > 60 ? firstLine.substring(0, 60) + '...' : firstLine;
 
     steps.push({
       index: i,
@@ -90,6 +86,9 @@ function mapSchemaDiffPlan(output: PgSchemaDiffPlan): Plan {
       sql,
       hazardLevel,
       transactional,
+      hazards: stmt.hazards && stmt.hazards.length > 0 ? stmt.hazards : undefined,
+      timeoutMs: stmt.timeout_ms,
+      lockTimeoutMs: stmt.lock_timeout_ms,
     });
   }
 
