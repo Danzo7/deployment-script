@@ -1,7 +1,6 @@
 import React from 'react';
 import { HeaderEditor, HeaderRow } from './index.js';
 import { Logger } from '../../../utils/logger.js';
-import { pauseRepl, resumeRepl } from '../../../utils/repl-context.js';
 import { launchTui } from '../../utils/launch-tui.js';
 
 async function applyDomainChanges(
@@ -47,8 +46,6 @@ export async function launchDomainHeaderEditor(
   const { DomainRepo } = await import('../../../db/repos.js');
   const { normalizeDomainName } = await import('../../../utils/route-validation.js');
 
-  pauseRepl();
-
   const normalized = normalizeDomainName(domainName);
   const domain = await DomainRepo.findByName(normalized);
   const initial: Record<string, string> = domain.headers ?? {};
@@ -67,8 +64,6 @@ export async function launchDomainHeaderEditor(
     {
       muteLogger: false,
       onExit: () => {
-        resumeRepl();
-
         if (savedCount > 0) {
           Logger.success(
             `Saved ${savedCount} header change${savedCount === 1 ? '' : 's'} to domain "${normalized}".`
@@ -91,15 +86,12 @@ export async function launchRouteHeaderEditor(
     '../../../utils/route-validation.js'
   );
 
-  pauseRepl();
-
   const normalizedDomain = normalizeDomainName(domainName);
   const normalizedPath = normalizePath(location);
 
   const domain = await DomainRepo.findByName(normalizedDomain);
   const route = await RouteRepo.findByDomainAndPath(domain.id, normalizedPath);
   if (!route) {
-    resumeRepl();
     throw new Error(
       `No route found for "/${normalizedPath}" on domain "${normalizedDomain}"`
     );
@@ -124,8 +116,6 @@ export async function launchRouteHeaderEditor(
     {
       muteLogger: false,
       onExit: () => {
-        resumeRepl();
-
         if (savedCount > 0) {
           Logger.success(
             `Saved ${savedCount} header change${savedCount === 1 ? '' : 's'} to route "${target}".`

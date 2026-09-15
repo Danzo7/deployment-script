@@ -18,7 +18,6 @@ import {
   AppSummary,
 } from '../../../utils/dashboard-data.js';
 import { Logger } from '../../../utils/logger.js';
-import { pauseRepl, resumeRepl } from '../../../utils/repl-context.js';
 import { launchTui } from '../../utils/launch-tui.js';
 
 // ─── Polling cadences ─────────────────────────────────────────────────────────
@@ -270,8 +269,6 @@ function DashboardApp(): React.ReactElement {
 // ─── Exported launcher ────────────────────────────────────────────────────────
 
 export async function launchDashboard(): Promise<void> {
-  pauseRepl();
-
   try {
     await openSharedPm2();
   } catch {
@@ -283,7 +280,6 @@ export async function launchDashboard(): Promise<void> {
   await launchTui(<DashboardApp />, {
     onExit: async () => {
       closeSharedPm2();
-      resumeRepl();
 
       const action: DashboardAction | undefined = (globalThis as any)
         .__pendingDashboardAction;

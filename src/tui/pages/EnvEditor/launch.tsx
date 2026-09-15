@@ -5,7 +5,6 @@ import { setEnv } from '../../../utils/env-heper.js';
 import { AppRepo } from '../../../db/repos.js';
 import { ensureDirectories } from '../../../utils/file-utils.js';
 import { Logger } from '../../../utils/logger.js';
-import { pauseRepl, resumeRepl } from '../../../utils/repl-context.js';
 import { launchTui } from '../../utils/launch-tui.js';
 
 async function applyChanges(envDir: string, rows: EditorRow[]): Promise<void> {
@@ -27,8 +26,6 @@ async function applyChanges(envDir: string, rows: EditorRow[]): Promise<void> {
 }
 
 export async function launchEnvEditor(appName: string): Promise<void> {
-  pauseRepl();
-
   const app = await AppRepo.findByName(appName);
   const { envDir } = ensureDirectories(app.appDir);
   const initial = parseEnvFile(envDir);
@@ -47,8 +44,6 @@ export async function launchEnvEditor(appName: string): Promise<void> {
     {
       muteLogger: false, // Keep logger active for this TUI
       onExit: () => {
-        resumeRepl();
-
         if (savedCount > 0) {
           Logger.success(
             `Saved ${savedCount} change${savedCount === 1 ? '' : 's'} to ${appName}.`
