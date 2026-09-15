@@ -39,6 +39,25 @@ export async function launchDbMigrate(args: {
     initialText = Buffer.concat(chunks).toString('utf8');
   }
 
+  // Check if migration key already exists before launching TUI
+  const { DatabaseRepo, MigrationRepo } = await import('../../../db/repos.js');
+  try {
+    const database = await DatabaseRepo.findByName(args.name);
+    const existing = await MigrationRepo.findByKey(database.id, args.key);
+    if (existing) {
+      Logger.error(`Migration with key "${args.key}" already exists for database "${args.name}"`);
+      Logger.info('Use a different key or check existing migrations with:');
+      Logger.info(`  dm db history ${args.name}`);
+      return;
+    }
+  } catch (err: any) {
+    // Database not found or other error - let TUI handle it
+    if (!err.message?.includes('not found')) {
+      Logger.error(`Error checking migration key: ${err.message}`);
+      return;
+    }
+  }
+
   // Track whether migration was actually executed
   let migrationExecuted = false;
   const setMigrationExecuted = () => {

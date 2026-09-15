@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
+import { Alert } from '@inkjs/ui';
 import { TypeSelectScreen } from './components/TypeSelectScreen.js';
 import { SchemaEditor } from './components/SchemaEditor.js';
 import { PlanReviewScreen } from './components/PlanReviewScreen.js';
@@ -26,6 +27,13 @@ export const DbCompareScreen: React.FC<DbCompareScreenProps> = ({ dbName }) => {
   const [error, setError] = useState<string | null>(null);
   const { exit } = useApp();
 
+  // Handle Esc key on error screen
+  useInput((input, key) => {
+    if (error && (key.escape || (key.ctrl && input === 'x'))) {
+      exit();
+    }
+  });
+
   const handleSchemaSubmit = async (text: string) => {
     setSchemaText(text);
     
@@ -37,8 +45,7 @@ export const DbCompareScreen: React.FC<DbCompareScreenProps> = ({ dbName }) => {
       setScreen('plan-review');
     } catch (err: any) {
       setError(err.message || String(err));
-      // Show error and exit
-      exit();
+      // Don't exit - show error screen
     }
   };
 
@@ -48,8 +55,13 @@ export const DbCompareScreen: React.FC<DbCompareScreenProps> = ({ dbName }) => {
 
   if (error) {
     return (
-      <Box flexDirection="column" paddingX={2} paddingY={1}>
-        <Text color="red">Error: {error}</Text>
+      <Box flexDirection="column" height="100%" justifyContent="center" paddingX={2} paddingY={1}>
+        <Alert variant="error" title="Comparison Error">
+          {error}
+        </Alert>
+        <Box marginTop={1}>
+          <Text dimColor>Press Esc or Ctrl+X to exit.</Text>
+        </Box>
       </Box>
     );
   }
@@ -185,10 +197,11 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
   if (error) {
     return (
       <Box flexDirection="column" height="100%" justifyContent="center" paddingX={2} paddingY={1}>
-        <Text color="red">Migration Error:</Text>
-        <Text color="red">{error}</Text>
+        <Alert variant="error" title="Migration Error">
+          {error}
+        </Alert>
         <Box marginTop={1}>
-          <Text dimColor>The error details are shown above. Press Esc or Ctrl+X to exit.</Text>
+          <Text dimColor>Press Esc or Ctrl+X to exit.</Text>
         </Box>
       </Box>
     );
