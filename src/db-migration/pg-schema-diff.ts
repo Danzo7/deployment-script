@@ -64,22 +64,30 @@ export class DbSchemaDiff {
         for (let i = 0; i < output.statements.length; i++) {
           const stmt = output.statements[i];
 
-          // Determine hazard level based on pg-schema-diff metadata
-          let hazardLevel: 'none' | 'warning' | 'destructive' = 'none';
-          const upperSql = stmt.sql?.toUpperCase() || '';
+          // pg-schema-diff uses 'ddl' field, not 'sql'
+          const sql = stmt.ddl || stmt.sql || '';
+          const upperSql = sql.toUpperCase();
 
-          if (
-            stmt.hazard === 'high' ||
-            upperSql.includes('DROP') ||
-            upperSql.includes('TRUNCATE')
-          ) {
+          // Determine hazard level based on pg-schema-diff hazards array
+          let hazardLevel: 'none' | 'warning' | 'destructive' = 'none';
+          
+          if (stmt.hazards && Array.isArray(stmt.hazards) && stmt.hazards.length > 0) {
+            // Check for DELETES_DATA or other high-severity hazards
+            const hasDeletesData = stmt.hazards.some((h: any) => 
+              h.type === 'DELETES_DATA' || h.type === 'ACQUIRES_ACCESS_EXCLUSIVE_LOCK'
+            );
+            
+            if (hasDeletesData || upperSql.includes('DROP') || upperSql.includes('TRUNCATE')) {
+              hazardLevel = 'destructive';
+              destructiveCount++;
+            } else {
+              hazardLevel = 'warning';
+              warningCount++;
+            }
+          } else if (upperSql.includes('DROP') || upperSql.includes('TRUNCATE')) {
             hazardLevel = 'destructive';
             destructiveCount++;
-          } else if (
-            stmt.hazard === 'medium' ||
-            upperSql.includes('ALTER') ||
-            upperSql.includes('CREATE INDEX')
-          ) {
+          } else if (upperSql.includes('ALTER') || upperSql.includes('CREATE INDEX')) {
             hazardLevel = 'warning';
             warningCount++;
           }
@@ -87,10 +95,18 @@ export class DbSchemaDiff {
           // Determine if transactional
           const transactional = !upperSql.includes('CONCURRENTLY');
 
+          // Create description from the first hazard message or SQL
+          let description = '';
+          if (stmt.hazards && stmt.hazards.length > 0) {
+            description = stmt.hazards[0].message || sql.substring(0, 50);
+          } else {
+            description = sql.substring(0, 50);
+          }
+
           steps.push({
             index: i,
-            description: stmt.description || stmt.sql?.substring(0, 50) || '',
-            sql: stmt.sql || '',
+            description,
+            sql,
             hazardLevel,
             transactional,
           });
