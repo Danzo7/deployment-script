@@ -75,13 +75,16 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
           activeLineColor={DB_COLORS.accentDim}
           linePrefix={LineNumberPrefix}
           tabWidth={2}
+          keybindings={{
+            Enter: false, // Disable Enter key submit - use Ctrl+S instead
+          }}
         />
       </Box>
 
       {/* Footer */}
       <Box marginTop={1} borderStyle="single" borderTop paddingTop={1}>
         <Text dimColor>
-          ^S save{onBack ? ' · ^B back' : ''} · ^X cancel · ^Z undo · ^Y redo
+          ^S save{onBack ? ' · ^B back' : ''} · ^X cancel · ^Enter newline · ^Z undo · ^Y redo
         </Text>
       </Box>
     </Box>

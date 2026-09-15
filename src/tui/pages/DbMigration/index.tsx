@@ -146,6 +146,11 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
     setMigrationKey(key);
 
     try {
+      // Mark that migration is being executed
+      if (typeof (globalThis as any).__setMigrationExecuted === 'function') {
+        (globalThis as any).__setMigrationExecuted();
+      }
+
       let migration;
       if (migrationType === 'generated') {
         migration = await executeGeneratedMigration(dbName, key, schemaText);

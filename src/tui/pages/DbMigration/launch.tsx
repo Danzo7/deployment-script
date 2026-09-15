@@ -39,6 +39,13 @@ export async function launchDbMigrate(args: {
     initialText = Buffer.concat(chunks).toString('utf8');
   }
 
+  // Track whether migration was actually executed
+  let migrationExecuted = false;
+  const setMigrationExecuted = () => {
+    migrationExecuted = true;
+  };
+  (globalThis as any).__setMigrationExecuted = setMigrationExecuted;
+
   return new Promise((resolve, reject) => {
     process.stdout.write('\x1b[?1049h'); // enter alternate screen
     
@@ -54,11 +61,15 @@ export async function launchDbMigrate(args: {
     waitUntilExit()
       .then(() => {
         process.stdout.write('\x1b[?1049l'); // leave alternate screen
-        Logger.success('Migration completed');
+        if (migrationExecuted) {
+          Logger.success('Migration completed');
+        }
+        delete (globalThis as any).__setMigrationExecuted;
         resolve();
       })
       .catch((err) => {
         process.stdout.write('\x1b[?1049l'); // leave alternate screen
+        delete (globalThis as any).__setMigrationExecuted;
         reject(err);
       });
   });
