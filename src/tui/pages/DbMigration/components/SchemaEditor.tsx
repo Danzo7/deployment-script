@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Text, useInput, useApp } from 'ink';
+import { Box, Text, useInput } from 'ink';
 import { TextArea, LineNumberPrefix } from 'react-ink-textarea';
 import { SchemaEditorProps } from '../types.js';
 import { DB_COLORS } from '../../../utils/colors.js';
@@ -10,10 +10,10 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
   mode,
   onSubmit,
   onCancel,
+  onBack,
 }) => {
   const [value, setValue] = useState(initialText || '');
   const [modified, setModified] = useState(false);
-  const { exit } = useApp();
 
   const title =
     mode === 'generated'
@@ -30,10 +30,21 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
   };
 
   useInput((input, key) => {
+    // Save shortcut
+    if (key.ctrl && input === 's') {
+      onSubmit(value);
+      return;
+    }
+    // Back shortcut
+    if (key.ctrl && input === 'b') {
+      if (onBack) {
+        onBack();
+      }
+      return;
+    }
     // Cancel shortcut
     if (key.ctrl && input === 'x') {
       onCancel();
-      exit();
       return;
     }
   });
@@ -76,7 +87,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
       {/* Footer */}
       <Box marginTop={1} borderStyle="single" borderTop paddingTop={1}>
         <Text dimColor>
-          ^S submit · ^X cancel · ^Z undo · ^Y redo
+          ^S save{onBack ? ' · ^B back' : ''} · ^X cancel · ^Z undo · ^Y redo
         </Text>
       </Box>
     </Box>

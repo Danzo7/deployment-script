@@ -5,15 +5,21 @@ import { Logger } from '../../../utils/logger.js';
 
 export async function launchDbCompare(dbName: string): Promise<void> {
   return new Promise((resolve, reject) => {
+    process.stdout.write('\x1b[?1049h'); // enter alternate screen
+    
     const { waitUntilExit } = render(
       React.createElement(DbCompareScreen, { dbName })
     );
 
     waitUntilExit()
       .then(() => {
+        process.stdout.write('\x1b[?1049l'); // leave alternate screen
         resolve();
       })
-      .catch(reject);
+      .catch((err) => {
+        process.stdout.write('\x1b[?1049l'); // leave alternate screen
+        reject(err);
+      });
   });
 }
 
@@ -34,6 +40,8 @@ export async function launchDbMigrate(args: {
   }
 
   return new Promise((resolve, reject) => {
+    process.stdout.write('\x1b[?1049h'); // enter alternate screen
+    
     const { waitUntilExit } = render(
       React.createElement(DbMigrateScreen, {
         dbName: args.name,
@@ -45,9 +53,13 @@ export async function launchDbMigrate(args: {
 
     waitUntilExit()
       .then(() => {
+        process.stdout.write('\x1b[?1049l'); // leave alternate screen
         Logger.success('Migration completed');
         resolve();
       })
-      .catch(reject);
+      .catch((err) => {
+        process.stdout.write('\x1b[?1049l'); // leave alternate screen
+        reject(err);
+      });
   });
 }

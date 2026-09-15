@@ -31,6 +31,7 @@ export interface SchemaEditorProps {
   mode: 'generated' | 'manual';
   onSubmit: (text: string) => void;
   onCancel: () => void;
+  onBack?: () => void;
 }
 
 export interface PlanReviewScreenProps {

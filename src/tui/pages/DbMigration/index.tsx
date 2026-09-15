@@ -111,6 +111,7 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
   const [migrationKey, setMigrationKey] = useState(initialMigrationKey);
   const [migrationId, setMigrationId] = useState<string | number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [canGoBack, setCanGoBack] = useState(false);
   const { exit } = useApp();
 
   const handleTypeSelect = (type: MigrationType) => {
@@ -120,6 +121,7 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
 
   const handleSchemaSubmit = async (text: string) => {
     setSchemaText(text);
+    setCanGoBack(true); // Enable back button after first submission
 
     try {
       if (migrationType === 'generated') {
@@ -192,6 +194,7 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
         mode={migrationType || 'generated'}
         onSubmit={handleSchemaSubmit}
         onCancel={handleCancel}
+        onBack={canGoBack && !initialType ? () => setScreen('type-select') : undefined}
       />
     );
   }
