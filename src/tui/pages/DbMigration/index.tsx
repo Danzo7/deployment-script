@@ -27,10 +27,15 @@ export const DbCompareScreen: React.FC<DbCompareScreenProps> = ({ dbName }) => {
   const [error, setError] = useState<string | null>(null);
   const { exit } = useApp();
 
-  // Handle exit keys on error screen
+  // Handle keys on error screen
   useInput((input, key) => {
-    if (error && (key.escape || (key.ctrl && input === 'c') || (key.ctrl && input === 'x'))) {
-      exit();
+    if (error) {
+      if (key.escape || (key.ctrl && input === 'c') || (key.ctrl && input === 'x')) {
+        exit();
+      } else if (input === 'b') {
+        setError(null);
+        // Don't change screen - stay on schema-editor
+      }
     }
   });
 
@@ -60,7 +65,12 @@ export const DbCompareScreen: React.FC<DbCompareScreenProps> = ({ dbName }) => {
           {error}
         </Alert>
         <Box marginTop={1}>
-          <Text dimColor>Press ^C or ^X to exit.</Text>
+          <Text>
+            <Text dimColor>[</Text>
+            <Text>b back</Text>
+            <Text dimColor>]</Text>
+            <Text dimColor>  Press b to go back, ^C or ^X to exit.</Text>
+          </Text>
         </Box>
       </Box>
     );
@@ -126,10 +136,15 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
   const [canGoBack, setCanGoBack] = useState(false);
   const { exit } = useApp();
 
-  // Handle exit keys on error screen
+  // Handle keys on error screen
   useInput((input, key) => {
-    if (error && (key.escape || (key.ctrl && input === 'c') || (key.ctrl && input === 'x'))) {
-      exit();
+    if (error) {
+      if (key.escape || (key.ctrl && input === 'c') || (key.ctrl && input === 'x')) {
+        exit();
+      } else if (input === 'b') {
+        setError(null);
+        setScreen('schema-editor');
+      }
     }
   });
 
@@ -201,7 +216,12 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
           {error}
         </Alert>
         <Box marginTop={1}>
-          <Text dimColor>Press ^C or ^X to exit.</Text>
+          <Text>
+            <Text dimColor>[</Text>
+            <Text>b back</Text>
+            <Text dimColor>]</Text>
+            <Text dimColor>  Press b to go back, ^C or ^X to exit.</Text>
+          </Text>
         </Box>
       </Box>
     );
