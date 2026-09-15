@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Text, useApp, useInput } from 'ink';
+import { Box, Text, useInput } from 'ink';
 import { ProgressScreenProps } from '../types.js';
 import { DB_COLORS } from '../../../utils/colors.js';
 import { MigrationRepo } from '../../../../db/repos.js';
 import { Migration, MigrationStep } from '../../../../db/model.js';
+import { Keybar } from '../../../components/Keybar.js';
 
 const getStatusGlyph = (status: string) => {
   switch (status) {
@@ -155,12 +156,14 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
       )}
 
       {/* Footer status */}
-      <Box borderStyle="single" borderTop>
-        <Text dimColor>
-          {isRunning && 'running…'}
-          {isComplete && 'finished — press ^C or ^X to exit'}
-        </Text>
-      </Box>
+      <Keybar
+        hints={[
+          {
+            label: isRunning ? 'running…' : 'finished',
+            desc: isComplete ? 'press ^C or ^X to exit' : '',
+          },
+        ]}
+      />
     </Box>
   );
 };

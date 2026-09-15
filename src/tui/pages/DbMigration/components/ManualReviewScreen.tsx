@@ -3,6 +3,7 @@ import { Box, Text, useInput, useApp } from 'ink';
 import { ControlledTextInput as TextInput } from '../../../components/ControlledTextInput.js';
 import { ManualReviewScreenProps } from '../types.js';
 import { DB_COLORS } from '../../../utils/colors.js';
+import { Keybar } from '../../../components/Keybar.js';
 
 const hasDestructiveKeyword = (sql: string): boolean => {
   const upperSql = sql.toUpperCase();
@@ -148,9 +149,14 @@ export const ManualReviewScreen: React.FC<ManualReviewScreenProps> = ({
       </Box>
 
       {/* Footer */}
-      <Box borderStyle="single" borderTop>
-        <Text dimColor>k edit key · y execute · b back · Esc cancel</Text>
-      </Box>
+      <Keybar
+        hints={[
+          { label: 'k', desc: 'edit key' },
+          { label: 'y', desc: 'execute' },
+          { label: 'b', desc: 'back' },
+          { label: 'Esc', desc: 'cancel' },
+        ]}
+      />
     </Box>
   );
 };

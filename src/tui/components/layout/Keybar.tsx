@@ -2,79 +2,51 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import type { DetailTab } from '../../pages/Dashboard/types.js';
 import { TERM_W } from '../../utils/constants.js';
-
-interface HintProps {
-  label: string;
-  desc: string;
-}
-function Hint({ label, desc }: HintProps): React.ReactElement {
-  return (
-    <>
-      <Text bold color="white">
-        {label}
-      </Text>
-      <Text dimColor>{` ${desc}  `}</Text>
-    </>
-  );
-}
+import { Keybar as UnifiedKeybar } from '../Keybar.js';
 
 interface KeybarProps {
   activeTab: DetailTab;
 }
 
 export function Keybar({ activeTab }: KeybarProps): React.ReactElement {
+  const baseHints = [
+    { label: 'Tab', desc: 'switch tab' },
+    { label: 'PgUp/PgDn', desc: 'scroll' },
+    { label: 'Esc', desc: 'dismiss' },
+    { label: 'q', desc: 'quit' },
+  ];
+
   const tabHints = (() => {
     switch (activeTab) {
       case 'overview':
-        return (
-          <>
-            <Hint label="r" desc="restart" />
-            <Hint label="S" desc="stop" />
-            <Hint label="D" desc="redeploy" />
-            <Hint label="E" desc="env" />
-          </>
-        );
+        return [
+          { label: 'r', desc: 'restart' },
+          { label: 'S', desc: 'stop' },
+          { label: 'D', desc: 'redeploy' },
+          { label: 'E', desc: 'env' },
+        ];
       case 'metrics':
-        return (
-          <>
-            <Hint label="v" desc="toggle logs" />
-            <Hint label="c" desc="copy value" />
-          </>
-        );
+        return [
+          { label: 'v', desc: 'toggle logs' },
+          { label: 'c', desc: 'copy value' },
+        ];
       case 'logs':
-        return (
-          <>
-            <Hint label="X" desc="clear" />
-            <Hint label="c" desc="copy line" />
-          </>
-        );
+        return [
+          { label: 'X', desc: 'clear' },
+          { label: 'c', desc: 'copy line' },
+        ];
       case 'deploys':
-        return (
-          <>
-            <Hint label="↵" desc="rollback" />
-            <Hint label="c" desc="copy commit" />
-          </>
-        );
+        return [
+          { label: '↵', desc: 'rollback' },
+          { label: 'c', desc: 'copy commit' },
+        ];
       case 'domains':
-        return (
-          <>
-            <Hint label="↵" desc="nginx config" />
-            <Hint label="c" desc="copy url" />
-          </>
-        );
+        return [
+          { label: '↵', desc: 'nginx config' },
+          { label: 'c', desc: 'copy url' },
+        ];
     }
   })();
 
-  return (
-    <Box flexDirection="column" width={TERM_W}>
-      <Text dimColor>{'─'.repeat(TERM_W)}</Text>
-      <Box flexDirection="row">
-        <Hint label="Tab" desc="switch tab" />
-        <Hint label="PgUp/PgDn" desc="scroll" />
-        <Hint label="Esc" desc="dismiss" />
-        <Hint label="q" desc="quit" />
-        {tabHints}
-      </Box>
-    </Box>
-  );
+  return <UnifiedKeybar hints={[...baseHints, ...tabHints]} width={TERM_W} />;
 }

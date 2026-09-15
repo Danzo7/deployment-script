@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
 import { TypeSelectScreenProps } from '../types.js';
 import { DB_COLORS } from '../../../utils/colors.js';
+import { Keybar } from '../../../components/Keybar.js';
 
 export const TypeSelectScreen: React.FC<TypeSelectScreenProps> = ({
   onSelect,
@@ -74,9 +75,14 @@ export const TypeSelectScreen: React.FC<TypeSelectScreenProps> = ({
         </Box>
 
         {/* Footer */}
-        <Box borderStyle="single" borderTop>
-          <Text dimColor>↑↓ choose · ↵ continue · Esc cancel</Text>
-        </Box>
+        <Keybar
+          hints={[
+            { label: '↑↓', desc: 'choose' },
+            { label: '↵', desc: 'continue' },
+            { label: 'Esc', desc: 'cancel' },
+          ]}
+          width={60}
+        />
       </Box>
     </Box>
   );

@@ -4,6 +4,7 @@ import { ControlledTextInput as TextInput } from '../../../components/Controlled
 import { PlanReviewScreenProps } from '../types.js';
 import { DB_COLORS } from '../../../utils/colors.js';
 import { PlanStep } from '../../../../db-migration/plan-types.js';
+import { Keybar } from '../../../components/Keybar.js';
 
 export const PlanReviewScreen: React.FC<PlanReviewScreenProps> = ({
   dbName,
@@ -186,13 +187,25 @@ export const PlanReviewScreen: React.FC<PlanReviewScreenProps> = ({
       </Box>
 
       {/* Footer */}
-      <Box borderStyle="single" borderTop>
-        <Text dimColor>
-          {isReadOnly
-            ? '↑↓ select · ↵ expand · c copy SQL · Esc cancel'
-            : '↑↓ select · ↵ expand · k edit key · y execute · b back · Esc cancel'}
-        </Text>
-      </Box>
+      <Keybar
+        hints={
+          isReadOnly
+            ? [
+                { label: '↑↓', desc: 'select' },
+                { label: '↵', desc: 'expand' },
+                { label: 'c', desc: 'copy SQL' },
+                { label: 'Esc', desc: 'cancel' },
+              ]
+            : [
+                { label: '↑↓', desc: 'select' },
+                { label: '↵', desc: 'expand' },
+                { label: 'k', desc: 'edit key' },
+                { label: 'y', desc: 'execute' },
+                ...(onBack ? [{ label: 'b', desc: 'back' }] : []),
+                { label: 'Esc', desc: 'cancel' },
+              ]
+        }
+      />
     </Box>
   );
 };

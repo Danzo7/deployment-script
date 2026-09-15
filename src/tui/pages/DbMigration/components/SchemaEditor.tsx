@@ -3,6 +3,7 @@ import { Box, Text, useInput } from 'ink';
 import { TextArea, LineNumberPrefix } from 'react-ink-textarea';
 import { SchemaEditorProps } from '../types.js';
 import { DB_COLORS } from '../../../utils/colors.js';
+import { Keybar } from '../../../components/Keybar.js';
 
 export const SchemaEditor: React.FC<SchemaEditorProps> = ({
   dbName,
@@ -83,11 +84,16 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
       </Box>
 
       {/* Footer */}
-      <Box paddingX={2}>
-        <Text dimColor>
-          ^S save{onBack ? ' · ^B back' : ''} · ^X cancel · ^Enter newline · ^Z undo · ^Y redo
-        </Text>
-      </Box>
+      <Keybar
+        hints={[
+          { label: '^S', desc: 'save' },
+          ...(onBack ? [{ label: '^B', desc: 'back' }] : []),
+          { label: '^X', desc: 'cancel' },
+          { label: '^Enter', desc: 'newline' },
+          { label: '^Z', desc: 'undo' },
+          { label: '^Y', desc: 'redo' },
+        ]}
+      />
     </Box>
   );
 };
