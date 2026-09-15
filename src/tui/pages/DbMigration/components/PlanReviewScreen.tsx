@@ -5,6 +5,7 @@ import { PlanReviewScreenProps } from '../types.js';
 import { DB_COLORS } from '../../../utils/colors.js';
 import { PlanStep } from '../../../../db-migration/plan-types.js';
 import { Keybar } from '../../../components/Keybar.js';
+import fs from 'fs';
 
 export const PlanReviewScreen: React.FC<PlanReviewScreenProps> = ({
   dbName,
@@ -19,6 +20,7 @@ export const PlanReviewScreen: React.FC<PlanReviewScreenProps> = ({
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [migrationKey, setMigrationKey] = useState(initialKey || '');
   const [editingKey, setEditingKey] = useState(false);
+  const [debugMessage, setDebugMessage] = useState<string | null>(null);
   const { exit } = useApp();
 
   const getHazardGlyph = (level: string) => {
@@ -64,6 +66,22 @@ export const PlanReviewScreen: React.FC<PlanReviewScreenProps> = ({
       const step = plan.steps[selectedIndex];
       // In a real implementation, you'd use a clipboard library
       // For now, we'll just indicate it was "copied"
+    } else if (input === 'd') {
+      // DEBUG: Dump raw plan JSON to file
+      try {
+        const debugData = {
+          plan,
+          timestamp: new Date().toISOString(),
+          dbName,
+          mode,
+        };
+        fs.writeFileSync('debug-plan.json', JSON.stringify(debugData, null, 2), 'utf8');
+        setDebugMessage('✓ Debug data written to debug-plan.json');
+        setTimeout(() => setDebugMessage(null), 3000);
+      } catch (err: any) {
+        setDebugMessage(`✗ Failed to write debug file: ${err.message}`);
+        setTimeout(() => setDebugMessage(null), 3000);
+      }
     } else if (input === 'k' && mode === 'migrate' && !editingKey) {
       setEditingKey(true);
     } else if (input === 'y' && mode === 'migrate' && onExecute && migrationKey) {
@@ -81,6 +99,15 @@ export const PlanReviewScreen: React.FC<PlanReviewScreenProps> = ({
           Plan — {dbName}
         </Text>
       </Box>
+
+      {/* Debug message banner */}
+      {debugMessage && (
+        <Box>
+          <Text color={debugMessage.startsWith('✓') ? DB_COLORS.green : DB_COLORS.red}>
+            {debugMessage}
+          </Text>
+        </Box>
+      )}
 
       {/* Summary */}
       <Box>
@@ -194,6 +221,7 @@ export const PlanReviewScreen: React.FC<PlanReviewScreenProps> = ({
                 { label: '↑↓', desc: 'select' },
                 { label: '↵', desc: 'expand' },
                 { label: 'c', desc: 'copy SQL' },
+                { label: 'd', desc: 'debug dump' },
                 { label: 'Esc', desc: 'cancel' },
               ]
             : [
@@ -201,6 +229,7 @@ export const PlanReviewScreen: React.FC<PlanReviewScreenProps> = ({
                 { label: '↵', desc: 'expand' },
                 { label: 'k', desc: 'edit key' },
                 { label: 'y', desc: 'execute' },
+                { label: 'd', desc: 'debug dump' },
                 ...(onBack ? [{ label: 'b', desc: 'back' }] : []),
                 { label: 'Esc', desc: 'cancel' },
               ]

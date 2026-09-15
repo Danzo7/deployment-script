@@ -45,6 +45,13 @@ export class DbSchemaDiff {
         'json',
       ]);
 
+      // DEBUG: Write raw output to file for debugging
+      try {
+        fs.writeFileSync('debug-pg-schema-diff-raw.json', result.stdout, 'utf8');
+      } catch (debugErr) {
+        // Ignore debug write errors
+      }
+
       // Parse JSON output
       const output = JSON.parse(result.stdout);
 
