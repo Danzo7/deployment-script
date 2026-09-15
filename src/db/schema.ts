@@ -172,6 +172,96 @@ export const appConfigTableSqlite = sqliteTable(
   (table) => [sqliteIndex('app_config_app_id_idx').on(table.appId)]
 );
 
+export const databasesTableSqlite = sqliteTable(
+  'databases',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    name: text('name').notNull().unique(),
+    host: text('host').notNull(),
+    port: integer('port').notNull(),
+    database: text('database').notNull(),
+    username: text('username').notNull(),
+    passwordEnc: text('passwordEnc').notNull(),
+    sslMode: text('sslMode', {
+      enum: ['disable', 'require', 'verify-full'],
+    })
+      .notNull()
+      .default('require'),
+    ownerRole: text('ownerRole'),
+    createdAt: integer('createdAt', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    updatedAt: integer('updatedAt', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(unixepoch())`)
+      .$onUpdate(() => new Date()),
+    createdBy: text('createdBy').notNull().default('system'),
+    updatedBy: text('updatedBy').notNull().default('system'),
+  },
+  (table) => [sqliteIndex('databases_name_idx').on(table.name)]
+);
+
+export const migrationsTableSqlite = sqliteTable(
+  'migrations',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    databaseId: integer('databaseId')
+      .notNull()
+      .references(() => databasesTableSqlite.id, { onDelete: 'cascade' }),
+    migrationKey: text('migrationKey').notNull(),
+    contentHash: text('contentHash').notNull(),
+    type: text('type', { enum: ['generated', 'manual'] }).notNull(),
+    sourceText: text('sourceText').notNull(),
+    plan: text('plan').notNull(), // JSON
+    status: text('status', {
+      enum: ['pending', 'running', 'succeeded', 'failed', 'canceled'],
+    })
+      .notNull()
+      .default('pending'),
+    totalSteps: integer('totalSteps').notNull(),
+    completedSteps: integer('completedSteps').notNull().default(0),
+    error: text('error'),
+    startedAt: integer('startedAt', { mode: 'timestamp' }),
+    finishedAt: integer('finishedAt', { mode: 'timestamp' }),
+    performedBy: text('performedBy').notNull(),
+    createdAt: integer('createdAt', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    sqliteIndex('migrations_database_id_idx').on(table.databaseId),
+    sqliteIndex('migrations_database_key_idx').on(
+      table.databaseId,
+      table.migrationKey
+    ),
+  ]
+);
+
+export const migrationStepsTableSqlite = sqliteTable(
+  'migration_steps',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    migrationId: integer('migrationId')
+      .notNull()
+      .references(() => migrationsTableSqlite.id, { onDelete: 'cascade' }),
+    stepIndex: integer('stepIndex').notNull(),
+    description: text('description').notNull(),
+    sql: text('sql').notNull(),
+    hazardLevel: text('hazardLevel', {
+      enum: ['none', 'warning', 'destructive'],
+    }).notNull(),
+    status: text('status', {
+      enum: ['pending', 'running', 'succeeded', 'failed', 'skipped'],
+    })
+      .notNull()
+      .default('pending'),
+    errorMessage: text('errorMessage'),
+    startedAt: integer('startedAt', { mode: 'timestamp' }),
+    finishedAt: integer('finishedAt', { mode: 'timestamp' }),
+  },
+  (table) => [sqliteIndex('migration_steps_migration_id_idx').on(table.migrationId)]
+);
+
 // ============================================================================
 // PostgreSQL Schema
 // ============================================================================
@@ -315,6 +405,75 @@ export const appConfigTablePostgres = pgTable(
   (table) => [pgIndex('app_config_app_id_idx').on(table.appId)]
 );
 
+export const databasesTablePostgres = pgTable(
+  'databases',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: varchar('name', { length: 255 }).notNull().unique(),
+    host: varchar('host', { length: 255 }).notNull(),
+    port: pgInteger('port').notNull(),
+    database: varchar('database', { length: 255 }).notNull(),
+    username: varchar('username', { length: 255 }).notNull(),
+    passwordEnc: pgText('password_enc').notNull(),
+    sslMode: varchar('ssl_mode', { length: 20 }).notNull().default('require'),
+    ownerRole: varchar('owner_role', { length: 255 }),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date' })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    createdBy: varchar('created_by', { length: 255 }).notNull().default('system'),
+    updatedBy: varchar('updated_by', { length: 255 }).notNull().default('system'),
+  },
+  (table) => [pgIndex('databases_name_idx').on(table.name)]
+);
+
+export const migrationsTablePostgres = pgTable(
+  'migrations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    databaseId: uuid('database_id')
+      .notNull()
+      .references(() => databasesTablePostgres.id, { onDelete: 'cascade' }),
+    migrationKey: varchar('migration_key', { length: 255 }).notNull(),
+    contentHash: varchar('content_hash', { length: 64 }).notNull(),
+    type: varchar('type', { length: 20 }).notNull(),
+    sourceText: pgText('source_text').notNull(),
+    plan: jsonb('plan').notNull(),
+    status: varchar('status', { length: 20 }).notNull().default('pending'),
+    totalSteps: pgInteger('total_steps').notNull(),
+    completedSteps: pgInteger('completed_steps').notNull().default(0),
+    error: pgText('error'),
+    startedAt: timestamp('started_at', { mode: 'date' }),
+    finishedAt: timestamp('finished_at', { mode: 'date' }),
+    performedBy: varchar('performed_by', { length: 255 }).notNull(),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    pgIndex('migrations_database_id_idx').on(table.databaseId),
+    pgIndex('migrations_database_key_idx').on(table.databaseId, table.migrationKey),
+  ]
+);
+
+export const migrationStepsTablePostgres = pgTable(
+  'migration_steps',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    migrationId: uuid('migration_id')
+      .notNull()
+      .references(() => migrationsTablePostgres.id, { onDelete: 'cascade' }),
+    stepIndex: pgInteger('step_index').notNull(),
+    description: varchar('description', { length: 500 }).notNull(),
+    sql: pgText('sql').notNull(),
+    hazardLevel: varchar('hazard_level', { length: 20 }).notNull(),
+    status: varchar('status', { length: 20 }).notNull().default('pending'),
+    errorMessage: pgText('error_message'),
+    startedAt: timestamp('started_at', { mode: 'date' }),
+    finishedAt: timestamp('finished_at', { mode: 'date' }),
+  },
+  (table) => [pgIndex('migration_steps_migration_id_idx').on(table.migrationId)]
+);
+
 // Export the appropriate tables based on dbType
 export const appsTable =
   dbType === 'postgres' ? appsTablePostgres : appsTableSqlite;
@@ -328,6 +487,12 @@ export const appStorageTable =
   dbType === 'postgres' ? appStorageTablePostgres : appStorageTableSqlite;
 export const appConfigTable =
   dbType === 'postgres' ? appConfigTablePostgres : appConfigTableSqlite;
+export const databasesTable =
+  dbType === 'postgres' ? databasesTablePostgres : databasesTableSqlite;
+export const migrationsTable =
+  dbType === 'postgres' ? migrationsTablePostgres : migrationsTableSqlite;
+export const migrationStepsTable =
+  dbType === 'postgres' ? migrationStepsTablePostgres : migrationStepsTableSqlite;
 
 // ============================================================================
 // Relations

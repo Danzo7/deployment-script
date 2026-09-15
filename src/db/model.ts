@@ -151,3 +151,50 @@ export interface AppStorage {
   storageId: string | number; // References Storage.id
   createdAt: Date; // Database-generated creation timestamp
 }
+
+export interface Database {
+  id: string | number; // UUID (PostgreSQL) or auto-increment integer (SQLite)
+  name: string; // Unique name for this database connection
+  host: string; // Database host
+  port: number; // Database port
+  database: string; // Database name
+  username: string; // Database username
+  passwordEnc: string; // Encrypted password
+  sslMode: 'disable' | 'require' | 'verify-full'; // SSL mode
+  ownerRole?: string | null; // Optional owner role
+  createdAt: Date; // Database-generated creation timestamp
+  updatedAt: Date; // Last update timestamp
+  createdBy: string; // User who created this database connection
+  updatedBy: string; // User who last updated this database connection
+}
+
+export interface Migration {
+  id: string | number; // UUID (PostgreSQL) or auto-increment integer (SQLite)
+  databaseId: string | number; // References Database.id
+  migrationKey: string; // Unique migration key
+  contentHash: string; // Hash of migration content
+  type: 'generated' | 'manual'; // Migration type
+  sourceText: string; // Original migration text
+  plan: any; // JSON migration plan
+  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'canceled'; // Migration status
+  totalSteps: number; // Total number of steps
+  completedSteps: number; // Number of completed steps
+  error?: string | null; // Error message if failed
+  startedAt?: Date | null; // When migration started
+  finishedAt?: Date | null; // When migration finished
+  performedBy: string; // User who performed the migration
+  createdAt: Date; // Database-generated creation timestamp
+}
+
+export interface MigrationStep {
+  id: string | number; // UUID (PostgreSQL) or auto-increment integer (SQLite)
+  migrationId: string | number; // References Migration.id
+  stepIndex: number; // Step order index
+  description: string; // Step description
+  sql: string; // SQL to execute
+  hazardLevel: 'none' | 'warning' | 'destructive'; // Hazard level
+  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped'; // Step status
+  errorMessage?: string | null; // Error message if failed
+  startedAt?: Date | null; // When step started
+  finishedAt?: Date | null; // When step finished
+}

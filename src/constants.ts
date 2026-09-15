@@ -82,6 +82,7 @@ export const DATABASE_URL = process.env.DATABASE_URL ?? undefined;
 
 // Security
 export const SECRET_KEY = process.env.SECRET_KEY ?? undefined;
+export const DB_CRED_KEY = process.env.DB_CRED_KEY ?? SECRET_KEY;
 
 // Remote SSH access - stored in data directory
 export const REMOTE_PORT = parseInt(process.env.REMOTE_PORT ?? '2022', 10);
@@ -100,3 +101,6 @@ export const REMOTE_KNOWN_HOSTS_PATH = path.join(
   REMOTE_DIR,
   'known_hosts.json'
 );
+
+// Database migration tools
+export const PG_SCHEMA_DIFF_DIR = process.env.PG_SCHEMA_DIFF_DIR ?? path.join(ROOT_DIR, 'tools', 'pg-schema-diff');

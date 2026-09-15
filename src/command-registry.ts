@@ -70,6 +70,13 @@ import {
 } from './commands/remote.js';
 import { logClear } from './commands/log-clear.js';
 import { metrics } from './commands/metrics.js';
+import { dbRegister } from './commands/db-register.js';
+import { dbList } from './commands/db-list.js';
+import { dbUpdate } from './commands/db-update.js';
+import { dbRemove } from './commands/db-remove.js';
+import { dbHistory } from './commands/db-history.js';
+import { dbCompare } from './commands/db-compare.js';
+import { dbMigrate } from './commands/db-migrate.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1351,6 +1358,156 @@ export const COMMANDS: Record<string, CommandNode> = {
         ],
         handler: async ({ oldUsername, newUsername }) => {
           await remoteRenameUser(oldUsername, newUsername);
+        },
+      },
+    },
+  },
+
+  // ── Database ───────────────────────────────────────────────────────────────
+  db: {
+    kind: 'group',
+    describe: 'Manage database connections and migrations',
+    group: 'Database',
+    subcommands: {
+      register: {
+        kind: 'leaf',
+        usage: 'register <name> <host> <port> <database> <username>',
+        describe: 'Register a new database connection',
+        group: 'Database',
+        positionals: [
+          { name: 'name', demandOption: true, describe: 'Unique name for this connection' },
+          { name: 'host', demandOption: true, describe: 'Database host' },
+          { name: 'port', type: 'number', demandOption: true, describe: 'Database port' },
+          { name: 'database', demandOption: true, describe: 'Database name' },
+          { name: 'username', demandOption: true, describe: 'Database username' },
+        ],
+        options: {
+          'ssl-mode': {
+            type: 'string',
+            choices: ['disable', 'require', 'verify-full'],
+            default: 'require',
+            describe: 'SSL mode',
+          },
+          'owner-role': {
+            type: 'string',
+            describe: 'Optional owner role to SET ROLE after connecting',
+          },
+        },
+        handler: async (args) => {
+          await dbRegister({
+            name: args.name,
+            host: args.host,
+            port: args.port,
+            database: args.database,
+            username: args.username,
+            sslMode: args['ssl-mode'],
+            ownerRole: args['owner-role'],
+          });
+        },
+      },
+      list: {
+        kind: 'leaf',
+        usage: 'list',
+        describe: 'List all registered databases',
+        group: 'Database',
+        handler: async () => {
+          await dbList();
+        },
+      },
+      update: {
+        kind: 'leaf',
+        usage: 'update <name>',
+        describe: 'Update database connection details',
+        group: 'Database',
+        positionals: [
+          { name: 'name', demandOption: true, describe: 'Database name' },
+        ],
+        options: {
+          host: { type: 'string', describe: 'New host' },
+          port: { type: 'number', describe: 'New port' },
+          database: { type: 'string', describe: 'New database name' },
+          username: { type: 'string', describe: 'New username' },
+          password: { type: 'boolean', describe: 'Prompt for new password' },
+          'ssl-mode': {
+            type: 'string',
+            choices: ['disable', 'require', 'verify-full'],
+            describe: 'New SSL mode',
+          },
+          'owner-role': { type: 'string', describe: 'New owner role' },
+        },
+        handler: async (args) => {
+          await dbUpdate({
+            name: args.name,
+            host: args.host,
+            port: args.port,
+            database: args.database,
+            username: args.username,
+            password: args.password,
+            sslMode: args['ssl-mode'],
+            ownerRole: args['owner-role'],
+          });
+        },
+      },
+      remove: {
+        kind: 'leaf',
+        usage: 'remove <name>',
+        describe: 'Remove a database connection',
+        group: 'Database',
+        positionals: [
+          { name: 'name', demandOption: true, describe: 'Database name' },
+        ],
+        handler: async (args) => {
+          await dbRemove({ name: args.name });
+        },
+      },
+      history: {
+        kind: 'leaf',
+        usage: 'history <name> [key]',
+        describe: 'View migration history',
+        group: 'Database',
+        positionals: [
+          { name: 'name', demandOption: true, describe: 'Database name' },
+          { name: 'key', describe: 'Migration key for detailed view' },
+        ],
+        handler: async (args) => {
+          await dbHistory({ name: args.name, key: args.key });
+        },
+      },
+      compare: {
+        kind: 'leaf',
+        usage: 'compare <name>',
+        describe: 'Compare current schema with desired schema (read-only)',
+        group: 'Database',
+        positionals: [
+          { name: 'name', demandOption: true, describe: 'Database name' },
+        ],
+        handler: async (args) => {
+          await dbCompare({ name: args.name });
+        },
+      },
+      migrate: {
+        kind: 'leaf',
+        usage: 'migrate <name> <key>',
+        describe: 'Execute a database migration',
+        group: 'Database',
+        lockArg: 'name',
+        positionals: [
+          { name: 'name', demandOption: true, describe: 'Database name' },
+          { name: 'key', demandOption: true, describe: 'Migration key' },
+        ],
+        options: {
+          type: {
+            type: 'string',
+            choices: ['generated', 'manual'],
+            describe: 'Migration type',
+          },
+        },
+        handler: async (args) => {
+          await dbMigrate({
+            name: args.name,
+            key: args.key,
+            type: args.type,
+          });
         },
       },
     },

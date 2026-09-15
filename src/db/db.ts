@@ -151,6 +151,57 @@ export const initializeDB = async () => {
         updatedBy TEXT NOT NULL DEFAULT 'system'
       );
       CREATE INDEX IF NOT EXISTS app_config_app_id_idx ON app_config(appId);
+
+      CREATE TABLE IF NOT EXISTS databases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        host TEXT NOT NULL,
+        port INTEGER NOT NULL,
+        database TEXT NOT NULL,
+        username TEXT NOT NULL,
+        passwordEnc TEXT NOT NULL,
+        sslMode TEXT NOT NULL DEFAULT 'require',
+        ownerRole TEXT,
+        createdAt INTEGER NOT NULL,
+        updatedAt INTEGER NOT NULL,
+        createdBy TEXT NOT NULL DEFAULT 'system',
+        updatedBy TEXT NOT NULL DEFAULT 'system'
+      );
+      CREATE INDEX IF NOT EXISTS databases_name_idx ON databases(name);
+
+      CREATE TABLE IF NOT EXISTS migrations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        databaseId INTEGER NOT NULL REFERENCES databases(id) ON DELETE CASCADE,
+        migrationKey TEXT NOT NULL,
+        contentHash TEXT NOT NULL,
+        type TEXT NOT NULL,
+        sourceText TEXT NOT NULL,
+        plan TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        totalSteps INTEGER NOT NULL,
+        completedSteps INTEGER NOT NULL DEFAULT 0,
+        error TEXT,
+        startedAt INTEGER,
+        finishedAt INTEGER,
+        performedBy TEXT NOT NULL,
+        createdAt INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS migrations_database_id_idx ON migrations(databaseId);
+      CREATE INDEX IF NOT EXISTS migrations_database_key_idx ON migrations(databaseId, migrationKey);
+
+      CREATE TABLE IF NOT EXISTS migration_steps (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        migrationId INTEGER NOT NULL REFERENCES migrations(id) ON DELETE CASCADE,
+        stepIndex INTEGER NOT NULL,
+        description TEXT NOT NULL,
+        sql TEXT NOT NULL,
+        hazardLevel TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        errorMessage TEXT,
+        startedAt INTEGER,
+        finishedAt INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS migration_steps_migration_id_idx ON migration_steps(migrationId);
     `);
   } else if (DATABASE_TYPE === 'postgres' && postgresInstance) {
     // For PostgreSQL, create tables using CREATE IF NOT EXISTS
@@ -243,6 +294,57 @@ export const initializeDB = async () => {
         updated_by VARCHAR(255) NOT NULL DEFAULT 'system'
       );
       CREATE INDEX IF NOT EXISTS app_config_app_id_idx ON app_config(app_id);
+
+      CREATE TABLE IF NOT EXISTS databases (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL UNIQUE,
+        host VARCHAR(255) NOT NULL,
+        port INTEGER NOT NULL,
+        database VARCHAR(255) NOT NULL,
+        username VARCHAR(255) NOT NULL,
+        password_enc TEXT NOT NULL,
+        ssl_mode VARCHAR(20) NOT NULL DEFAULT 'require',
+        owner_role VARCHAR(255),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        created_by VARCHAR(255) NOT NULL DEFAULT 'system',
+        updated_by VARCHAR(255) NOT NULL DEFAULT 'system'
+      );
+      CREATE INDEX IF NOT EXISTS databases_name_idx ON databases(name);
+
+      CREATE TABLE IF NOT EXISTS migrations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        database_id UUID NOT NULL REFERENCES databases(id) ON DELETE CASCADE,
+        migration_key VARCHAR(255) NOT NULL,
+        content_hash VARCHAR(64) NOT NULL,
+        type VARCHAR(20) NOT NULL,
+        source_text TEXT NOT NULL,
+        plan JSONB NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        total_steps INTEGER NOT NULL,
+        completed_steps INTEGER NOT NULL DEFAULT 0,
+        error TEXT,
+        started_at TIMESTAMP,
+        finished_at TIMESTAMP,
+        performed_by VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS migrations_database_id_idx ON migrations(database_id);
+      CREATE INDEX IF NOT EXISTS migrations_database_key_idx ON migrations(database_id, migration_key);
+
+      CREATE TABLE IF NOT EXISTS migration_steps (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        migration_id UUID NOT NULL REFERENCES migrations(id) ON DELETE CASCADE,
+        step_index INTEGER NOT NULL,
+        description TEXT NOT NULL,
+        sql TEXT NOT NULL,
+        hazard_level VARCHAR(20) NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        error_message TEXT,
+        started_at TIMESTAMP,
+        finished_at TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS migration_steps_migration_id_idx ON migration_steps(migration_id);
     `);
   }
 };

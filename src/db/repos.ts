@@ -14,6 +14,9 @@ import {
   AppConfig,
   AppWithConfig,
   AppWithConfigAndStorages,
+  Database,
+  Migration,
+  MigrationStep,
 } from './model.js';
 import { eq, and } from 'drizzle-orm';
 import {
@@ -23,8 +26,13 @@ import {
   routesTable,
   appStorageTable,
   appConfigTable,
+  databasesTable,
+  migrationsTable,
+  migrationStepsTable,
   dbType,
 } from './schema.js';
+import { encryptSecret, decryptSecret } from '../db-migration/crypto.js';
+import { getCurrentUser } from '../utils/user-context.js';
 
 // Helper to serialize JSON for SQLite
 function serializeJSON(data: any): string | any {
@@ -121,6 +129,62 @@ function mapToRoute(row: any): Route {
     createdBy: row.createdBy || 'system',
     updatedBy: row.updatedBy || 'system',
     headers: deserializeJSON<Record<string, string>>(row.headers),
+  };
+}
+
+// Helper to map DB row to Database model
+function mapToDatabase(row: any): Database {
+  return {
+    id: row.id,
+    name: row.name,
+    host: row.host,
+    port: row.port,
+    database: row.database,
+    username: row.username,
+    passwordEnc: row.passwordEnc,
+    sslMode: row.sslMode as 'disable' | 'require' | 'verify-full',
+    ownerRole: row.ownerRole ?? null,
+    createdAt: toDate(row.createdAt)!,
+    updatedAt: toDate(row.updatedAt)!,
+    createdBy: row.createdBy || 'system',
+    updatedBy: row.updatedBy || 'system',
+  };
+}
+
+// Helper to map DB row to Migration model
+function mapToMigration(row: any): Migration {
+  return {
+    id: row.id,
+    databaseId: row.databaseId,
+    migrationKey: row.migrationKey,
+    contentHash: row.contentHash,
+    type: row.type as 'generated' | 'manual',
+    sourceText: row.sourceText,
+    plan: deserializeJSON(row.plan) || {},
+    status: row.status as 'pending' | 'running' | 'succeeded' | 'failed' | 'canceled',
+    totalSteps: row.totalSteps,
+    completedSteps: row.completedSteps,
+    error: row.error ?? null,
+    startedAt: toDate(row.startedAt) ?? null,
+    finishedAt: toDate(row.finishedAt) ?? null,
+    performedBy: row.performedBy,
+    createdAt: toDate(row.createdAt)!,
+  };
+}
+
+// Helper to map DB row to MigrationStep model
+function mapToMigrationStep(row: any): MigrationStep {
+  return {
+    id: row.id,
+    migrationId: row.migrationId,
+    stepIndex: row.stepIndex,
+    description: row.description,
+    sql: row.sql,
+    hazardLevel: row.hazardLevel as 'none' | 'warning' | 'destructive',
+    status: row.status as 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped',
+    errorMessage: row.errorMessage ?? null,
+    startedAt: toDate(row.startedAt) ?? null,
+    finishedAt: toDate(row.finishedAt) ?? null,
   };
 }
 
@@ -1150,5 +1214,326 @@ export const AppConfigRepo = {
   delete: async (appId: string | number): Promise<void> => {
     const db: any = getDB();
     await db.delete(appConfigTable).where(eq(appConfigTable.appId, appId));
+  },
+};
+
+// ─── Database Repository ───────────────────────────────────────────────────
+
+export const DatabaseRepo = {
+  getAll: async (): Promise<Database[]> => {
+    const db: any = getDB();
+    const rows = await db.select().from(databasesTable);
+    return rows.map(mapToDatabase);
+  },
+
+  findByName: async (name: string): Promise<Database> => {
+    const db: any = getDB();
+    const rows = await db
+      .select()
+      .from(databasesTable)
+      .where(eq(databasesTable.name, name));
+    if (rows.length === 0) {
+      throw new Error(`Database "${name}" not found`);
+    }
+    return mapToDatabase(rows[0]);
+  },
+
+  getConnectionDetails: async (name: string): Promise<{
+    name: string;
+    host: string;
+    port: number;
+    database: string;
+    username: string;
+    password: string;
+    sslMode: 'disable' | 'require' | 'verify-full';
+    ownerRole?: string | null;
+  }> => {
+    const db = await DatabaseRepo.findByName(name);
+    const password = decryptSecret(db.passwordEnc);
+    
+    return {
+      name: db.name,
+      host: db.host,
+      port: db.port,
+      database: db.database,
+      username: db.username,
+      password,
+      sslMode: db.sslMode,
+      ownerRole: db.ownerRole,
+    };
+  },
+
+  add: async (
+    data: {
+      name: string;
+      host: string;
+      port: number;
+      database: string;
+      username: string;
+      password: string;
+      sslMode?: 'disable' | 'require' | 'verify-full';
+      ownerRole?: string | null;
+    },
+    createdBy?: string
+  ): Promise<Database> => {
+    const db: any = getDB();
+
+    // Check if database with same name exists
+    const existing = await db
+      .select()
+      .from(databasesTable)
+      .where(eq(databasesTable.name, data.name));
+    if (existing.length > 0) {
+      throw new Error(`Database "${data.name}" already exists`);
+    }
+
+    const user = createdBy || getCurrentUser();
+    const passwordEnc = encryptSecret(data.password);
+
+    const insertData = {
+      name: data.name,
+      host: data.host,
+      port: data.port,
+      database: data.database,
+      username: data.username,
+      passwordEnc,
+      sslMode: data.sslMode ?? 'require',
+      ownerRole: data.ownerRole ?? null,
+      createdBy: user,
+      updatedBy: user,
+    };
+
+    await db.insert(databasesTable).values(insertData);
+
+    // Fetch the newly inserted database to get the DB-generated id and timestamps
+    return await DatabaseRepo.findByName(data.name);
+  },
+
+  update: async (
+    name: string,
+    data: Partial<{
+      host: string;
+      port: number;
+      database: string;
+      username: string;
+      password: string;
+      sslMode: 'disable' | 'require' | 'verify-full';
+      ownerRole: string | null;
+    }>,
+    updatedBy?: string
+  ): Promise<Database> => {
+    const db: any = getDB();
+    const database = await DatabaseRepo.findByName(name);
+
+    const updateFields: any = {};
+
+    // Only update provided fields
+    if (data.host !== undefined) updateFields.host = data.host;
+    if (data.port !== undefined) updateFields.port = data.port;
+    if (data.database !== undefined) updateFields.database = data.database;
+    if (data.username !== undefined) updateFields.username = data.username;
+    if (data.password !== undefined) {
+      updateFields.passwordEnc = encryptSecret(data.password);
+    }
+    if (data.sslMode !== undefined) updateFields.sslMode = data.sslMode;
+    if ('ownerRole' in data) updateFields.ownerRole = data.ownerRole ?? null;
+
+    // Set updatedBy
+    updateFields.updatedBy = updatedBy || getCurrentUser();
+
+    await db
+      .update(databasesTable)
+      .set(updateFields)
+      .where(eq(databasesTable.name, database.name));
+
+    return await DatabaseRepo.findByName(name);
+  },
+
+  remove: async (name: string): Promise<void> => {
+    const db: any = getDB();
+    await db.delete(databasesTable).where(eq(databasesTable.name, name));
+  },
+};
+
+export const MigrationRepo = {
+  getAll: async (databaseId?: string | number): Promise<Migration[]> => {
+    const db: any = getDB();
+    let query = db.select().from(migrationsTable);
+    
+    if (databaseId !== undefined) {
+      query = query.where(eq(migrationsTable.databaseId, databaseId));
+    }
+    
+    const rows = await query.orderBy(migrationsTable.createdAt);
+    return rows.map(mapToMigration);
+  },
+
+  findById: async (id: string | number): Promise<Migration & { steps?: MigrationStep[] }> => {
+    const db: any = getDB();
+    const rows = await db
+      .select()
+      .from(migrationsTable)
+      .where(eq(migrationsTable.id, id));
+    
+    if (rows.length === 0) {
+      throw new Error(`Migration with id "${id}" not found`);
+    }
+    
+    const migration = mapToMigration(rows[0]);
+    
+    // Eagerly load steps
+    const stepRows = await db
+      .select()
+      .from(migrationStepsTable)
+      .where(eq(migrationStepsTable.migrationId, id))
+      .orderBy(migrationStepsTable.stepIndex);
+    
+    return {
+      ...migration,
+      steps: stepRows.map(mapToMigrationStep),
+    };
+  },
+
+  findByKey: async (
+    databaseId: string | number,
+    migrationKey: string
+  ): Promise<Migration | null> => {
+    const db: any = getDB();
+    const rows = await db
+      .select()
+      .from(migrationsTable)
+      .where(
+        and(
+          eq(migrationsTable.databaseId, databaseId),
+          eq(migrationsTable.migrationKey, migrationKey)
+        )
+      );
+    
+    if (rows.length === 0) {
+      return null;
+    }
+    
+    return mapToMigration(rows[0]);
+  },
+
+  create: async (data: {
+    databaseId: string | number;
+    migrationKey: string;
+    contentHash: string;
+    type: 'generated' | 'manual';
+    sourceText: string;
+    plan: any;
+    totalSteps: number;
+    performedBy: string;
+  }): Promise<Migration> => {
+    const db: any = getDB();
+    
+    const insertData = {
+      databaseId: data.databaseId,
+      migrationKey: data.migrationKey,
+      contentHash: data.contentHash,
+      type: data.type,
+      sourceText: data.sourceText,
+      plan: serializeJSON(data.plan),
+      totalSteps: data.totalSteps,
+      completedSteps: 0,
+      status: 'pending' as const,
+      performedBy: data.performedBy,
+    };
+    
+    const result = await db.insert(migrationsTable).values(insertData).returning();
+    
+    // For SQLite, we need to fetch the inserted row since returning() might not work
+    if (result && result.length > 0) {
+      return mapToMigration(result[0]);
+    }
+    
+    // Fallback: find by key
+    const migration = await MigrationRepo.findByKey(
+      data.databaseId,
+      data.migrationKey
+    );
+    if (!migration) {
+      throw new Error('Failed to create migration');
+    }
+    return migration;
+  },
+
+  updateStatus: async (
+    id: string | number,
+    status: 'pending' | 'running' | 'succeeded' | 'failed' | 'canceled',
+    completedSteps?: number,
+    error?: string
+  ): Promise<void> => {
+    const db: any = getDB();
+    const updateData: any = { status };
+    
+    if (completedSteps !== undefined) {
+      updateData.completedSteps = completedSteps;
+    }
+    
+    if (error !== undefined) {
+      updateData.error = error;
+    }
+    
+    if (status === 'running' && !updateData.startedAt) {
+      updateData.startedAt = new Date();
+    }
+    
+    if (status === 'succeeded' || status === 'failed' || status === 'canceled') {
+      updateData.finishedAt = new Date();
+    }
+    
+    await db
+      .update(migrationsTable)
+      .set(updateData)
+      .where(eq(migrationsTable.id, id));
+  },
+
+  addStep: async (
+    migrationId: string | number,
+    stepData: {
+      stepIndex: number;
+      description: string;
+      sql: string;
+      hazardLevel: 'none' | 'warning' | 'destructive';
+    }
+  ): Promise<void> => {
+    const db: any = getDB();
+    
+    await db.insert(migrationStepsTable).values({
+      migrationId,
+      stepIndex: stepData.stepIndex,
+      description: stepData.description,
+      sql: stepData.sql,
+      hazardLevel: stepData.hazardLevel,
+      status: 'pending',
+    });
+  },
+
+  updateStepStatus: async (
+    stepId: string | number,
+    status: 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped',
+    error?: string
+  ): Promise<void> => {
+    const db: any = getDB();
+    const updateData: any = { status };
+    
+    if (error !== undefined) {
+      updateData.errorMessage = error;
+    }
+    
+    if (status === 'running') {
+      updateData.startedAt = new Date();
+    }
+    
+    if (status === 'succeeded' || status === 'failed' || status === 'skipped') {
+      updateData.finishedAt = new Date();
+    }
+    
+    await db
+      .update(migrationStepsTable)
+      .set(updateData)
+      .where(eq(migrationStepsTable.id, stepId));
   },
 };
