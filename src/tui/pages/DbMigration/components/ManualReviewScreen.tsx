@@ -72,7 +72,7 @@ export const ManualReviewScreen: React.FC<ManualReviewScreenProps> = ({
   const sqlLines = sql.split('\n');
 
   return (
-    <Box flexDirection="column" paddingX={2} paddingY={1}>
+    <Box flexDirection="column" height="100%" paddingX={2} paddingY={1}>
       {/* Title bar */}
       <Box marginBottom={1}>
         <Text bold color={DB_COLORS.accent}>
@@ -108,7 +108,7 @@ export const ManualReviewScreen: React.FC<ManualReviewScreenProps> = ({
         paddingX={1}
         paddingY={1}
         marginBottom={1}
-        minHeight={10}
+        flexGrow={1}
       >
         {sqlLines.map((line, idx) => {
           const hasWarning = hasDestructiveKeyword(line);
@@ -143,7 +143,7 @@ export const ManualReviewScreen: React.FC<ManualReviewScreenProps> = ({
       <Box marginBottom={1}>
         <Text>
           <Text dimColor>[</Text>
-          <Text>← Back</Text>
+          <Text>b back</Text>
           <Text dimColor>]</Text>
         </Text>
         <Text>  </Text>

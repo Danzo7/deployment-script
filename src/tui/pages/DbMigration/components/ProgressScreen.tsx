@@ -75,7 +75,7 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
 
   if (!migration) {
     return (
-      <Box flexDirection="column" paddingX={2} paddingY={1}>
+      <Box flexDirection="column" height="100%" justifyContent="center" alignItems="center">
         <Text>Loading migration status...</Text>
       </Box>
     );
@@ -86,7 +86,7 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
   const isSucceeded = migration.status === 'succeeded';
 
   return (
-    <Box flexDirection="column" paddingX={2} paddingY={1}>
+    <Box flexDirection="column" height="100%" paddingX={2} paddingY={1}>
       {/* Title bar */}
       <Box marginBottom={1}>
         <Text bold color={DB_COLORS.accent}>
@@ -102,7 +102,7 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
         paddingX={1}
         paddingY={1}
         marginBottom={1}
-        minHeight={10}
+        flexGrow={1}
       >
         {steps.map((step) => {
           const statusInfo = getStatusGlyph(step.status);

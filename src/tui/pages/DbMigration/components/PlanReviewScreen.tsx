@@ -73,7 +73,7 @@ export const PlanReviewScreen: React.FC<PlanReviewScreenProps> = ({
   const isReadOnly = mode === 'compare';
 
   return (
-    <Box flexDirection="column" paddingX={2} paddingY={1}>
+    <Box flexDirection="column" height="100%" paddingX={2} paddingY={1}>
       {/* Title bar */}
       <Box marginBottom={1}>
         <Text bold color={DB_COLORS.accent}>
@@ -97,7 +97,7 @@ export const PlanReviewScreen: React.FC<PlanReviewScreenProps> = ({
         borderColor={DB_COLORS.border}
         paddingX={1}
         paddingY={1}
-        minHeight={10}
+        flexGrow={1}
       >
         {plan.steps.map((step, idx) => {
           const hazard = getHazardGlyph(step.hazardLevel);
@@ -172,7 +172,7 @@ export const PlanReviewScreen: React.FC<PlanReviewScreenProps> = ({
         {onBack && (
           <Text>
             <Text dimColor>[</Text>
-            <Text>← Back</Text>
+            <Text>b back</Text>
             <Text dimColor>]</Text> {' '}
           </Text>
         )}

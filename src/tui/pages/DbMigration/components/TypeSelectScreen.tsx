@@ -40,41 +40,43 @@ export const TypeSelectScreen: React.FC<TypeSelectScreenProps> = ({
   ];
 
   return (
-    <Box flexDirection="column" paddingX={2} paddingY={1}>
-      {/* Title bar */}
-      <Box marginBottom={1}>
-        <Text bold color={DB_COLORS.accent}>
-          New Migration
-        </Text>
-      </Box>
+    <Box flexDirection="column" height="100%" justifyContent="center" alignItems="center">
+      <Box flexDirection="column" paddingX={2} paddingY={1} width={60}>
+        {/* Title bar */}
+        <Box marginBottom={1}>
+          <Text bold color={DB_COLORS.accent}>
+            New Migration
+          </Text>
+        </Box>
 
-      {/* Options */}
-      <Box flexDirection="column" marginY={1}>
-        {options.map((option) => {
-          const isSelected = selected === option.type;
-          const marker = isSelected ? '▸' : '○';
-          
-          return (
-            <Box key={option.type} flexDirection="column" marginBottom={1}>
-              <Box>
-                <Text color={isSelected ? DB_COLORS.accent : DB_COLORS.dim}>
-                  {marker}{' '}
-                </Text>
-                <Text bold color={isSelected ? DB_COLORS.text : DB_COLORS.dim}>
-                  {option.title}
-                </Text>
+        {/* Options */}
+        <Box flexDirection="column" marginY={1}>
+          {options.map((option) => {
+            const isSelected = selected === option.type;
+            const marker = isSelected ? '▸' : '○';
+            
+            return (
+              <Box key={option.type} flexDirection="column" marginBottom={1}>
+                <Box>
+                  <Text color={isSelected ? DB_COLORS.accent : DB_COLORS.dim}>
+                    {marker}{' '}
+                  </Text>
+                  <Text bold color={isSelected ? DB_COLORS.text : DB_COLORS.dim}>
+                    {option.title}
+                  </Text>
+                </Box>
+                <Box marginLeft={3}>
+                  <Text dimColor>{option.description}</Text>
+                </Box>
               </Box>
-              <Box marginLeft={3}>
-                <Text dimColor>{option.description}</Text>
-              </Box>
-            </Box>
-          );
-        })}
-      </Box>
+            );
+          })}
+        </Box>
 
-      {/* Footer */}
-      <Box marginTop={1} borderStyle="single" borderTop paddingTop={1}>
-        <Text dimColor>↑↓ choose · ↵ continue · Esc cancel</Text>
+        {/* Footer */}
+        <Box marginTop={1} borderStyle="single" borderTop paddingTop={1}>
+          <Text dimColor>↑↓ choose · ↵ continue · Esc cancel</Text>
+        </Box>
       </Box>
     </Box>
   );

@@ -25,10 +25,6 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
     setModified(newValue !== (initialText || ''));
   };
 
-  const handleSubmit = (submittedValue: string) => {
-    onSubmit(submittedValue);
-  };
-
   useInput((input, key) => {
     // Save shortcut
     if (key.ctrl && input === 's') {
@@ -50,7 +46,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
   });
 
   return (
-    <Box flexDirection="column" paddingX={2} paddingY={1}>
+    <Box flexDirection="column" height="100%" paddingX={2} paddingY={1}>
       {/* Title bar */}
       <Box marginBottom={1}>
         <Text bold color={DB_COLORS.accent}>
@@ -68,19 +64,17 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
         borderColor={DB_COLORS.border}
         paddingX={1}
         paddingY={1}
-        minHeight={15}
+        flexGrow={1}
       >
         <TextArea
           focus
           value={value}
           onChange={handleChange}
-          onSubmit={handleSubmit}
+          onSubmit={() => {}} 
           highlightActiveLine
           activeLineColor={DB_COLORS.accentDim}
           linePrefix={LineNumberPrefix}
-          viewportLines={13}
           tabWidth={2}
-          initialLineCount={13}
         />
       </Box>
 
