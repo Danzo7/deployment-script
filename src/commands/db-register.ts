@@ -2,7 +2,7 @@ import { promptSecret } from '../utils/prompt-secret.js';
 import { DatabaseRepo } from '../db/repos.js';
 import { testConnection } from '../db-migration/connector.js';
 import { Logger } from '../utils/logger.js';
-import { DEFAULT_DB_HOST, DEFAULT_DB_PORT } from '../constants.js';
+import { DB_DEFAULT_HOST, DB_DEFAULT_PORT } from '../constants.js';
 
 export async function dbRegister(args: {
   name: string;
@@ -14,8 +14,8 @@ export async function dbRegister(args: {
   ownerRole?: string;
 }): Promise<void> {
   // Apply defaults
-  const host = args.host ?? DEFAULT_DB_HOST;
-  const port = args.port ?? DEFAULT_DB_PORT;
+  const host = args.host ?? DB_DEFAULT_HOST;
+  const port = args.port ?? DB_DEFAULT_PORT;
   const database = args.database ?? args.name; // Use connection name as database name if not specified
 
   Logger.info(`Registering database connection "${args.name}"...`);
