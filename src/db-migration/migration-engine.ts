@@ -51,16 +51,24 @@ export async function executeManualMigration(
     });
   }
 
-  // Create connector and connect
-  const connector = new Connector(dbName);
-  await connector.connect();
+  // Start execution in background - do not await
+  executeInBackground(migration.id, dbName, plan);
 
+  // Return migration record immediately so UI can start polling
+  return await MigrationRepo.findById(migration.id);
+}
+
+async function executeInBackground(migrationId: string | number, dbName: string, plan: any): Promise<void> {
+  const connector = new Connector(dbName);
+  
   try {
+    await connector.connect();
+    
     // Update migration status to running
-    await MigrationRepo.updateStatus(migration.id, 'running');
+    await MigrationRepo.updateStatus(migrationId, 'running');
 
     // Get the migration with steps to get step IDs
-    const migrationWithSteps = await MigrationRepo.findById(migration.id);
+    const migrationWithSteps = await MigrationRepo.findById(migrationId);
     const steps = migrationWithSteps.steps || [];
 
     // Execute plan with onStepUpdate callback
@@ -76,7 +84,7 @@ export async function executeManualMigration(
           (s) => s.stepIndex <= stepIndex
         ).length;
         await MigrationRepo.updateStatus(
-          migration.id,
+          migrationId,
           'running',
           succeededCount
         );
@@ -86,32 +94,28 @@ export async function executeManualMigration(
     // Update migration status based on result
     if (result.failedStep !== undefined) {
       await MigrationRepo.updateStatus(
-        migration.id,
+        migrationId,
         'failed',
         result.succeededSteps.length,
         `Migration failed at step ${result.failedStep}`
       );
     } else {
       await MigrationRepo.updateStatus(
-        migration.id,
+        migrationId,
         'succeeded',
         plan.stats.totalSteps
       );
     }
   } catch (err: any) {
     await MigrationRepo.updateStatus(
-      migration.id,
+      migrationId,
       'failed',
       undefined,
       err.message || String(err)
     );
-    throw err;
   } finally {
     await connector.close();
   }
-
-  // Return final migration record
-  return await MigrationRepo.findById(migration.id);
 }
 
 
@@ -166,69 +170,9 @@ export async function executeGeneratedMigration(
     });
   }
 
-  // Create connector and connect
-  const connector = new Connector(dbName);
-  await connector.connect();
+  // Start execution in background - do not await
+  executeInBackground(migration.id, dbName, plan);
 
-  try {
-    // Update migration status to running
-    await MigrationRepo.updateStatus(migration.id, 'running');
-
-    // Get the migration with steps to get step IDs
-    const migrationWithSteps = await MigrationRepo.findById(migration.id);
-    const steps = migrationWithSteps.steps || [];
-
-    // Execute plan with onStepUpdate callback
-    const result = await executePlan(
-      connector,
-      plan,
-      async (stepIndex, status, error) => {
-        const step = steps.find((s) => s.stepIndex === stepIndex);
-        if (step) {
-          await MigrationRepo.updateStepStatus(step.id, status, error);
-        }
-
-        // Update migration completedSteps count
-        if (status === 'succeeded') {
-          const succeededCount = steps.filter(
-            (s) => s.stepIndex <= stepIndex
-          ).length;
-          await MigrationRepo.updateStatus(
-            migration.id,
-            'running',
-            succeededCount
-          );
-        }
-      }
-    );
-
-    // Update migration status based on result
-    if (result.failedStep !== undefined) {
-      await MigrationRepo.updateStatus(
-        migration.id,
-        'failed',
-        result.succeededSteps.length,
-        `Migration failed at step ${result.failedStep}`
-      );
-    } else {
-      await MigrationRepo.updateStatus(
-        migration.id,
-        'succeeded',
-        plan.stats.totalSteps
-      );
-    }
-  } catch (err: any) {
-    await MigrationRepo.updateStatus(
-      migration.id,
-      'failed',
-      undefined,
-      err.message || String(err)
-    );
-    throw err;
-  } finally {
-    await connector.close();
-  }
-
-  // Return final migration record
+  // Return migration record immediately so UI can start polling
   return await MigrationRepo.findById(migration.id);
 }

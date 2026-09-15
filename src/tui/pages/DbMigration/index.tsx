@@ -145,12 +145,12 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
   const handleExecute = async (key: string) => {
     setMigrationKey(key);
 
-    try {
-      // Mark that migration is being executed
-      if (typeof (globalThis as any).__setMigrationExecuted === 'function') {
-        (globalThis as any).__setMigrationExecuted();
-      }
+    // Mark that migration is being executed
+    if (typeof (globalThis as any).__setMigrationExecuted === 'function') {
+      (globalThis as any).__setMigrationExecuted();
+    }
 
+    try {
       let migration;
       if (migrationType === 'generated') {
         migration = await executeGeneratedMigration(dbName, key, schemaText);
@@ -158,11 +158,12 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
         migration = await executeManualMigration(dbName, key, schemaText);
       }
 
+      // Migration record created, execution started in background
+      // Now show progress screen which will poll status
       setMigrationId(migration.id);
       setScreen('progress');
     } catch (err: any) {
       setError(err.message || String(err));
-      exit();
     }
   };
 
@@ -176,8 +177,12 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
 
   if (error) {
     return (
-      <Box flexDirection="column" paddingX={2} paddingY={1}>
-        <Text color="red">Error: {error}</Text>
+      <Box flexDirection="column" height="100%" justifyContent="center" paddingX={2} paddingY={1}>
+        <Text color="red">Migration Error:</Text>
+        <Text color="red">{error}</Text>
+        <Box marginTop={1}>
+          <Text dimColor>The error details are shown above. Press Esc or Ctrl+X to exit.</Text>
+        </Box>
       </Box>
     );
   }
