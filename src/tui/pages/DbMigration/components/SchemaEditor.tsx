@@ -46,9 +46,9 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
   });
 
   return (
-    <Box flexDirection="column" height="100%" paddingX={2} paddingY={1}>
+    <Box flexDirection="column" width="100%" height="100%">
       {/* Title bar */}
-      <Box marginBottom={1}>
+      <Box paddingX={2} paddingTop={1} marginBottom={1}>
         <Text bold color={DB_COLORS.accent}>
           {title}
         </Text>
@@ -62,6 +62,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
         flexDirection="column"
         borderStyle="single"
         borderColor={DB_COLORS.border}
+        marginX={2}
         paddingX={1}
         paddingY={1}
         flexGrow={1}
@@ -82,7 +83,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
       </Box>
 
       {/* Footer */}
-      <Box marginTop={1} borderStyle="single" borderTop paddingTop={1}>
+      <Box paddingX={2} paddingY={1}>
         <Text dimColor>
           ^S save{onBack ? ' · ^B back' : ''} · ^X cancel · ^Enter newline · ^Z undo · ^Y redo
         </Text>

@@ -27,9 +27,9 @@ export const DbCompareScreen: React.FC<DbCompareScreenProps> = ({ dbName }) => {
   const [error, setError] = useState<string | null>(null);
   const { exit } = useApp();
 
-  // Handle Esc key on error screen
+  // Handle exit keys on error screen
   useInput((input, key) => {
-    if (error && (key.escape || (key.ctrl && input === 'x'))) {
+    if (error && (key.escape || (key.ctrl && input === 'c') || (key.ctrl && input === 'x'))) {
       exit();
     }
   });
@@ -60,7 +60,7 @@ export const DbCompareScreen: React.FC<DbCompareScreenProps> = ({ dbName }) => {
           {error}
         </Alert>
         <Box marginTop={1}>
-          <Text dimColor>Press Esc or Ctrl+X to exit.</Text>
+          <Text dimColor>Press ^C or ^X to exit.</Text>
         </Box>
       </Box>
     );
@@ -126,9 +126,9 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
   const [canGoBack, setCanGoBack] = useState(false);
   const { exit } = useApp();
 
-  // Handle Esc key on error screen
+  // Handle exit keys on error screen
   useInput((input, key) => {
-    if (error && (key.escape || (key.ctrl && input === 'x'))) {
+    if (error && (key.escape || (key.ctrl && input === 'c') || (key.ctrl && input === 'x'))) {
       exit();
     }
   });
@@ -201,7 +201,7 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
           {error}
         </Alert>
         <Box marginTop={1}>
-          <Text dimColor>Press Esc or Ctrl+X to exit.</Text>
+          <Text dimColor>Press ^C or ^X to exit.</Text>
         </Box>
       </Box>
     );

@@ -29,11 +29,10 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
   const [migration, setMigration] = useState<Migration | null>(null);
   const [steps, setSteps] = useState<MigrationStep[]>([]);
   const [isComplete, setIsComplete] = useState(false);
-  const { exit } = useApp();
 
-  // Handle Esc key to exit
+  // Handle exit keys
   useInput((input, key) => {
-    if (key.escape) {
+    if (key.escape || (key.ctrl && input === 'c') || (key.ctrl && input === 'x')) {
       onComplete();
     }
   });
@@ -160,7 +159,7 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
       <Box borderStyle="single" borderTop paddingTop={1}>
         <Text dimColor>
           {isRunning && 'running…'}
-          {isComplete && 'finished — press Esc to exit'}
+          {isComplete && 'finished — press ^C or ^X to exit'}
         </Text>
       </Box>
     </Box>
