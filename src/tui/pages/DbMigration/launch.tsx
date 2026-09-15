@@ -4,8 +4,11 @@ import { DbCompareScreen, DbMigrateScreen } from './index.js';
 import { Logger } from '../../../utils/logger.js';
 
 export async function launchDbCompare(dbName: string): Promise<void> {
+  Logger.isMuted = true;
+
   return new Promise((resolve, reject) => {
     process.stdout.write('\x1b[?1049h'); // enter alternate screen
+    process.stdout.write('\x1b[H'); // move cursor to home
     
     const { waitUntilExit } = render(
       React.createElement(DbCompareScreen, { dbName })
@@ -14,10 +17,12 @@ export async function launchDbCompare(dbName: string): Promise<void> {
     waitUntilExit()
       .then(() => {
         process.stdout.write('\x1b[?1049l'); // leave alternate screen
+        Logger.isMuted = false;
         resolve();
       })
       .catch((err) => {
         process.stdout.write('\x1b[?1049l'); // leave alternate screen
+        Logger.isMuted = false;
         reject(err);
       });
   });
@@ -58,6 +63,8 @@ export async function launchDbMigrate(args: {
     }
   }
 
+  Logger.isMuted = true;
+
   // Track whether migration was actually executed
   let migrationExecuted = false;
   const setMigrationExecuted = () => {
@@ -67,6 +74,7 @@ export async function launchDbMigrate(args: {
 
   return new Promise((resolve, reject) => {
     process.stdout.write('\x1b[?1049h'); // enter alternate screen
+    process.stdout.write('\x1b[H'); // move cursor to home
     
     const { waitUntilExit } = render(
       React.createElement(DbMigrateScreen, {
@@ -80,6 +88,7 @@ export async function launchDbMigrate(args: {
     waitUntilExit()
       .then(() => {
         process.stdout.write('\x1b[?1049l'); // leave alternate screen
+        Logger.isMuted = false;
         if (migrationExecuted) {
           Logger.success('Migration completed');
         }
@@ -88,6 +97,7 @@ export async function launchDbMigrate(args: {
       })
       .catch((err) => {
         process.stdout.write('\x1b[?1049l'); // leave alternate screen
+        Logger.isMuted = false;
         delete (globalThis as any).__setMigrationExecuted;
         reject(err);
       });
