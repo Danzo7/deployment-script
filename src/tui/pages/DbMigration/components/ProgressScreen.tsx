@@ -89,9 +89,9 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
   const isSucceeded = migration.status === 'succeeded';
 
   return (
-    <Box flexDirection="column" height="100%" paddingX={2} paddingY={1}>
+    <Box flexDirection="column" height="100%" paddingX={2}>
       {/* Title bar */}
-      <Box marginBottom={1}>
+      <Box>
         <Text bold color={DB_COLORS.accent}>
           Executing — {migration.migrationKey}
         </Text>
@@ -104,7 +104,6 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
         borderColor={DB_COLORS.border}
         paddingX={1}
         paddingY={1}
-        marginBottom={1}
         flexGrow={1}
       >
         {steps.map((step) => {
@@ -135,7 +134,7 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
 
       {/* Summary message */}
       {isFailed && (
-        <Box flexDirection="column" marginBottom={1}>
+        <Box flexDirection="column">
           <Text color={DB_COLORS.red}>
             Steps 1–{migration.completedSteps} committed. Remaining steps never ran.
           </Text>
@@ -147,7 +146,7 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
       )}
 
       {isSucceeded && (
-        <Box flexDirection="column" marginBottom={1}>
+        <Box flexDirection="column">
           <Text color={DB_COLORS.green}>
             All {migration.totalSteps} steps completed. Recorded in history as
           </Text>
@@ -156,7 +155,7 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
       )}
 
       {/* Footer status */}
-      <Box borderStyle="single" borderTop paddingTop={1}>
+      <Box borderStyle="single" borderTop>
         <Text dimColor>
           {isRunning && 'running…'}
           {isComplete && 'finished — press ^C or ^X to exit'}

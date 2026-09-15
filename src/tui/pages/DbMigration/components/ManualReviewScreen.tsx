@@ -65,9 +65,9 @@ export const ManualReviewScreen: React.FC<ManualReviewScreenProps> = ({
   const sqlLines = sql.split('\n');
 
   return (
-    <Box flexDirection="column" height="100%" paddingX={2} paddingY={1}>
+    <Box flexDirection="column" height="100%" paddingX={2}>
       {/* Title bar */}
-      <Box marginBottom={1}>
+      <Box>
         <Text bold color={DB_COLORS.accent}>
           Review — {dbName} — manual migration
         </Text>
@@ -80,7 +80,6 @@ export const ManualReviewScreen: React.FC<ManualReviewScreenProps> = ({
         borderColor={DB_COLORS.yellow}
         paddingX={1}
         paddingY={1}
-        marginBottom={1}
       >
         <Text color={DB_COLORS.yellow}>
           ⚠ Raw SQL executes as-is. No schema diff
@@ -100,7 +99,6 @@ export const ManualReviewScreen: React.FC<ManualReviewScreenProps> = ({
         borderColor={DB_COLORS.border}
         paddingX={1}
         paddingY={1}
-        marginBottom={1}
         flexGrow={1}
       >
         {sqlLines.map((line, idx) => {
@@ -116,7 +114,7 @@ export const ManualReviewScreen: React.FC<ManualReviewScreenProps> = ({
       </Box>
 
       {/* Migration key input */}
-      <Box marginBottom={1}>
+      <Box>
         <Text>Migration key  </Text>
         {editingKey ? (
           <TextInput
@@ -133,7 +131,7 @@ export const ManualReviewScreen: React.FC<ManualReviewScreenProps> = ({
       </Box>
 
       {/* Action buttons */}
-      <Box marginBottom={1}>
+      <Box>
         <Text>
           <Text dimColor>[</Text>
           <Text>b back</Text>
@@ -150,7 +148,7 @@ export const ManualReviewScreen: React.FC<ManualReviewScreenProps> = ({
       </Box>
 
       {/* Footer */}
-      <Box borderStyle="single" borderTop paddingTop={1}>
+      <Box borderStyle="single" borderTop>
         <Text dimColor>k edit key · y execute · b back · Esc cancel</Text>
       </Box>
     </Box>

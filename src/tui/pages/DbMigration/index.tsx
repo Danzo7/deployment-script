@@ -60,11 +60,11 @@ export const DbCompareScreen: React.FC<DbCompareScreenProps> = ({ dbName }) => {
 
   if (error) {
     return (
-      <Box flexDirection="column" height="100%" justifyContent="center" paddingX={2} paddingY={1}>
+      <Box flexDirection="column" height="100%" justifyContent="center" paddingX={2}>
         <Alert variant="error" title="Comparison Error">
           {error}
         </Alert>
-        <Box marginTop={1}>
+        <Box>
           <Text>
             <Text dimColor>[</Text>
             <Text>b back</Text>
@@ -211,11 +211,11 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
 
   if (error) {
     return (
-      <Box flexDirection="column" height="100%" justifyContent="center" paddingX={2} paddingY={1}>
+      <Box flexDirection="column" height="100%" justifyContent="center" paddingX={2}>
         <Alert variant="error" title="Migration Error">
           {error}
         </Alert>
-        <Box marginTop={1}>
+        <Box>
           <Text>
             <Text dimColor>[</Text>
             <Text>b back</Text>

@@ -73,16 +73,16 @@ export const PlanReviewScreen: React.FC<PlanReviewScreenProps> = ({
   const isReadOnly = mode === 'compare';
 
   return (
-    <Box flexDirection="column" height="100%" paddingX={2} paddingY={1}>
+    <Box flexDirection="column" height="100%" paddingX={2}>
       {/* Title bar */}
-      <Box marginBottom={1}>
+      <Box>
         <Text bold color={DB_COLORS.accent}>
           Plan — {dbName}
         </Text>
       </Box>
 
       {/* Summary */}
-      <Box marginBottom={1}>
+      <Box>
         <Text>
           {plan.stats.totalSteps} steps · {plan.stats.warnings}{' '}
           <Text color={DB_COLORS.yellow}>⚠</Text> · {plan.stats.destructive}{' '}
@@ -150,7 +150,7 @@ export const PlanReviewScreen: React.FC<PlanReviewScreenProps> = ({
 
       {/* Migration key input (migrate mode only) */}
       {mode === 'migrate' && (
-        <Box marginTop={1} marginBottom={1}>
+        <Box>
           <Text>Migration key  </Text>
           {editingKey ? (
             <TextInput
@@ -168,7 +168,7 @@ export const PlanReviewScreen: React.FC<PlanReviewScreenProps> = ({
       )}
 
       {/* Action buttons */}
-      <Box marginTop={1}>
+      <Box>
         {onBack && (
           <Text>
             <Text dimColor>[</Text>
@@ -186,7 +186,7 @@ export const PlanReviewScreen: React.FC<PlanReviewScreenProps> = ({
       </Box>
 
       {/* Footer */}
-      <Box marginTop={1} borderStyle="single" borderTop paddingTop={1}>
+      <Box borderStyle="single" borderTop>
         <Text dimColor>
           {isReadOnly
             ? '↑↓ select · ↵ expand · c copy SQL · Esc cancel'

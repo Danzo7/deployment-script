@@ -41,16 +41,16 @@ export const TypeSelectScreen: React.FC<TypeSelectScreenProps> = ({
 
   return (
     <Box flexDirection="column" height="100%" justifyContent="center" alignItems="center">
-      <Box flexDirection="column" paddingX={2} paddingY={1} width={60}>
+      <Box flexDirection="column" paddingX={2} width={60}>
         {/* Title bar */}
-        <Box marginBottom={1}>
+        <Box>
           <Text bold color={DB_COLORS.accent}>
             New Migration
           </Text>
         </Box>
 
         {/* Options */}
-        <Box flexDirection="column" marginY={1}>
+        <Box flexDirection="column">
           {options.map((option) => {
             const isSelected = selected === option.type;
             const marker = isSelected ? '▸' : '○';
@@ -74,7 +74,7 @@ export const TypeSelectScreen: React.FC<TypeSelectScreenProps> = ({
         </Box>
 
         {/* Footer */}
-        <Box marginTop={1} borderStyle="single" borderTop paddingTop={1}>
+        <Box borderStyle="single" borderTop>
           <Text dimColor>↑↓ choose · ↵ continue · Esc cancel</Text>
         </Box>
       </Box>
