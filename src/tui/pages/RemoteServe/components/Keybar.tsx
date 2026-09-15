@@ -6,7 +6,7 @@ interface KeybarProps {
   hasActiveSessions: boolean;
 }
 
-export function Keybars({ hasActiveSessions }: KeybarProps): React.ReactElement {
+export function Keybar({ hasActiveSessions }: KeybarProps): React.ReactElement {
   const hints = [
     ...(hasActiveSessions
       ? [
