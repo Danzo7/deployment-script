@@ -2,16 +2,27 @@ import { promptSecret } from '../utils/prompt-secret.js';
 import { DatabaseRepo } from '../db/repos.js';
 import { testConnection } from '../db-migration/connector.js';
 import { Logger } from '../utils/logger.js';
+import { DEFAULT_DB_HOST, DEFAULT_DB_PORT } from '../constants.js';
 
 export async function dbRegister(args: {
   name: string;
-  host: string;
-  port: number;
-  database: string;
+  host?: string;
+  port?: number;
+  database?: string;
   username: string;
   sslMode?: 'disable' | 'require' | 'verify-full';
   ownerRole?: string;
 }): Promise<void> {
+  // Apply defaults
+  const host = args.host ?? DEFAULT_DB_HOST;
+  const port = args.port ?? DEFAULT_DB_PORT;
+  const database = args.database ?? args.name; // Use connection name as database name if not specified
+
+  Logger.info(`Registering database connection "${args.name}"...`);
+  Logger.info(`  Host: ${host}:${port}`);
+  Logger.info(`  Database: ${database}`);
+  Logger.info(`  Username: ${args.username}`);
+
   // Prompt for password
   const password = await promptSecret('Password: ');
 
@@ -22,9 +33,9 @@ export async function dbRegister(args: {
   // Add database
   await DatabaseRepo.add({
     name: args.name,
-    host: args.host,
-    port: args.port,
-    database: args.database,
+    host,
+    port,
+    database,
     username: args.username,
     password,
     sslMode: args.sslMode ?? 'require',
@@ -32,6 +43,7 @@ export async function dbRegister(args: {
   });
 
   // Test connection
+  Logger.info('Testing connection...');
   const test = await testConnection(args.name);
   if (!test.ok) {
     // Connection test failed, remove the database
@@ -39,5 +51,5 @@ export async function dbRegister(args: {
     throw new Error(`Connection test failed: ${test.error}`);
   }
 
-  Logger.success(`Database "${args.name}" registered successfully`);
+  Logger.success(`✓ Database "${args.name}" registered successfully`);
 }

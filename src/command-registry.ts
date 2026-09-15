@@ -1371,17 +1371,34 @@ export const COMMANDS: Record<string, CommandNode> = {
     subcommands: {
       register: {
         kind: 'leaf',
-        usage: 'register <name> <host> <port> <database> <username>',
+        usage: 'register <name>',
         describe: 'Register a new database connection',
         group: 'Database',
         positionals: [
-          { name: 'name', demandOption: true, describe: 'Unique name for this connection' },
-          { name: 'host', demandOption: true, describe: 'Database host' },
-          { name: 'port', type: 'number', demandOption: true, describe: 'Database port' },
-          { name: 'database', demandOption: true, describe: 'Database name' },
-          { name: 'username', demandOption: true, describe: 'Database username' },
+          { name: 'name', demandOption: true, describe: 'Unique name for this connection (also used as database name)' },
         ],
         options: {
+          host: {
+            alias: 'h',
+            type: 'string',
+            describe: 'Database host (default: localhost or DEFAULT_DB_HOST env var)',
+          },
+          port: {
+            alias: 'p',
+            type: 'number',
+            describe: 'Database port (default: 5432 or DEFAULT_DB_PORT env var)',
+          },
+          database: {
+            alias: 'd',
+            type: 'string',
+            describe: 'Database name (default: uses connection name)',
+          },
+          username: {
+            alias: 'u',
+            type: 'string',
+            demandOption: true,
+            describe: 'Database username',
+          },
           'ssl-mode': {
             type: 'string',
             choices: ['disable', 'require', 'verify-full'],
