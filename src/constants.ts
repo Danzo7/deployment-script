@@ -106,5 +106,9 @@ export const REMOTE_KNOWN_HOSTS_PATH = path.join(
 export const PG_SCHEMA_DIFF_DIR = process.env.PG_SCHEMA_DIFF_DIR ?? path.join(INSTALL_DIR, 'tools', 'pg-schema-diff');
 
 // Database connection defaults
-export const DEFAULT_DB_HOST = process.env.DEFAULT_DB_HOST ?? 'localhost';
-export const DEFAULT_DB_PORT = process.env.DEFAULT_DB_PORT ? parseInt(process.env.DEFAULT_DB_PORT, 10) : 5432;
+export const DB_DEFAULT_HOST = process.env.DB_DEFAULT_HOST ?? 'localhost';
+export const DB_DEFAULT_PORT = process.env.DB_DEFAULT_PORT ? parseInt(process.env.DB_DEFAULT_PORT, 10) : 5432;
+
+// Schema diff connection (user with CREATEDB privilege for temp database creation)
+export const DB_COMPARE_USER = process.env.DB_COMPARE_USER ?? undefined;
+export const DB_COMPARE_PASSWORD = process.env.DB_COMPARE_PASSWORD ?? undefined;

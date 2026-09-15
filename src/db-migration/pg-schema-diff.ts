@@ -5,6 +5,7 @@ import os from 'os';
 import { resolvePgSchemaDiffBinary } from './binary.js';
 import { DatabaseRepo } from '../db/repos.js';
 import { Plan, PlanStep } from './plan-types.js';
+import { DB_COMPARE_USER, DB_COMPARE_PASSWORD } from '../constants.js';
 
 export class DbSchemaDiff {
   private dbName: string;
@@ -17,8 +18,12 @@ export class DbSchemaDiff {
     // Get connection details
     const details = await DatabaseRepo.getConnectionDetails(this.dbName);
 
+    // Use compare credentials if available, otherwise fall back to regular credentials
+    const username = DB_COMPARE_USER || details.username;
+    const password = DB_COMPARE_PASSWORD || details.password;
+
     // Build PostgreSQL DSN string
-    const dsn = `postgresql://${encodeURIComponent(details.username)}:${encodeURIComponent(details.password)}@${details.host}:${details.port}/${details.database}?sslmode=${details.sslMode}`;
+    const dsn = `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${details.host}:${details.port}/${details.database}?sslmode=${details.sslMode}`;
 
     // Create temp directory for desired schema
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-schema-'));
