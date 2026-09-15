@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { render, useApp } from 'ink';
+import { useApp } from 'ink';
 import {
   subscribeBus,
   readAppLogs,
@@ -19,6 +19,7 @@ import {
 } from '../../../utils/dashboard-data.js';
 import { Logger } from '../../../utils/logger.js';
 import { pauseRepl, resumeRepl } from '../../../utils/repl-context.js';
+import { launchTui } from '../../utils/launch-tui.js';
 
 // ─── Polling cadences ─────────────────────────────────────────────────────────
 const LIST_POLL_MS = 2_000;
@@ -270,7 +271,6 @@ function DashboardApp(): React.ReactElement {
 
 export async function launchDashboard(): Promise<void> {
   pauseRepl();
-  Logger.isMuted = true;
 
   try {
     await openSharedPm2();
@@ -280,53 +280,51 @@ export async function launchDashboard(): Promise<void> {
 
   (globalThis as any).__pendingDashboardAction = undefined;
 
-  process.stdout.write('\x1b[?1049h'); // enter alternate screen
-  const { waitUntilExit } = render(<DashboardApp />);
-  await waitUntilExit();
-  process.stdout.write('\x1b[?1049l'); // leave alternate screen
+  await launchTui(<DashboardApp />, {
+    onExit: async () => {
+      closeSharedPm2();
+      resumeRepl();
 
-  closeSharedPm2();
-  resumeRepl();
-  Logger.isMuted = false;
+      const action: DashboardAction | undefined = (globalThis as any)
+        .__pendingDashboardAction;
+      if (!action) return;
 
-  const action: DashboardAction | undefined = (globalThis as any)
-    .__pendingDashboardAction;
-  if (!action) return;
+      console.log();
 
-  console.log();
-
-  switch (action.type) {
-    case 'restart': {
-      const { restart } = await import('../../../commands/restart.js');
-      await restart({ name: action.appName });
-      break;
-    }
-    case 'stop': {
-      const { stop } = await import('../../../commands/stop.js');
-      await stop({ name: action.appName });
-      break;
-    }
-    case 'deploy': {
-      Logger.info(`To deploy: dm deploy ${action.appName}`);
-      break;
-    }
-    case 'rollback': {
-      const { rollback } = await import('../../../commands/rollback.js');
-      await rollback({ name: action.appName, to: action.rollbackIndex });
-      break;
-    }
-    case 'logs': {
-      const { logs } = await import('../../../commands/logs.js');
-      await logs({ name: action.appName });
-      await new Promise(() => {});
-      break;
-    }
-    case 'env': {
-      const { launchEnvEditor } = await import('../EnvEditor/launch.js');
-      await launchEnvEditor(action.appName);
-      break;
-    }
-    default:
-      break;
-  }
+      switch (action.type) {
+        case 'restart': {
+          const { restart } = await import('../../../commands/restart.js');
+          await restart({ name: action.appName });
+          break;
+        }
+        case 'stop': {
+          const { stop } = await import('../../../commands/stop.js');
+          await stop({ name: action.appName });
+          break;
+        }
+        case 'deploy': {
+          Logger.info(`To deploy: dm deploy ${action.appName}`);
+          break;
+        }
+        case 'rollback': {
+          const { rollback } = await import('../../../commands/rollback.js');
+          await rollback({ name: action.appName, to: action.rollbackIndex });
+          break;
+        }
+        case 'logs': {
+          const { logs } = await import('../../../commands/logs.js');
+          await logs({ name: action.appName });
+          await new Promise(() => {});
+          break;
+        }
+        case 'env': {
+          const { launchEnvEditor } = await import('../EnvEditor/launch.js');
+          await launchEnvEditor(action.appName);
+          break;
+        }
+        default:
+          break;
+      }
+    },
+  });
 }

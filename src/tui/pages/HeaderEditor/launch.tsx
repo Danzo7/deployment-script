@@ -1,8 +1,8 @@
 import React from 'react';
-import { render } from 'ink';
 import { HeaderEditor, HeaderRow } from './index.js';
 import { Logger } from '../../../utils/logger.js';
 import { pauseRepl, resumeRepl } from '../../../utils/repl-context.js';
+import { launchTui } from '../../utils/launch-tui.js';
 
 async function applyDomainChanges(
   domainName: string,
@@ -48,17 +48,14 @@ export async function launchDomainHeaderEditor(
   const { normalizeDomainName } = await import('../../../utils/route-validation.js');
 
   pauseRepl();
-  Logger.isMuted = true;
 
   const normalized = normalizeDomainName(domainName);
   const domain = await DomainRepo.findByName(normalized);
   const initial: Record<string, string> = domain.headers ?? {};
 
-  Logger.isMuted = false;
-
   let savedCount = 0;
 
-  const { waitUntilExit } = render(
+  await launchTui(
     <HeaderEditor
       target={normalized}
       initial={initial}
@@ -66,20 +63,23 @@ export async function launchDomainHeaderEditor(
         await applyDomainChanges(normalized, rows);
         savedCount = count;
       }}
-    />
+    />,
+    {
+      muteLogger: false,
+      onExit: () => {
+        resumeRepl();
+
+        if (savedCount > 0) {
+          Logger.success(
+            `Saved ${savedCount} header change${savedCount === 1 ? '' : 's'} to domain "${normalized}".`
+          );
+          Logger.advice(
+            `Run ${Logger.highlight(`dm domain push ${normalized}`)} to apply the changes.`
+          );
+        }
+      },
+    }
   );
-
-  await waitUntilExit();
-  resumeRepl();
-
-  if (savedCount > 0) {
-    Logger.success(
-      `Saved ${savedCount} header change${savedCount === 1 ? '' : 's'} to domain "${normalized}".`
-    );
-    Logger.advice(
-      `Run ${Logger.highlight(`dm domain push ${normalized}`)} to apply the changes.`
-    );
-  }
 }
 
 export async function launchRouteHeaderEditor(
@@ -92,7 +92,6 @@ export async function launchRouteHeaderEditor(
   );
 
   pauseRepl();
-  Logger.isMuted = true;
 
   const normalizedDomain = normalizeDomainName(domainName);
   const normalizedPath = normalizePath(location);
@@ -100,7 +99,6 @@ export async function launchRouteHeaderEditor(
   const domain = await DomainRepo.findByName(normalizedDomain);
   const route = await RouteRepo.findByDomainAndPath(domain.id, normalizedPath);
   if (!route) {
-    Logger.isMuted = false;
     resumeRepl();
     throw new Error(
       `No route found for "/${normalizedPath}" on domain "${normalizedDomain}"`
@@ -112,11 +110,9 @@ export async function launchRouteHeaderEditor(
     ? `${normalizedDomain} /${normalizedPath}`
     : `${normalizedDomain} /`;
 
-  Logger.isMuted = false;
-
   let savedCount = 0;
 
-  const { waitUntilExit } = render(
+  await launchTui(
     <HeaderEditor
       target={target}
       initial={initial}
@@ -124,18 +120,21 @@ export async function launchRouteHeaderEditor(
         await applyRouteChanges(normalizedDomain, normalizedPath, rows);
         savedCount = count;
       }}
-    />
+    />,
+    {
+      muteLogger: false,
+      onExit: () => {
+        resumeRepl();
+
+        if (savedCount > 0) {
+          Logger.success(
+            `Saved ${savedCount} header change${savedCount === 1 ? '' : 's'} to route "${target}".`
+          );
+          Logger.advice(
+            `Run ${Logger.highlight(`dm domain push ${normalizedDomain}`)} to apply the changes.`
+          );
+        }
+      },
+    }
   );
-
-  await waitUntilExit();
-  resumeRepl();
-
-  if (savedCount > 0) {
-    Logger.success(
-      `Saved ${savedCount} header change${savedCount === 1 ? '' : 's'} to route "${target}".`
-    );
-    Logger.advice(
-      `Run ${Logger.highlight(`dm domain push ${normalizedDomain}`)} to apply the changes.`
-    );
-  }
 }

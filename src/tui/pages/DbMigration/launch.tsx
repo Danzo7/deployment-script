@@ -1,31 +1,12 @@
-import { render } from 'ink';
 import React from 'react';
 import { DbCompareScreen, DbMigrateScreen } from './index.js';
 import { Logger } from '../../../utils/logger.js';
+import { launchTui } from '../../utils/launch-tui.js';
 
 export async function launchDbCompare(dbName: string): Promise<void> {
-  Logger.isMuted = true;
-
-  return new Promise((resolve, reject) => {
-    process.stdout.write('\x1b[?1049h'); // enter alternate screen
-    process.stdout.write('\x1b[H'); // move cursor to home
-    
-    const { waitUntilExit } = render(
-      React.createElement(DbCompareScreen, { dbName })
-    );
-
-    waitUntilExit()
-      .then(() => {
-        process.stdout.write('\x1b[?1049l'); // leave alternate screen
-        Logger.isMuted = false;
-        resolve();
-      })
-      .catch((err) => {
-        process.stdout.write('\x1b[?1049l'); // leave alternate screen
-        Logger.isMuted = false;
-        reject(err);
-      });
-  });
+  await launchTui(
+    React.createElement(DbCompareScreen, { dbName })
+  );
 }
 
 export async function launchDbMigrate(args: {
@@ -63,8 +44,6 @@ export async function launchDbMigrate(args: {
     }
   }
 
-  Logger.isMuted = true;
-
   // Track whether migration was actually executed
   let migrationExecuted = false;
   const setMigrationExecuted = () => {
@@ -72,34 +51,20 @@ export async function launchDbMigrate(args: {
   };
   (globalThis as any).__setMigrationExecuted = setMigrationExecuted;
 
-  return new Promise((resolve, reject) => {
-    process.stdout.write('\x1b[?1049h'); // enter alternate screen
-    process.stdout.write('\x1b[H'); // move cursor to home
-    
-    const { waitUntilExit } = render(
-      React.createElement(DbMigrateScreen, {
-        dbName: args.name,
-        migrationKey: args.key,
-        migrationType: args.type,
-        initialText,
-      })
-    );
-
-    waitUntilExit()
-      .then(() => {
-        process.stdout.write('\x1b[?1049l'); // leave alternate screen
-        Logger.isMuted = false;
+  await launchTui(
+    React.createElement(DbMigrateScreen, {
+      dbName: args.name,
+      migrationKey: args.key,
+      migrationType: args.type,
+      initialText,
+    }),
+    {
+      onExit: () => {
         if (migrationExecuted) {
           Logger.success('Migration completed');
         }
         delete (globalThis as any).__setMigrationExecuted;
-        resolve();
-      })
-      .catch((err) => {
-        process.stdout.write('\x1b[?1049l'); // leave alternate screen
-        Logger.isMuted = false;
-        delete (globalThis as any).__setMigrationExecuted;
-        reject(err);
-      });
-  });
+      },
+    }
+  );
 }

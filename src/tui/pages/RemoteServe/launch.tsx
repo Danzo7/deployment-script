@@ -1,13 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/**
- * launch-remote-serve.tsx
- *
- * Wires the SSH server event bus to the RemoteServeDashboard TUI.
- * Starts the server, then renders the TUI. The server keeps running
- * until the user presses Q (graceful drain) or the process is killed.
- */
 import React, { useState, useEffect, useCallback } from 'react';
-import { render, useApp } from 'ink';
+import { useApp } from 'ink';
 import fs from 'fs';
 import {
   startRemoteServer,
@@ -20,6 +12,7 @@ import { RemoteServeDashboard } from './index.js';
 import type { LogEntry } from './index.js';
 import { Logger } from '../../../utils/logger.js';
 import { REMOTE_AUDIT_LOG_PATH } from '../../../constants.js';
+import { launchTui } from '../../utils/launch-tui.js';
 
 const MAX_LOG = 200;
 
@@ -139,9 +132,6 @@ export async function launchRemoteServe(port: number): Promise<void> {
   };
   serverEvents.on('log', bufferLog);
 
-  // Mute the plain Logger — the TUI shows all events via serverEvents
-  Logger.isMuted = true;
-
   let resolveServerInfo!: (info: ServerInfo) => void;
   const serverInfoPromise = new Promise<ServerInfo>((res) => {
     resolveServerInfo = res;
@@ -157,15 +147,11 @@ export async function launchRemoteServe(port: number): Promise<void> {
   // Stop buffering — hand off to the TUI
   serverEvents.off('log', bufferLog);
 
-  process.stdout.write('\x1b[?1049h'); // enter alternate screen
-  const { waitUntilExit } = render(
-    <App serverInfo={serverInfo} initialLogs={pendingLogs} />
-  );
-  await waitUntilExit();
-  process.stdout.write('\x1b[?1049l'); // leave alternate screen
-
-  Logger.isMuted = false;
-  await serverPromise.catch(() => {
-    /* already exiting */
+  await launchTui(<App serverInfo={serverInfo} initialLogs={pendingLogs} />, {
+    onExit: async () => {
+      await serverPromise.catch(() => {
+        /* already exiting */
+      });
+    },
   });
 }

@@ -1,5 +1,4 @@
 import React from 'react';
-import { render } from 'ink';
 import { EnvEditor, EditorRow } from './index.js';
 import { parseEnvFile, writeEnvFile } from '../../../utils/env-file-parser.js';
 import { setEnv } from '../../../utils/env-heper.js';
@@ -7,6 +6,7 @@ import { AppRepo } from '../../../db/repos.js';
 import { ensureDirectories } from '../../../utils/file-utils.js';
 import { Logger } from '../../../utils/logger.js';
 import { pauseRepl, resumeRepl } from '../../../utils/repl-context.js';
+import { launchTui } from '../../utils/launch-tui.js';
 
 async function applyChanges(envDir: string, rows: EditorRow[]): Promise<void> {
   const toUpsert = rows.filter(
@@ -28,17 +28,14 @@ async function applyChanges(envDir: string, rows: EditorRow[]): Promise<void> {
 
 export async function launchEnvEditor(appName: string): Promise<void> {
   pauseRepl();
-  Logger.isMuted = true;
 
   const app = await AppRepo.findByName(appName);
   const { envDir } = ensureDirectories(app.appDir);
   const initial = parseEnvFile(envDir);
 
-  Logger.isMuted = false;
-
   let savedCount = 0;
 
-  const { waitUntilExit } = render(
+  await launchTui(
     <EnvEditor
       appName={appName}
       initial={initial}
@@ -46,18 +43,21 @@ export async function launchEnvEditor(appName: string): Promise<void> {
         await applyChanges(envDir, rows);
         savedCount = count;
       }}
-    />
+    />,
+    {
+      muteLogger: false, // Keep logger active for this TUI
+      onExit: () => {
+        resumeRepl();
+
+        if (savedCount > 0) {
+          Logger.success(
+            `Saved ${savedCount} change${savedCount === 1 ? '' : 's'} to ${appName}.`
+          );
+          Logger.advice(
+            `Run ${Logger.highlight(`dm deploy ${appName}`)} to apply the changes.`
+          );
+        }
+      },
+    }
   );
-
-  await waitUntilExit();
-  resumeRepl();
-
-  if (savedCount > 0) {
-    Logger.success(
-      `Saved ${savedCount} change${savedCount === 1 ? '' : 's'} to ${appName}.`
-    );
-    Logger.advice(
-      `Run ${Logger.highlight(`dm deploy ${appName}`)} to apply the changes.`
-    );
-  }
 }
