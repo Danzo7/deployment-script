@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Text, useApp } from 'ink';
+import { Box, Text, useApp, useInput } from 'ink';
 import { TypeSelectScreen } from './components/TypeSelectScreen.js';
 import { SchemaEditor } from './components/SchemaEditor.js';
 import { PlanReviewScreen } from './components/PlanReviewScreen.js';
@@ -114,6 +114,13 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
   const [canGoBack, setCanGoBack] = useState(false);
   const { exit } = useApp();
 
+  // Handle Esc key on error screen
+  useInput((input, key) => {
+    if (error && (key.escape || (key.ctrl && input === 'x'))) {
+      exit();
+    }
+  });
+
   const handleTypeSelect = (type: MigrationType) => {
     setMigrationType(type);
     setScreen('schema-editor');
@@ -138,7 +145,7 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
       }
     } catch (err: any) {
       setError(err.message || String(err));
-      exit();
+      // Don't exit - show error screen
     }
   };
 
@@ -168,7 +175,7 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
   };
 
   const handleComplete = () => {
-    exit();
+    // Don't auto-exit - user must press Esc
   };
 
   const handleCancel = () => {
