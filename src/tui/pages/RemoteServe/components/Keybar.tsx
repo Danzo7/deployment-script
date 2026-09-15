@@ -1,12 +1,12 @@
 import React from 'react';
 import { TERM_W } from '../../../utils/constants.js';
-import { Keybar as UnifiedKeybar } from '../../components/Keybar.js';
+import { Keybar as UnifiedKeybar } from '../../../components/Keybar.js';
 
 interface KeybarProps {
   hasActiveSessions: boolean;
 }
 
-export function Keybar({ hasActiveSessions }: KeybarProps): React.ReactElement {
+export function Keybars({ hasActiveSessions }: KeybarProps): React.ReactElement {
   const hints = [
     ...(hasActiveSessions
       ? [

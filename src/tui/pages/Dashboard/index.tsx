@@ -11,10 +11,10 @@ import type {
   AppDetail,
   AppSummary,
 } from '../../../utils/dashboard-data.js';
-import { TopBar } from '../../components/layout/TopBar.js';
-import { FilterBar } from '../../components/layout/FilterBar.js';
+import { TopBar } from './components/TopBar.js';
+import { FilterBar } from './components/FilterBar.js';
 import { AppList } from './components/AppList.js';
-import { Keybar } from '../../components/layout/Keybar.js';
+import { Keybar } from './components/Keybar.js';
 import {
   CommandPalette,
   parsePaletteInput,

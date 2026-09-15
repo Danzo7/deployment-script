@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
-import { TERM_W } from '../../utils/constants.js';
+import { TERM_W } from '../../../utils/constants.js';
 
 interface TopBarProps {
   pm2Reachable: boolean;

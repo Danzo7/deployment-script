@@ -1,8 +1,7 @@
 import React from 'react';
-import { Box, Text } from 'ink';
-import type { DetailTab } from '../../pages/Dashboard/types.js';
-import { TERM_W } from '../../utils/constants.js';
-import { Keybar as UnifiedKeybar } from '../Keybar.js';
+import type { DetailTab } from '../types.js';
+import { TERM_W } from '../../../utils/constants.js';
+import { Keybar as UnifiedKeybar } from '../../../components/Keybar.js';
 
 interface KeybarProps {
   activeTab: DetailTab;
