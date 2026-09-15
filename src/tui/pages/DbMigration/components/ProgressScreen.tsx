@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Text, useApp } from 'ink';
+import { Box, Text, useApp, useInput } from 'ink';
 import { ProgressScreenProps } from '../types.js';
 import { DB_COLORS } from '../../../utils/colors.js';
 import { MigrationRepo } from '../../../../db/repos.js';
@@ -31,6 +31,13 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
   const [isComplete, setIsComplete] = useState(false);
   const { exit } = useApp();
 
+  // Handle Esc key to exit
+  useInput((input, key) => {
+    if (key.escape) {
+      onComplete();
+    }
+  });
+
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
 
@@ -48,10 +55,7 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
           if (!isComplete) {
             setIsComplete(true);
             clearInterval(intervalId);
-            // Wait a moment before calling onComplete so user can see final state
-            setTimeout(() => {
-              onComplete();
-            }, 3000);
+            // Don't auto-exit - let user press Esc to exit
           }
         }
       } catch (err) {
@@ -71,7 +75,7 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
         clearInterval(intervalId);
       }
     };
-  }, [migrationId, isComplete, onComplete]);
+  }, [migrationId, isComplete]);
 
   if (!migration) {
     return (
@@ -156,7 +160,7 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
       <Box borderStyle="single" borderTop paddingTop={1}>
         <Text dimColor>
           {isRunning && 'running…'}
-          {isComplete && 'finished — exits back to the shell'}
+          {isComplete && 'finished — press Esc to exit'}
         </Text>
       </Box>
     </Box>
