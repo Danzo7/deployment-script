@@ -15,14 +15,24 @@ export function buildManualPlan(sql: string): Plan {
     const statement = statements[i];
     const upperStatement = statement.toUpperCase();
 
+    // Block all database-level operations - not allowed in manual migrations
+    if (
+      upperStatement.includes('CREATE DATABASE') ||
+      upperStatement.includes('DROP DATABASE') ||
+      upperStatement.includes('ALTER DATABASE') ||
+      upperStatement.includes('RENAME DATABASE') ||
+      /\bDATABASE\s+\w+\s+RENAME\s+TO\b/i.test(statement)
+    ) {
+      throw new Error('Database-level operations (CREATE DATABASE, DROP DATABASE, ALTER DATABASE) are not allowed in manual migrations');
+    }
+
     // Detect hazard level
     let hazardLevel: 'none' | 'warning' | 'destructive' = 'none';
     let transactional = true;
 
-    // Destructive patterns
+    // Destructive patterns (database-level operations already blocked above)
     if (
       upperStatement.includes('DROP TABLE') ||
-      upperStatement.includes('DROP DATABASE') ||
       upperStatement.includes('DROP SCHEMA') ||
       upperStatement.includes('DROP INDEX') ||
       upperStatement.includes('TRUNCATE')

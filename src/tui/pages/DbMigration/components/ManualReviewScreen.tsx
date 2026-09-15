@@ -4,13 +4,6 @@ import { ControlledTextInput as TextInput } from '../../../components/Controlled
 import { ManualReviewScreenProps } from '../types.js';
 import { DB_COLORS } from '../../../utils/colors.js';
 
-const DESTRUCTIVE_KEYWORDS = [
-  'DROP',
-  'TRUNCATE',
-  'DELETE',
-  'UPDATE',
-];
-
 const hasDestructiveKeyword = (sql: string): boolean => {
   const upperSql = sql.toUpperCase();
   
