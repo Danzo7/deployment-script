@@ -103,7 +103,7 @@ export const REMOTE_KNOWN_HOSTS_PATH = path.join(
 );
 
 // Database migration tools
-export const PG_SCHEMA_DIFF_DIR = process.env.PG_SCHEMA_DIFF_DIR ?? path.join('tools', 'pg-schema-diff');
+export const PG_SCHEMA_DIFF_DIR = process.env.PG_SCHEMA_DIFF_DIR ?? path.join(INSTALL_DIR, 'tools', 'pg-schema-diff');
 
 // Database connection defaults
 export const DEFAULT_DB_HOST = process.env.DEFAULT_DB_HOST ?? 'localhost';
