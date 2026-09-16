@@ -70,6 +70,12 @@ export function pauseRepl(): void {
   activeRl = null;
 
   rl.close();
+
+  // After rl.close(), readline leaves stdin in a paused state.
+  // We need to resume it so Ink can read from stdin.
+  if (process.stdin.isPaused()) {
+    process.stdin.resume();
+  }
 }
 
 export async function resumeRepl(): Promise<void> {
