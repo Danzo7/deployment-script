@@ -39,8 +39,6 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
   });
 
   useEffect(() => {
-    let intervalId: NodeJS.Timeout;
-
     const pollStatus = async () => {
       try {
         const migrationData = await MigrationRepo.findById(migrationId);
@@ -68,12 +66,10 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
     pollStatus();
 
     // Poll every 500ms
-    intervalId = setInterval(pollStatus, 500);
+    const intervalId = setInterval(pollStatus, 500);
 
     return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
+      clearInterval(intervalId);
     };
   }, [migrationId, isComplete]);
 

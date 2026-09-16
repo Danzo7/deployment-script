@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import { TERM_W } from '../utils/constants.js';
 
 interface HintProps {
   label: string;
@@ -26,7 +27,7 @@ interface KeybarProps {
  * Unified keybar component for displaying keyboard shortcuts at the bottom of TUI screens
  */
 export function Keybar({ hints, width }: KeybarProps): React.ReactElement {
-  const barWidth = width ?? 80;
+  const barWidth = width ?? TERM_W;
   
   return (
     <Box flexDirection="column" width={barWidth}>
