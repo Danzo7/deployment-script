@@ -70,10 +70,13 @@ export function pauseRepl(): void {
   activeRl = null;
 
   rl.close();
-  
-  // readline.close() already leaves stdin in a state where it can be
-  // taken over by Ink. We don't manipulate stdin here — that's handled
-  // by launchTui's finally block on the way back.
+
+  // rl.close() explicitly pauses stdin (state.flowing = false). That pause
+  // does NOT get undone just because Ink attaches its own listener next —
+  // an explicitly-paused stream doesn't auto-resume from a new listener.
+  // Without this, Ink's raw-mode input listener is attached to a stream
+  // that will never emit anything, and the TUI is fully unresponsive.
+  process.stdin.resume();
 }
 
 export async function resumeRepl(): Promise<void> {
