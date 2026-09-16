@@ -93,17 +93,8 @@ export async function resumeRepl(): Promise<void> {
   activeRl = rl;
   handingOff = false;
 
-  // Clear the line and show the prompt
+  // Clear the line and show the prompt with a hint
   process.stdout.write('\n\r\x1b[K');
+  process.stdout.write('\x1b[90m(Press Enter to continue)\x1b[0m\n');
   rl.prompt();
-
-  // Workaround: Emit a synthetic keypress event to "wake up" readline's input handling
-  // This solves the issue where readline needs an Enter press to become responsive
-  // after Ink releases stdin.
-  if (process.stdin.isTTY) {
-    process.nextTick(() => {
-      // Emit a null keypress (no actual character) to trigger readline's event loop
-      process.stdin.emit('keypress', '', { name: 'return', ctrl: false, meta: false, shift: false });
-    });
-  }
 }
