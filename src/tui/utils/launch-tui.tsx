@@ -18,6 +18,9 @@ export async function launchTui<T = void>(
   const wasMuted = Logger.isMuted;
   const hadActiveRepl = !!getActiveRl();
 
+  // Debug: check if we detect REPL
+  console.error(`[DEBUG] hadActiveRepl: ${hadActiveRepl}, isTTY: ${process.stdin.isTTY}, SSH_CONNECTION: ${!!process.env.SSH_CONNECTION}`);
+
   if (shouldMuteLogger) {
     Logger.isMuted = true;
   }
@@ -37,6 +40,9 @@ export async function launchTui<T = void>(
       .then(async () => {
         process.stdout.write('\x1b[?1049l'); // leave alternate screen
         Logger.isMuted = wasMuted;
+
+        // Debug: check resume path
+        console.error(`[DEBUG] Exit: hadActiveRepl=${hadActiveRepl}, will ${hadActiveRepl ? 'call resumeRepl' : 'NOT call resumeRepl'}`);
 
         // Resume REPL if we paused it
         if (hadActiveRepl) {
