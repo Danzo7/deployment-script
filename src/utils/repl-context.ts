@@ -70,12 +70,10 @@ export function pauseRepl(): void {
   activeRl = null;
 
   rl.close();
-
-  // After rl.close(), readline leaves stdin in a paused state.
-  // We need to resume it so Ink can read from stdin.
-  if (process.stdin.isPaused()) {
-    process.stdin.resume();
-  }
+  
+  // readline.close() already leaves stdin in a state where it can be
+  // taken over by Ink. We don't manipulate stdin here — that's handled
+  // by launchTui's finally block on the way back.
 }
 
 export async function resumeRepl(): Promise<void> {
@@ -84,17 +82,14 @@ export async function resumeRepl(): Promise<void> {
     return;
   }
 
-  // Let Ink finish its terminal/stdin cleanup.
-  await new Promise<void>((resolve) => setImmediate(resolve));
-
-  // The factory will handle stdin state setup
+  // Build a new readline interface. The factory will attach 'line'/'close'
+  // handlers and set up stdin state for readline.
   const rl = rlFactory();
 
   activeRl = rl;
   handingOff = false;
 
-  // Clear the line and show the prompt with a hint
-  process.stdout.write('\n\r\x1b[K');
-  process.stdout.write('\x1b[90m(Press Enter to continue)\x1b[0m\n');
+  // Show the prompt immediately
+  process.stdout.write('\n\r');
   rl.prompt();
 }

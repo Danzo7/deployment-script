@@ -26,30 +26,38 @@ export async function launchTui<T = void>(
     pauseRepl();
   }
 
+  process.stdout.write('\x1b[?1049h');
+  process.stdout.write('\x1b[H');
+
+  const { waitUntilExit } = render(component, {
+    stdin: process.stdin,
+    stdout: process.stdout,
+    stderr: process.stderr,
+  });
+
   try {
-    process.stdout.write('\x1b[?1049h');
-    process.stdout.write('\x1b[H');
-
-    const { waitUntilExit } = render(component, {
-      stdin: process.stdin,
-      stdout: process.stdout,
-      stderr: process.stderr,
-    });
-
     await waitUntilExit();
-
-    process.stdout.write('\x1b[?1049l');
-
-    if (options?.onExit) {
-      await options.onExit();
-    }
-
-    return undefined as T;
   } finally {
-    Logger.isMuted = wasMuted;
-
-    if (hadActiveRepl) {
-      await resumeRepl();
+    // Restore the terminal + REPL the instant Ink itself is done —
+    // BEFORE running any caller-supplied onExit side effect. onExit may
+    // block indefinitely (a log tail, a nested TUI); that must never be
+    // able to starve the shell of its stdin listener.
+    process.stdout.write('\x1b[?1049l');
+    
+    // Take stdin back deterministically — don't rely on Ink's internal
+    // unmount cleanup having already run by the time we get here.
+    if (process.stdin.isTTY && process.stdin.setRawMode) {
+      process.stdin.setRawMode(false);
     }
+    process.stdin.resume();
+
+    Logger.isMuted = wasMuted;
+    if (hadActiveRepl) await resumeRepl();
   }
+
+  if (options?.onExit) {
+    await options.onExit();
+  }
+
+  return undefined as T;
 }
