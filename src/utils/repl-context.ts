@@ -61,7 +61,7 @@ export function isHandingOff(): boolean {
   return handingOff;
 }
 
-export function pauseRepl(): void {
+export async function pauseRepl(): Promise<void> {
   if (!activeRl) return;
 
   handingOff = true;
@@ -70,9 +70,15 @@ export function pauseRepl(): void {
   activeRl = null;
 
   // rl.close() relinquishes readline's control of stdin/stdout streams.
-  // We do NOT manually call setRawMode(false) or resume() here — let Ink
-  // establish the stdin state it needs when it takes over.
   rl.close();
+
+  // Ensure stdin is in a clean state for Ink: not in raw mode, and flowing
+  if (process.stdin.isTTY && process.stdin.setRawMode) {
+    process.stdin.setRawMode(false);
+  }
+
+  // Give readline a tick to fully release stdin before Ink tries to use it.
+  await new Promise<void>((resolve) => setImmediate(resolve));
 }
 
 export async function resumeRepl(): Promise<void> {

@@ -24,7 +24,15 @@ export async function launchTui<T = void>(
 
   // Pause REPL if one is active to avoid stdin/stdout conflicts with Ink
   if (hadActiveRepl) {
-    pauseRepl();
+    await pauseRepl();
+  }
+
+  // Small delay to ensure readline cleanup is complete
+  await new Promise<void>((resolve) => setImmediate(resolve));
+
+  // Ensure stdin is in flowing mode for Ink
+  if (process.stdin.isPaused()) {
+    process.stdin.resume();
   }
 
   try {
@@ -32,7 +40,12 @@ export async function launchTui<T = void>(
       process.stdout.write('\x1b[?1049h'); // enter alternate screen
       process.stdout.write('\x1b[H'); // move cursor to home
 
-      const { waitUntilExit } = render(component);
+      // Explicitly pass stdin/stdout/stderr to Ink
+      const { waitUntilExit } = render(component, {
+        stdin: process.stdin,
+        stdout: process.stdout,
+        stderr: process.stderr,
+      });
 
       waitUntilExit()
         .then(async () => {
