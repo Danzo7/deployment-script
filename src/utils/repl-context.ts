@@ -64,7 +64,7 @@ export function pauseRepl(): void {
   process.stdin.resume(); // Make sure stdin is flowing for Ink
 }
 
-export function resumeRepl(): void {
+export async function resumeRepl(): Promise<void> {
   handingOff = false;
   if (!rlFactory) return;
   
@@ -79,6 +79,10 @@ export function resumeRepl(): void {
   if (process.stdin.isPaused()) {
     process.stdin.resume();
   }
+  
+  // Small delay to let the command handler in repl.ts finish its check
+  // before we create the new readline interface
+  await new Promise(resolve => setImmediate(resolve));
   
   const rl = rlFactory();
   setReplInterface(rl);

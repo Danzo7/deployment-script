@@ -119,33 +119,31 @@ if (isMigrationNeeded()) {
 // ─── Interactive REPL mode ────────────────────────────────────────────────────
 // When called with no arguments (just `dm`), launch the interactive shell.
 if (process.argv.slice(2).length === 0) {
-  startRepl(_pkg.version).catch((err) => {
-    Logger.error('REPL error:', err);
-    process.exit(1);
-  });
-} else {
-  // ─── Quick connect shortcuts ──────────────────────────────────────────────────
-  // Handle @host or --host shortcuts before yargs parses commands.
-  const rawArgs = process.argv.slice(2);
-  const { handleQuickConnect } = await import('./utils/quick-connect.js');
-  if (await handleQuickConnect(rawArgs)) {
-    process.exit(0);
-  }
-
-  try {
-    let cli = yargs(process.argv.slice(2)).scriptName('dm');
-    for (const [key, node] of Object.entries(COMMANDS)) {
-      cli = registerNode(cli, key, node) as any;
-    }
-    await cli
-      .demandCommand(1, 'You must specify a command to run.')
-      .strictCommands()
-      .parseAsync();
-  } catch (err) {
-    Logger.error(err);
-  }
-  const endTime = Date.now();
-  const timeTaken = ((endTime - startTime) / 1000).toFixed(2);
-  Logger.info(`${timeTaken} seconds`);
-  process.exit();
+  await startRepl(_pkg.version);
+  process.exit(0);
 }
+
+// ─── Quick connect shortcuts ──────────────────────────────────────────────────
+// Handle @host or --host shortcuts before yargs parses commands.
+const rawArgs = process.argv.slice(2);
+const { handleQuickConnect } = await import('./utils/quick-connect.js');
+if (await handleQuickConnect(rawArgs)) {
+  process.exit(0);
+}
+
+try {
+  let cli = yargs(process.argv.slice(2)).scriptName('dm');
+  for (const [key, node] of Object.entries(COMMANDS)) {
+    cli = registerNode(cli, key, node) as any;
+  }
+  await cli
+    .demandCommand(1, 'You must specify a command to run.')
+    .strictCommands()
+    .parseAsync();
+} catch (err) {
+  Logger.error(err);
+}
+const endTime = Date.now();
+const timeTaken = ((endTime - startTime) / 1000).toFixed(2);
+Logger.info(`${timeTaken} seconds`);
+process.exit();

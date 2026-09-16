@@ -40,7 +40,7 @@ export async function launchTui<T = void>(
 
         // Resume REPL if we paused it
         if (hadActiveRepl) {
-          resumeRepl();
+          await resumeRepl();
         }
 
         if (options?.onExit) {
@@ -49,13 +49,13 @@ export async function launchTui<T = void>(
 
         resolve(undefined as T);
       })
-      .catch((err) => {
+      .catch(async (err) => {
         process.stdout.write('\x1b[?1049l'); // leave alternate screen
         Logger.isMuted = wasMuted;
 
         // Resume REPL even on error
         if (hadActiveRepl) {
-          resumeRepl();
+          await resumeRepl();
         }
 
         reject(err);
