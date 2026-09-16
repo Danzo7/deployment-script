@@ -87,10 +87,17 @@ export async function resumeRepl(): Promise<void> {
   // Let Ink finish its terminal/stdin cleanup.
   await new Promise<void>((resolve) => setImmediate(resolve));
 
+  // Ensure stdin is in cooked mode (not raw) before creating new readline
+  if (process.stdin.isTTY && process.stdin.setRawMode) {
+    process.stdin.setRawMode(false);
+  }
+
   const rl = rlFactory();
 
   activeRl = rl;
   handingOff = false;
 
+  // Clear the line and show the prompt
+  process.stdout.write('\r\x1b[K');
   rl.prompt();
 }
