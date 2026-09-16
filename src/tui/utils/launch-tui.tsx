@@ -16,10 +16,7 @@ export async function launchTui<T = void>(
 ): Promise<T> {
   const shouldMuteLogger = options?.muteLogger ?? true;
   const wasMuted = Logger.isMuted;
-  const hadActiveRepl = true;
-
-  // Debug: check if we detect REPL
-  console.error(`[DEBUG] hadActiveRepl: ${hadActiveRepl}, isTTY: ${process.stdin.isTTY}, SSH_CONNECTION: ${!!process.env.SSH_CONNECTION}`);
+  const hadActiveRepl = !!getActiveRl();
 
   if (shouldMuteLogger) {
     Logger.isMuted = true;
@@ -41,11 +38,17 @@ export async function launchTui<T = void>(
         process.stdout.write('\x1b[?1049l'); // leave alternate screen
         Logger.isMuted = wasMuted;
 
-        // Debug: check resume path
-        console.error(`[DEBUG] Exit: hadActiveRepl=${hadActiveRepl}, will ${hadActiveRepl ? 'call resumeRepl' : 'NOT call resumeRepl'}`);
-
         // Resume REPL if we paused it
         if (hadActiveRepl) {
+          // Ensure stdin is in the right state before resumeRepl rebuilds readline
+          // Ink may have left it in raw mode or paused
+          if (process.stdin.isTTY && process.stdin.setRawMode) {
+            process.stdin.setRawMode(false);
+          }
+          if (process.stdin.isPaused()) {
+            process.stdin.resume();
+          }
+          
           resumeRepl();
         }
 
@@ -61,6 +64,14 @@ export async function launchTui<T = void>(
 
         // Resume REPL even on error
         if (hadActiveRepl) {
+          // Ensure stdin is in the right state
+          if (process.stdin.isTTY && process.stdin.setRawMode) {
+            process.stdin.setRawMode(false);
+          }
+          if (process.stdin.isPaused()) {
+            process.stdin.resume();
+          }
+          
           resumeRepl();
         }
 
