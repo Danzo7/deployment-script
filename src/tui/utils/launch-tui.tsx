@@ -16,7 +16,7 @@ export async function launchTui<T = void>(
 ): Promise<T> {
   const shouldMuteLogger = options?.muteLogger ?? true;
   const wasMuted = Logger.isMuted;
-  const hadActiveRepl = !!getActiveRl();
+  const hadActiveRepl = true;
 
   // Debug: check if we detect REPL
   console.error(`[DEBUG] hadActiveRepl: ${hadActiveRepl}, isTTY: ${process.stdin.isTTY}, SSH_CONNECTION: ${!!process.env.SSH_CONNECTION}`);
