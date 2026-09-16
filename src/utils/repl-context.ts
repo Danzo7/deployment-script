@@ -61,6 +61,7 @@ export function pauseRepl(): void {
   activeRl.close();
   activeRl = null;
   if (process.stdin.isTTY) process.stdin.setRawMode?.(false);
+  process.stdin.resume(); // Make sure stdin is flowing for Ink
 }
 
 export function resumeRepl(): void {
