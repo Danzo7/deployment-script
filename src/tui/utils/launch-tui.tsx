@@ -40,15 +40,6 @@ export async function launchTui<T = void>(
 
         // Resume REPL if we paused it
         if (hadActiveRepl) {
-          // Ensure stdin is in the right state before resumeRepl rebuilds readline
-          // Ink may have left it in raw mode or paused
-          if (process.stdin.isTTY && process.stdin.setRawMode) {
-            process.stdin.setRawMode(false);
-          }
-          if (process.stdin.isPaused()) {
-            process.stdin.resume();
-          }
-          
           resumeRepl();
         }
 
@@ -64,14 +55,6 @@ export async function launchTui<T = void>(
 
         // Resume REPL even on error
         if (hadActiveRepl) {
-          // Ensure stdin is in the right state
-          if (process.stdin.isTTY && process.stdin.setRawMode) {
-            process.stdin.setRawMode(false);
-          }
-          if (process.stdin.isPaused()) {
-            process.stdin.resume();
-          }
-          
           resumeRepl();
         }
 

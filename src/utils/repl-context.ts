@@ -69,8 +69,12 @@ export function resumeRepl(): void {
   if (!rlFactory) return;
   // Ink can leave stdin paused/raw on exit; make sure it's back in normal
   // flowing "cooked" mode before we build a fresh readline interface on it.
-  if (process.stdin.isTTY) process.stdin.setRawMode?.(false);
-  process.stdin.resume();
+  if (process.stdin.isTTY && process.stdin.setRawMode) {
+    process.stdin.setRawMode(false);
+  }
+  if (process.stdin.isPaused()) {
+    process.stdin.resume();
+  }
   const rl = rlFactory();
   setReplInterface(rl);
   rl.prompt();
