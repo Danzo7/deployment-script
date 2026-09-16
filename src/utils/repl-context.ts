@@ -1,4 +1,4 @@
-import type { Interface } from 'readline';
+import type { Interface } from 'node:readline';
 
 /**
  * Holds a reference to the active REPL readline interface, and knows how to
@@ -20,6 +20,12 @@ import type { Interface } from 'readline';
  * Ink, and build a brand new one after Ink hands it back — rather than try
  * to pause/resume the same instance. `repl.ts` registers a factory via
  * `setReplFactory` for exactly this purpose.
+ *
+ * Critical ownership boundary:
+ * - pauseRepl() ONLY closes readline, letting readline relinquish stdin control
+ * - Ink then owns stdin in raw mode during TUI rendering
+ * - resumeRepl() ONLY creates a new readline, letting it establish stdin state
+ * - Neither function manually manipulates stdin's flowing/raw state to avoid races
  */
 
 let activeRl: Interface | null = null;
@@ -57,36 +63,35 @@ export function isHandingOff(): boolean {
 
 export function pauseRepl(): void {
   if (!activeRl) return;
+
   handingOff = true;
-  activeRl.close();
+
+  const rl = activeRl;
   activeRl = null;
-  if (process.stdin.isTTY) process.stdin.setRawMode?.(false);
-  process.stdin.resume(); // Make sure stdin is flowing for Ink
+
+  // rl.close() relinquishes readline's control of stdin/stdout streams.
+  // We do NOT manually call setRawMode(false) or resume() here — let Ink
+  // establish the stdin state it needs when it takes over.
+  rl.close();
 }
 
 export async function resumeRepl(): Promise<void> {
-  handingOff = false;
-  if (!rlFactory) return;
-  
-  // Clean up terminal state: clear current line and ensure cursor is at start
-  process.stdout.write('\r\x1b[K');
-  
-  // Ink can leave stdin paused/raw on exit; make sure it's back in normal
-  // flowing "cooked" mode before we build a fresh readline interface on it.
-  if (process.stdin.isTTY && process.stdin.setRawMode) {
-    process.stdin.setRawMode(false);
+  if (!rlFactory) {
+    handingOff = false;
+    return;
   }
-  if (process.stdin.isPaused()) {
-    process.stdin.resume();
-  }
-  
-  // Small delay to let the command handler in repl.ts finish its check
-  // before we create the new readline interface
-  await new Promise(resolve => setImmediate(resolve));
-  
+
+  // Give Ink time to finish restoring stdin after its cleanup.
+  await new Promise<void>((resolve) => setImmediate(resolve));
+
   const rl = rlFactory();
-  setReplInterface(rl);
-  // Ensure we're on a fresh line before showing prompt
-  process.stdout.write('\n');
+
+  activeRl = rl;
+
+  // We are no longer handing stdin to Ink.
+  handingOff = false;
+
+  // Put the REPL prompt on a clean line.
+  process.stdout.write('\r\x1b[K');
   rl.prompt();
 }

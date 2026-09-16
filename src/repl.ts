@@ -1,4 +1,4 @@
-import readline, { Interface } from 'readline';
+import readline, { Interface } from 'node:readline';
 import chalk from 'chalk';
 import fs from 'fs';
 import { Logger } from './utils/logger.js';

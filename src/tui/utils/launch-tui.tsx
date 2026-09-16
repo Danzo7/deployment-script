@@ -27,38 +27,34 @@ export async function launchTui<T = void>(
     pauseRepl();
   }
 
-  return new Promise((resolve, reject) => {
-    process.stdout.write('\x1b[?1049h'); // enter alternate screen
-    process.stdout.write('\x1b[H'); // move cursor to home
+  try {
+    return await new Promise((resolve, reject) => {
+      process.stdout.write('\x1b[?1049h'); // enter alternate screen
+      process.stdout.write('\x1b[H'); // move cursor to home
 
-    const { waitUntilExit } = render(component);
+      const { waitUntilExit } = render(component);
 
-    waitUntilExit()
-      .then(async () => {
-        process.stdout.write('\x1b[?1049l'); // leave alternate screen
-        Logger.isMuted = wasMuted;
+      waitUntilExit()
+        .then(async () => {
+          process.stdout.write('\x1b[?1049l'); // leave alternate screen
+          Logger.isMuted = wasMuted;
 
-        // Resume REPL if we paused it
-        if (hadActiveRepl) {
-          await resumeRepl();
-        }
+          if (options?.onExit) {
+            await options.onExit();
+          }
 
-        if (options?.onExit) {
-          await options.onExit();
-        }
-
-        resolve(undefined as T);
-      })
-      .catch(async (err) => {
-        process.stdout.write('\x1b[?1049l'); // leave alternate screen
-        Logger.isMuted = wasMuted;
-
-        // Resume REPL even on error
-        if (hadActiveRepl) {
-          await resumeRepl();
-        }
-
-        reject(err);
-      });
-  });
+          resolve(undefined as T);
+        })
+        .catch((err) => {
+          process.stdout.write('\x1b[?1049l'); // leave alternate screen
+          Logger.isMuted = wasMuted;
+          reject(err);
+        });
+    });
+  } finally {
+    // Always resume REPL if we paused it, even on error or early exit
+    if (hadActiveRepl) {
+      await resumeRepl();
+    }
+  }
 }
