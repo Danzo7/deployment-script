@@ -22,50 +22,32 @@ export async function launchTui<T = void>(
     Logger.isMuted = true;
   }
 
-  // Pause REPL if one is active to avoid stdin/stdout conflicts with Ink
   if (hadActiveRepl) {
-    await pauseRepl();
-  }
-
-  // Small delay to ensure readline cleanup is complete
-  await new Promise<void>((resolve) => setImmediate(resolve));
-
-  // Ensure stdin is in flowing mode for Ink
-  if (process.stdin.isPaused()) {
-    process.stdin.resume();
+    pauseRepl();
   }
 
   try {
-    return await new Promise((resolve, reject) => {
-      process.stdout.write('\x1b[?1049h'); // enter alternate screen
-      process.stdout.write('\x1b[H'); // move cursor to home
+    process.stdout.write('\x1b[?1049h');
+    process.stdout.write('\x1b[H');
 
-      // Explicitly pass stdin/stdout/stderr to Ink
-      const { waitUntilExit } = render(component, {
-        stdin: process.stdin,
-        stdout: process.stdout,
-        stderr: process.stderr,
-      });
-
-      waitUntilExit()
-        .then(async () => {
-          process.stdout.write('\x1b[?1049l'); // leave alternate screen
-          Logger.isMuted = wasMuted;
-
-          if (options?.onExit) {
-            await options.onExit();
-          }
-
-          resolve(undefined as T);
-        })
-        .catch((err) => {
-          process.stdout.write('\x1b[?1049l'); // leave alternate screen
-          Logger.isMuted = wasMuted;
-          reject(err);
-        });
+    const { waitUntilExit } = render(component, {
+      stdin: process.stdin,
+      stdout: process.stdout,
+      stderr: process.stderr,
     });
+
+    await waitUntilExit();
+
+    process.stdout.write('\x1b[?1049l');
+
+    if (options?.onExit) {
+      await options.onExit();
+    }
+
+    return undefined as T;
   } finally {
-    // Always resume REPL if we paused it, even on error or early exit
+    Logger.isMuted = wasMuted;
+
     if (hadActiveRepl) {
       await resumeRepl();
     }

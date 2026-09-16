@@ -61,7 +61,7 @@ export function isHandingOff(): boolean {
   return handingOff;
 }
 
-export async function pauseRepl(): Promise<void> {
+export function pauseRepl(): void {
   if (!activeRl) return;
 
   handingOff = true;
@@ -69,16 +69,7 @@ export async function pauseRepl(): Promise<void> {
   const rl = activeRl;
   activeRl = null;
 
-  // rl.close() relinquishes readline's control of stdin/stdout streams.
   rl.close();
-
-  // Ensure stdin is in a clean state for Ink: not in raw mode, and flowing
-  if (process.stdin.isTTY && process.stdin.setRawMode) {
-    process.stdin.setRawMode(false);
-  }
-
-  // Give readline a tick to fully release stdin before Ink tries to use it.
-  await new Promise<void>((resolve) => setImmediate(resolve));
 }
 
 export async function resumeRepl(): Promise<void> {
@@ -87,17 +78,13 @@ export async function resumeRepl(): Promise<void> {
     return;
   }
 
-  // Give Ink time to finish restoring stdin after its cleanup.
+  // Let Ink finish its terminal/stdin cleanup.
   await new Promise<void>((resolve) => setImmediate(resolve));
 
   const rl = rlFactory();
 
   activeRl = rl;
-
-  // We are no longer handing stdin to Ink.
   handingOff = false;
 
-  // Put the REPL prompt on a clean line.
-  process.stdout.write('\r\x1b[K');
   rl.prompt();
 }
