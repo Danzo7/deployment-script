@@ -67,6 +67,10 @@ export function pauseRepl(): void {
 export function resumeRepl(): void {
   handingOff = false;
   if (!rlFactory) return;
+  
+  // Clean up terminal state: clear current line and ensure cursor is at start
+  process.stdout.write('\r\x1b[K');
+  
   // Ink can leave stdin paused/raw on exit; make sure it's back in normal
   // flowing "cooked" mode before we build a fresh readline interface on it.
   if (process.stdin.isTTY && process.stdin.setRawMode) {
@@ -75,7 +79,10 @@ export function resumeRepl(): void {
   if (process.stdin.isPaused()) {
     process.stdin.resume();
   }
+  
   const rl = rlFactory();
   setReplInterface(rl);
+  // Ensure we're on a fresh line before showing prompt
+  process.stdout.write('\n');
   rl.prompt();
 }
