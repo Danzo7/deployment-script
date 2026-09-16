@@ -418,9 +418,16 @@ export async function startRepl(version: string): Promise<void> {
   // trying to pause/resume a single instance that Ink would otherwise fight
   // over stdin with (see the comment in utils/repl-context.ts for why).
   const createInterface = (): Interface => {
+    // Ensure stdin is ready for readline before creating the interface
+    if (process.stdin.isTTY && process.stdin.setRawMode) {
+      // Make sure we're in cooked mode
+      process.stdin.setRawMode(false);
+    }
+
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
+      terminal: true, // Explicitly enable terminal handling
       // \x01 (SOH) and \x02 (STX) are readline zero-width markers used by
       // bash/zsh to correctly compute cursor position around color sequences.
       // Node.js readline does NOT use them — they print as literal garbage
