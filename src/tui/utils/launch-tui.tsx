@@ -38,19 +38,10 @@ export async function launchTui<T = void>(
   try {
     await waitUntilExit();
   } finally {
-    // Restore the terminal + REPL the instant Ink itself is done —
-    // BEFORE running any caller-supplied onExit side effect. onExit may
-    // block indefinitely (a log tail, a nested TUI); that must never be
-    // able to starve the shell of its stdin listener.
+    // Must run the instant Ink itself is done, regardless of whether the
+    // caller's onExit (below) ever resolves — this is what keeps a hanging
+    // onExit from being able to starve the REPL of its stdin listener.
     process.stdout.write('\x1b[?1049l');
-    
-    // Take stdin back deterministically — don't rely on Ink's internal
-    // unmount cleanup having already run by the time we get here.
-    if (process.stdin.isTTY && process.stdin.setRawMode) {
-      process.stdin.setRawMode(false);
-    }
-    process.stdin.resume();
-
     Logger.isMuted = wasMuted;
     if (hadActiveRepl) await resumeRepl();
   }

@@ -85,14 +85,18 @@ export async function resumeRepl(): Promise<void> {
     return;
   }
 
-  // Build a new readline interface. The factory will attach 'line'/'close'
-  // handlers and set up stdin state for readline.
-  const rl = rlFactory();
+  // Symmetric to pauseRepl(): Ink's unmount pauses stdin on its way out.
+  // Force it back to a known state ourselves before building the new
+  // Interface — don't assume Ink already left it flowing.
+  if (process.stdin.isTTY && process.stdin.setRawMode) {
+    process.stdin.setRawMode(false);
+  }
+  process.stdin.resume();
 
+  const rl = rlFactory();
   activeRl = rl;
   handingOff = false;
 
-  // Show the prompt immediately
   process.stdout.write('\n\r');
   rl.prompt();
 }
