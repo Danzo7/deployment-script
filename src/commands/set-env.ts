@@ -29,9 +29,25 @@ export const setEnvForApp = async ({
 
 /**
  * Launches the interactive TUI env editor for the given app.
- * Imported lazily so the ink/React dependencies only load when needed.
+ * Works in both REPL (navigation push) and CLI (direct bootstrapApp) contexts.
  */
 export const launchEnvEditorForApp = async (name: string): Promise<void> => {
-  const { launchEnvEditor } = await import('../tui/pages/EnvEditor/launch.js');
-  await launchEnvEditor(name);
+  const { PageId } = await import('../app/navigation/types.js');
+  const { launchPage } = await import('../app/navigation/launcher.js');
+  
+  await launchPage({
+    pageId: PageId.EnvEditor,
+    params: { appName: name },
+    fullScreen: true,
+    onResult: (savedCount: number) => {
+      if (savedCount > 0) {
+        Logger.success(
+          `Saved ${savedCount} change${savedCount === 1 ? '' : 's'} to ${name}.`
+        );
+        Logger.advice(
+          `Run ${Logger.highlight(`dm deploy ${name}`)} to apply the changes.`
+        );
+      }
+    },
+  });
 };

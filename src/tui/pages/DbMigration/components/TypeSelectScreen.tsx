@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Box, Text, useInput, useApp } from 'ink';
+import { Box, Text, useInput } from 'ink';
+import { usePageExit } from '../../../../app/navigation/use-page-exit.js';
 import { TypeSelectScreenProps } from '../types.js';
 import { DB_COLORS } from '../../../utils/colors.js';
 import { Keybar } from '../../../components/Keybar.js';
@@ -9,7 +10,7 @@ export const TypeSelectScreen: React.FC<TypeSelectScreenProps> = ({
   onCancel,
 }) => {
   const [selected, setSelected] = useState<'generated' | 'manual'>('generated');
-  const { exit } = useApp();
+  const exit = usePageExit();
 
   useInput((input, key) => {
     if (key.escape) {

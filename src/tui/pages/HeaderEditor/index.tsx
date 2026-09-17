@@ -12,13 +12,15 @@ export type { RowState, EditorRow as HeaderRow };
 interface HeaderEditorProps {
   target: string; // e.g. "example.com" or "example.com /api"
   initial: Record<string, string>;
-  onSave: (rows: EditorRow[], count: number) => Promise<void>;
+  onCancel: () => void;
+  onSave: (rows: EditorRow[], count: number) => Promise<unknown>;
 }
 
 export function HeaderEditor({
   target,
   initial,
   onSave,
+  onCancel
 }: HeaderEditorProps): React.ReactElement {
   const config: KeyValueEditorConfig = {
     targetName: target,
@@ -44,5 +46,5 @@ export function HeaderEditor({
     // No masking for headers
   };
 
-  return <KeyValueEditor config={config} initial={initial} onSave={onSave} />;
+  return <KeyValueEditor onCancel={onCancel} config={config} initial={initial} onSave={onSave} />;
 }

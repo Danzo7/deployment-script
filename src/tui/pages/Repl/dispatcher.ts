@@ -1,28 +1,20 @@
-import readline, { Interface } from 'node:readline';
 import chalk from 'chalk';
 import fs from 'fs';
-import { Logger } from './utils/logger.js';
-import { acquireLock, releaseLock } from './utils/lock-utils.js';
-import { REMOTE_AUDIT_LOG_PATH } from './constants.js';
-import {
-  setReplInterface,
-  getActiveRl,
-  setReplFactory,
-  isHandingOff,
-} from './utils/repl-context.js';
+import { Logger } from '../../../utils/logger.js';
+import { acquireLock, releaseLock } from '../../../utils/lock-utils.js';
+import { REMOTE_AUDIT_LOG_PATH } from '../../../constants.js';
 import {
   COMMANDS,
   CommandNode,
   LeafCommand,
   isGroup,
   resolveLeafArgs,
-  ensureAppDirectories,
-} from './command-registry.js';
+} from '../../../command-registry.js';
 
 // ─── Tokeniser ────────────────────────────────────────────────────────────────
 // Splits input respecting single/double quotes, e.g.:
 //   set-env api KEY="hello world"  →  ['set-env', 'api', 'KEY=hello world']
-function tokenise(line: string): string[] {
+export function tokenise(line: string): string[] {
   const tokens: string[] = [];
   let cur = '';
   let inSingle = false;
@@ -52,16 +44,7 @@ function tokenise(line: string): string[] {
 }
 
 // ─── Option parser ────────────────────────────────────────────────────────────
-// Parses --flag, --flag=value, --flag value, -f, -f value, --no-flag from a
-// token array.
-//
-// Uses the command's option specs to determine whether a flag expects a value:
-// - Boolean flags: consume as standalone (--force) unless explicitly provided (--force=true)
-// - String/number flags: consume the next token as value
-//
-// --no-flag is stored as flags['no-flag'] = true; resolveLeafArgs normalises
-// that into the boolean negation for the matching option.
-function parseTokens(
+export function parseTokens(
   tokens: string[],
   optionSpecs?: Record<
     string,
@@ -74,7 +57,6 @@ function parseTokens(
   const positional: string[] = [];
   const flags: Record<string, string | boolean> = {};
 
-  // Build lookup: flag/alias -> type
   const flagTypes = new Map<string, string>();
   if (optionSpecs) {
     for (const [key, spec] of Object.entries(optionSpecs)) {
@@ -95,9 +77,6 @@ function parseTokens(
         const flagType = flagTypes.get(body);
         const next = tokens[i + 1];
         
-        // Boolean flags don't consume the next token
-        // Non-boolean flags consume next token if it exists and isn't a flag
-        // Unknown flags fall back to old behavior: consume if next exists and isn't a flag
         if (flagType === 'boolean') {
           flags[body] = true;
         } else if (next !== undefined && !next.startsWith('-')) {
@@ -112,9 +91,6 @@ function parseTokens(
       const flagType = flagTypes.get(key);
       const next = tokens[i + 1];
       
-      // Boolean flags don't consume the next token
-      // Non-boolean flags consume next token if it exists and isn't a flag
-      // Unknown flags fall back to old behavior: consume if next exists and isn't a flag
       if (flagType === 'boolean') {
         flags[key] = true;
       } else if (next !== undefined && !next.startsWith('-')) {
@@ -130,13 +106,9 @@ function parseTokens(
   return { positional, flags };
 }
 
-// ─── Help & tab-completion (generated from command-registry.ts) ─────────────
-// There is no second, hand-maintained list of commands here: both are
-// derived from COMMANDS, so they can't drift out of sync with what actually
-// runs the way the old hardcoded HELP string and TOP_LEVEL_COMMANDS array
-// used to.
+// ─── Help & tab-completion ────────────────────────────────────────────────────
 
-function optionSummary(
+export function optionSummary(
   options?: Record<
     string,
     { flag?: string; alias?: string; type: string; demandOption?: boolean }
@@ -152,10 +124,7 @@ function optionSummary(
     .join(' ');
 }
 
-// Builds a yargs-style per-command help block shown when the user provides
-// wrong/missing arguments in the REPL — so instead of just "Missing required
-// argument: <name>", they see the full picture of what the command expects.
-function buildLeafHelp(node: LeafCommand): string {
+export function buildLeafHelp(node: LeafCommand): string {
   const lines: string[] = [];
 
   lines.push(`\n  ${chalk.bold(node.usage)}`);
@@ -192,7 +161,7 @@ function buildLeafHelp(node: LeafCommand): string {
   return lines.join('\n');
 }
 
-function buildHelp(): string {
+export function buildHelp(): string {
   const groups = new Map<string, string[]>();
   const addLine = (group: string, line: string) => {
     if (!groups.has(group)) groups.set(group, []);
@@ -203,7 +172,7 @@ function buildHelp(): string {
     if (node.cliOnly) continue;
     if (isGroup(node)) {
       for (const [, subNode] of Object.entries(node.subcommands)) {
-        if (isGroup(subNode)) continue; // no 2-level nesting today
+        if (isGroup(subNode)) continue;
         const opts = optionSummary(subNode.options);
         addLine(
           node.group,
@@ -225,7 +194,7 @@ function buildHelp(): string {
   )}\n    help              Show this help\n    clear             Clear the screen\n    exit | quit       Exit the shell\n`;
 }
 
-const TOP_LEVEL_COMMANDS = [
+export const TOP_LEVEL_COMMANDS = [
   ...Object.entries(COMMANDS)
     .filter(([, node]) => !node.cliOnly)
     .map(([key]) => key),
@@ -235,47 +204,8 @@ const TOP_LEVEL_COMMANDS = [
   'quit',
 ];
 
-// ─── Streaming commands (e.g. `logs`) ────────────────────────────────────────
-// `logs` tails until Ctrl+C. In the CLI that just means "keep the process
-// alive" — but inside the REPL, Ctrl+C must return to the `dm>` prompt
-// instead of killing the whole shell. That SIGINT juggling is REPL-specific
-// plumbing, so it lives here rather than in command-registry.ts; the actual
-// log-tailing logic is still defined exactly once, in the registry.
-async function runStreamingInRepl(
-  node: LeafCommand,
-  args: Record<string, any>
-): Promise<void> {
-  await new Promise<void>((resolveDone) => {
-    const existingSigInt = process.rawListeners('SIGINT').slice() as ((
-      ...a: any[]
-    ) => void)[];
-    process.removeAllListeners('SIGINT');
-
-    const origExit = process.exit.bind(process) as (code?: number) => never;
-
-    const restore = async () => {
-      (process as any).exit = origExit;
-      process.removeAllListeners('SIGINT');
-      for (const l of existingSigInt) process.on('SIGINT', l);
-      Logger.nl();
-      if (node.onStreamEnd) await node.onStreamEnd();
-      resolveDone();
-    };
-
-    // The underlying command may call process.exit() itself on SIGINT (pm2
-    // does) — shadow it so that instead returns us to the prompt.
-    (process as any).exit = () => restore();
-    process.once('SIGINT', restore);
-
-    void node.handler(args);
-  });
-}
-
 // ─── Command dispatcher ───────────────────────────────────────────────────────
-// Walks the same COMMANDS tree cli.ts registers with yargs, resolving
-// positionals/flags with the exact same rules (see resolveLeafArgs in
-// command-registry.ts) so a command behaves identically whether it's run as
-// `dm <command>` or typed at the `dm>` prompt.
+
 async function runNode(
   node: CommandNode,
   fullUsage: string,
@@ -309,17 +239,13 @@ async function runNode(
 
   if (node.lockArg) acquireLock(args[node.lockArg]);
   try {
-    if (node.streaming) {
-      await runStreamingInRepl(node, args);
-    } else {
-      await node.handler(args);
-    }
+    await node.handler(args);
   } finally {
     if (node.lockArg) releaseLock(args[node.lockArg]);
   }
 }
 
-async function dispatch(tokens: string[]): Promise<void> {
+export async function dispatch(tokens: string[]): Promise<void> {
   if (tokens.length === 0) return;
   const [cmdKey, ...rest] = tokens;
 
@@ -328,14 +254,24 @@ async function dispatch(tokens: string[]): Promise<void> {
       Logger.print(buildHelp());
       return;
     case 'clear':
-      process.stdout.write('\x1b[2J\x1b[H');
+      // Handle clear command through special callback
+      // The ReplPage component will hook this
+      if ((dispatch as any)._clearCallback) {
+        (dispatch as any)._clearCallback();
+      }
       return;
     case 'exit':
     case 'quit':
-      Logger.print(chalk.gray('Goodbye.'));
-      process.exit(0);
+      // Handle exit through special callback
+      // The ReplPage component will hook this
+      if ((dispatch as any)._exitCallback) {
+        (dispatch as any)._exitCallback();
+      }
+      return;
   }
 
+  const REMOTE_USER = process.env.DM_REMOTE_USER;
+  
   // Block sensitive commands from remote sessions entirely.
   if (REMOTE_USER && REMOTE_BLOCKED_COMMANDS.has(cmdKey)) {
     Logger.error(
@@ -352,7 +288,6 @@ async function dispatch(tokens: string[]): Promise<void> {
     return;
   }
 
-  // cliOnly commands are not available in the REPL at all.
   if (node.cliOnly) {
     Logger.error(
       `Command "${chalk.bold(cmdKey)}" is only available via the CLI (\`dm ${cmdKey}\`), not the interactive shell.`
@@ -364,25 +299,18 @@ async function dispatch(tokens: string[]): Promise<void> {
 }
 
 // ─── Remote session restrictions ─────────────────────────────────────────────
-// Commands that must never be executed from within a remote SSH session.
-// This covers anything that could modify the server's security posture:
-// key management, password auth, server lifecycle, self-update, and
-// system service installation.
 const REMOTE_BLOCKED_COMMANDS = new Set([
-  'remote', // entire group: key-add, key-remove, set-password, serve…
-  'update', // self-update could pull malicious code
-  'install-service', // modifies OS startup configuration
-  'migrate-db', // direct DB mutation outside normal app flow
+  'remote',
+  'update',
+  'install-service',
+  'migrate-db',
 ]);
 
 // ─── Remote command audit ─────────────────────────────────────────────────────
-// When the REPL runs inside a remote session (DM_REMOTE_USER is set), every
-// dispatched command is appended to the audit log so it's attributable to the
-// connecting key — distinguishable from local usage.
 const REMOTE_USER = process.env.DM_REMOTE_USER;
 const REMOTE_SESSION_TYPE = process.env.DM_REMOTE_SESSION_TYPE || 'shell';
 
-function auditCommand(line: string): void {
+export function auditCommand(line: string): void {
   if (!REMOTE_USER) return;
   try {
     const entry = JSON.stringify({
@@ -396,86 +324,4 @@ function auditCommand(line: string): void {
   } catch {
     /* non-fatal */
   }
-}
-
-// ─── REPL entry point ─────────────────────────────────────────────────────────
-export async function startRepl(version: string): Promise<void> {
-  await ensureAppDirectories();
-
-  // Clear screen and move cursor to top-left
-  process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
-  Logger.print(chalk.bold(`Deployment Manager v${version}`));
-  Logger.print(chalk.gray('Type "help" for available commands.\n'));
-
-  let resolveExit: () => void;
-  const exited = new Promise<void>((resolve) => {
-    resolveExit = resolve;
-  });
-
-  // Builds a fully-configured readline interface. Registered with
-  // repl-context.ts so that pauseRepl()/resumeRepl() can close this instance
-  // for a TUI handoff and rebuild an identical one afterwards, instead of
-  // trying to pause/resume a single instance that Ink would otherwise fight
-  // over stdin with (see the comment in utils/repl-context.ts for why).
-  const createInterface = (): Interface => {
-    // Ensure stdin is ready for readline before creating the interface
-    if (process.stdin.isTTY && process.stdin.setRawMode) {
-      // Make sure we're in cooked mode
-      process.stdin.setRawMode(false);
-    }
-
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-      terminal: true, // Explicitly enable terminal handling
-      // \x01 (SOH) and \x02 (STX) are readline zero-width markers used by
-      // bash/zsh to correctly compute cursor position around color sequences.
-      // Node.js readline does NOT use them — they print as literal garbage
-      // characters on legacy Windows conhost. Removed entirely; chalk handles
-      // color stripping automatically when the terminal doesn't support it.
-      prompt: `${chalk.cyan('dm>')} `,
-      completer: (line: string) => {
-        const hits = TOP_LEVEL_COMMANDS.filter((c) => c.startsWith(line));
-        return [hits.length ? hits : TOP_LEVEL_COMMANDS, line];
-      },
-    });
-
-    rl.on('close', () => {
-      // A close means either the user hit Ctrl+D (real exit) or
-      // pauseRepl() intentionally tore this interface down for a TUI
-      // handoff — only actually end the shell for the former.
-      if (isHandingOff()) return;
-      setReplInterface(null);
-      resolveExit();
-    });
-
-    rl.on('line', async (rawLine) => {
-      const line = rawLine.trim();
-      if (!line) {
-        rl.prompt();
-        return;
-      }
-
-      auditCommand(line);
-      const tokens = tokenise(line);
-      try {
-        await dispatch(tokens);
-      } catch (err: any) {
-        Logger.error(err?.message ?? err);
-      }
-
-      // A command may have paused *this* rl and had resumeRepl() build and
-      // prompt a brand new one already (e.g. `dashboard`, `set-env` with no
-      // KEY=VALUE) — only re-prompt here if this rl is still the active one.
-      if (getActiveRl() === rl) rl.prompt();
-    });
-
-    return rl;
-  };
-
-  setReplFactory(createInterface);
-  setReplInterface(createInterface());
-  getActiveRl()!.prompt();
-
-  await exited;
 }

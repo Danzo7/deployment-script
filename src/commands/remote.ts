@@ -9,7 +9,6 @@ import {
   listAuthorizedKeys,
 } from '../utils/remote-auth.js';
 import { REMOTE_PORT } from '../constants.js';
-import { launchRemoteServe } from '../tui/pages/RemoteServe/launch.js';
 
 /** Blocks key-management commands from running inside a remote session. */
 function assertNotRemoteSession(): void {
@@ -21,7 +20,14 @@ function assertNotRemoteSession(): void {
 }
 
 export async function remoteServe(port: number): Promise<void> {
-  await launchRemoteServe(port);
+  const { getNavigation } = await import('../app/navigation/navigation-context.js');
+  const { PageId } = await import('../app/navigation/types.js');
+
+  getNavigation().push(
+    PageId.RemoteServe,
+    { port },
+    { fullScreen: true }
+  );
 }
 
 export async function remoteConnect(

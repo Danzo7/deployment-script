@@ -14,13 +14,15 @@ export type { RowState, EditorRow };
 interface EnvEditorProps {
   appName: string;
   initial: EnvEntry[];
-  onSave: (rows: EditorRow[], count: number) => Promise<void>;
+  onSave: (rows: EditorRow[], count: number) => Promise<unknown>;
+  onCancel: () => void;
 }
 
 export function EnvEditor({
   appName,
   initial,
   onSave,
+  onCancel
 }: EnvEditorProps): React.ReactElement {
   // Convert EnvEntry[] to Record<string, string>
   const initialRecord = initial.reduce(
@@ -55,5 +57,5 @@ export function EnvEditor({
     },
   };
 
-  return <KeyValueEditor config={config} initial={initialRecord} onSave={onSave} />;
+  return <KeyValueEditor onCancel={onCancel} config={config} initial={initialRecord} onSave={onSave} />;
 }

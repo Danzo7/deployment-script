@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Box, Text, useApp, useInput } from 'ink';
+import { Box, Text, useInput } from 'ink';
+import { usePageExit } from '../../../app/navigation/use-page-exit.js';
 import { Alert } from '@inkjs/ui';
 import { TypeSelectScreen } from './components/TypeSelectScreen.js';
 import { SchemaEditor } from './components/SchemaEditor.js';
@@ -25,7 +26,7 @@ export const DbCompareScreen: React.FC<DbCompareScreenProps> = ({ dbName }) => {
   const [schemaText, setSchemaText] = useState('');
   const [plan, setPlan] = useState<Plan | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { exit } = useApp();
+  const exit = usePageExit();
 
   // Handle keys on error screen
   useInput((input, key) => {
@@ -134,7 +135,7 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
   const [migrationId, setMigrationId] = useState<string | number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [canGoBack, setCanGoBack] = useState(false);
-  const { exit } = useApp();
+  const exit = usePageExit();
 
   // Handle keys on error screen
   useInput((input, key) => {
@@ -179,11 +180,6 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
   const handleExecute = async (key: string) => {
     setMigrationKey(key);
 
-    // Mark that migration is being executed
-    if (typeof (globalThis as any).__setMigrationExecuted === 'function') {
-      (globalThis as any).__setMigrationExecuted();
-    }
-
     try {
       let migration;
       if (migrationType === 'generated') {
@@ -202,7 +198,8 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
   };
 
   const handleComplete = () => {
-    // Don't auto-exit - user must press Esc
+    // Migration was executed - pass true to onResult
+    exit(true);
   };
 
   const handleCancel = () => {

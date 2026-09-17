@@ -14,6 +14,24 @@ const SYM = {
 
 export class Logger {
   static isMuted = false;
+  private static sink: ((line: string) => void) | null = null;
+
+  static setSink(fn: (line: string) => void): void {
+    Logger.sink = fn;
+  }
+
+  static clearSink(): void {
+    Logger.sink = null;
+  }
+
+  private static write(text: string): void {
+    if (Logger.sink) {
+      Logger.sink(text);
+    } else {
+      process.stdout.write(text);
+    }
+  }
+
   /**
    * Logs an informational message in gray.
    */
@@ -98,7 +116,7 @@ export class Logger {
    * Adds a line break for better formatting.
    */
   static nl() {
-    process.stdout.write('\n');
+    this.write('\n');
     return this;
   }
 
@@ -117,7 +135,7 @@ export class Logger {
     let i = 0;
     const timestamp = chalk.gray(`[${new Date().toLocaleTimeString()}]`);
     const interval = setInterval(() => {
-      process.stdout.write(
+      this.write(
         `\r${timestamp} ${chalk.cyan(frames[i++ % frames.length])} ${label}`
       );
     }, 80);
@@ -125,13 +143,13 @@ export class Logger {
     try {
       const result = await operation();
       clearInterval(interval);
-      process.stdout.write(
+      this.write(
         `\r${timestamp} ${chalk.green(SYM.success)} ${label}\n\n`
       );
       return result;
     } catch (err) {
       clearInterval(interval);
-      process.stdout.write(
+      this.write(
         `\r${timestamp} ${chalk.red(SYM.error)} ${label}\n\n`
       );
       throw err;
@@ -144,7 +162,7 @@ export class Logger {
    */
   static print(message: any = '') {
     if (Logger.isMuted) return this;
-    process.stdout.write(String(message) + '\n');
+    this.write(String(message) + '\n');
     return this;
   }
 
@@ -163,7 +181,7 @@ export class Logger {
    */
   static row(label: string, value: string, labelWidth = 18) {
     if (Logger.isMuted) return this;
-    process.stdout.write(`  ${chalk.gray(label.padEnd(labelWidth))} ${value}\n`);
+    this.write(`  ${chalk.gray(label.padEnd(labelWidth))} ${value}\n`);
     return this;
   }
 
@@ -172,7 +190,7 @@ export class Logger {
    */
   static divider(width = 40) {
     if (Logger.isMuted) return this;
-    process.stdout.write(chalk.gray('  ' + '─'.repeat(width)) + '\n');
+    this.write(chalk.gray('  ' + '─'.repeat(width)) + '\n');
     return this;
   }
 
@@ -180,9 +198,9 @@ export class Logger {
    * Private helper for consistent logging.
    */
   private static log(formattedMessage: string, ...optionalParams: any[]) {
-    process.stdout.write(this.withTimestamp(formattedMessage) + '\n');
+    this.write(this.withTimestamp(formattedMessage) + '\n');
     if (optionalParams.length) {
-      process.stdout.write(optionalParams.map(String).join(' ') + '\n');
+      this.write(optionalParams.map(String).join(' ') + '\n');
     }
   }
 }

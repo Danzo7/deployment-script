@@ -8,7 +8,8 @@
  *  - Keyboard shortcuts bar
  */
 import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput, useApp } from 'ink';
+import { Box, Text, useInput } from 'ink';
+import { usePageExit } from '../../../app/navigation/use-page-exit.js';
 import type { LogEntry, RemoteServeDashboardProps } from './types.js';
 import { TERM_W, TERM_H } from '../../utils/constants.js';
 import { useCursor } from '../../hooks/useCursor.js';
@@ -40,7 +41,7 @@ export function RemoteServeDashboard({
   onDisconnect,
   onQuit,
 }: RemoteServeDashboardProps): React.ReactElement {
-  const { exit } = useApp();
+  const exit = usePageExit();
   const { cursor, setCursor } = useCursor(0);
   const [confirm, setConfirm] = useState<string | null>(null);
   const [logOffset, setLogOffset] = useState(0);

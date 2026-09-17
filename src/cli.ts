@@ -4,7 +4,8 @@ import chalk from 'chalk';
 import { Logger } from './utils/logger.js';
 import { acquireLock, releaseLock } from './utils/lock-utils.js';
 import { isMigrationNeeded } from './commands/migrate-db.js';
-import { startRepl } from './repl.js';
+import { bootstrapApp } from './app/root.js';
+import { PageId } from './app/navigation/types.js';
 import {
   COMMANDS,
   CommandNode,
@@ -45,11 +46,8 @@ function wrapHandler(node: LeafCommand) {
         acquireLock(argv[node.lockArg]);
         setupCleanup(argv[node.lockArg]);
       }
+      
       await node.handler(argv);
-      if (node.streaming) {
-        // e.g. `logs` — pm2's bus (not yargs) owns the process lifecycle now.
-        await new Promise<never>(() => {});
-      }
     } catch (err) {
       Logger.error(err);
       process.exit(1);
@@ -119,8 +117,12 @@ if (isMigrationNeeded()) {
 // ─── Interactive REPL mode ────────────────────────────────────────────────────
 // When called with no arguments (just `dm`), launch the interactive shell.
 if (process.argv.slice(2).length === 0) {
-  await startRepl(_pkg.version);
-  process.exit(0);
+  // Clear screen and show welcome
+  process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
+  Logger.print(chalk.bold(`Deployment Manager v${_pkg.version}`));
+  Logger.print(chalk.gray('Type "help" for available commands.\n'));
+  
+  await bootstrapApp({ id: PageId.Repl, params: {} });
 }
 
 // ─── Quick connect shortcuts ──────────────────────────────────────────────────

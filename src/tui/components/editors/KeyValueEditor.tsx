@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Box, Text, useInput, useApp } from 'ink';
+import { Box, Text, useInput } from 'ink';
 import { ControlledTextInput as TextInput } from '../ControlledTextInput.js';
 import { TABLE_BOX_WIDTH, TABLE_KEY_COL, TABLE_VAL_COL } from '../../utils/constants.js';
 import { countChanges } from '../../utils/editor-helpers.js';
@@ -48,7 +48,8 @@ export interface KeyValueEditorConfig {
 interface KeyValueEditorProps {
   config: KeyValueEditorConfig;
   initial: Record<string, string>;
-  onSave: (rows: EditorRow[], count: number) => Promise<void>;
+  onCancel(result?: any): void;
+  onSave: (rows: EditorRow[], count: number) => void;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -202,8 +203,8 @@ export function KeyValueEditor({
   config,
   initial,
   onSave,
+  onCancel
 }: KeyValueEditorProps): React.ReactElement {
-  const { exit } = useApp();
 
   const [rows, setRows] = useState<EditorRow[]>(() => buildRows(initial));
   const { cursor, setCursor, clamp } = useCursor(0);
@@ -271,14 +272,14 @@ export function KeyValueEditor({
         });
       } else if (input === 's') {
         if (changes.total === 0) {
-          exit();
+          onCancel();
           return;
         }
         setSavedCount(changes.total);
         setMode('confirm-save');
       } else if (input === 'q' || key.escape) {
         if (changes.total === 0) {
-          exit();
+          onCancel();
           return;
         }
         setMode('confirm-quit');
@@ -368,7 +369,7 @@ export function KeyValueEditor({
 
     if (mode === 'confirm-quit') {
       if (input === 'y' || input === 'Y') {
-        exit();
+        onCancel();
       } else {
         setMode('list');
       }
@@ -379,9 +380,7 @@ export function KeyValueEditor({
   useEffect(() => {
     if (mode !== 'saved') return;
     onSave(rows, savedCount)
-      .then(() => exit())
-      .catch(() => exit());
-  }, [mode, rows, savedCount, onSave, exit]);
+  }, [mode, rows, savedCount, onSave]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 

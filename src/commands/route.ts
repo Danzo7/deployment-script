@@ -92,3 +92,36 @@ export async function routeList(domainName: string): Promise<void> {
 
   Logger.table(table.toString());
 }
+
+/**
+ * Launches the interactive TUI header editor for a route.
+ * Works in both REPL (navigation push) and CLI (direct bootstrapApp) contexts.
+ */
+export const launchRouteHeaderApp = async (
+  domainName: string,
+  location: string
+): Promise<void> => {
+  const { PageId } = await import('../app/navigation/types.js');
+  const { launchPage } = await import('../app/navigation/launcher.js');
+  const normalizedDomain = normalizeDomainName(domainName);
+  const normalizedPath = normalizePath(location);
+  
+  await launchPage({
+    pageId: PageId.HeaderEditor,
+    params: { target: 'route', domainName: normalizedDomain, location: normalizedPath },
+    fullScreen: true,
+    onResult: (result: any) => {
+      if (result?.count > 0) {
+        const target = normalizedPath
+          ? `${normalizedDomain} /${normalizedPath}`
+          : `${normalizedDomain} /`;
+        Logger.success(
+          `Saved ${result.count} header change${result.count === 1 ? '' : 's'} to route "${target}".`
+        );
+        Logger.advice(
+          `Run ${Logger.highlight(`dm domain push ${normalizedDomain}`)} to apply the changes.`
+        );
+      }
+    },
+  });
+};

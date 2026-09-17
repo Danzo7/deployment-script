@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useApp } from 'ink';
+import { usePageExit } from '../../../app/navigation/use-page-exit.js';
+import { usePageParams } from '../../../app/navigation/use-navigation.js';
+import { PageId } from '../../../app/navigation/types.js';
 import fs from 'fs';
 import {
   startRemoteServer,
@@ -8,11 +10,8 @@ import {
   disconnectSession,
 } from '../../../utils/ssh-server.js';
 import type { SessionSnapshot } from '../../../utils/ssh-server.js';
-import { RemoteServeDashboard } from './index.js';
-import type { LogEntry } from './index.js';
-import { Logger } from '../../../utils/logger.js';
+import { RemoteServeDashboard, type LogEntry } from './index.js';
 import { REMOTE_AUDIT_LOG_PATH } from '../../../constants.js';
-import { launchTui } from '../../utils/launch-tui.js';
 
 const MAX_LOG = 200;
 
@@ -22,18 +21,12 @@ interface ServerInfo {
   fingerprint: string;
 }
 
-function App({
-  serverInfo,
-  initialLogs,
-}: {
-  serverInfo: ServerInfo;
-  initialLogs: LogEntry[];
-}): React.ReactElement {
-  const { exit } = useApp();
-  const [sessions, setSessions] = useState<SessionSnapshot[]>(() =>
-    getActiveSessions()
-  );
-  const [logs, setLogs] = useState<LogEntry[]>(initialLogs);
+export function RemoteServeAdapter(): React.ReactElement {
+  const { port } = usePageParams<PageId.RemoteServe>();
+  const exit = usePageExit();
+  const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null);
+  const [sessions, setSessions] = useState<SessionSnapshot[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
 
   const addLog = useCallback((level: LogEntry['level'], message: string) => {
     setLogs((prev) => {
@@ -42,34 +35,49 @@ function App({
     });
   }, []);
 
+  // Start server on mount
   useEffect(() => {
+    let serverPromise: Promise<void> | null = null;
+
     const onLog = (level: LogEntry['level'], message: string) =>
       addLog(level, message);
+    
+    const onListening = (address: string, actualPort: number, fingerprint: string) => {
+      setServerInfo({ bindAddress: address, port: actualPort, fingerprint });
+    };
+
     const onOpen = (_s: SessionSnapshot) => setSessions(getActiveSessions());
     const onClose = (_id: string) => setSessions(getActiveSessions());
 
     serverEvents.on('log', onLog);
+    serverEvents.once('listening', onListening);
     serverEvents.on('session-open', onOpen);
     serverEvents.on('session-close', onClose);
+
+    serverPromise = startRemoteServer(port);
 
     return () => {
       serverEvents.off('log', onLog);
       serverEvents.off('session-open', onOpen);
       serverEvents.off('session-close', onClose);
+      
+      if (serverPromise) {
+        serverPromise.catch(() => {
+          /* already exiting */
+        });
+      }
     };
-  }, [addLog]);
+  }, [port, addLog]);
 
-  // Tail the audit log file for command entries from child PTY sessions.
-  // Those run in a separate process so they can't emit to serverEvents directly.
-  // Handles both 'exec' (direct SSH commands) and 'repl-command' (interactive shell commands).
+  // Tail audit log
   useEffect(() => {
     if (!fs.existsSync(REMOTE_AUDIT_LOG_PATH)) return;
 
-    let offset = fs.statSync(REMOTE_AUDIT_LOG_PATH).size; // start at current EOF
+    let offset = fs.statSync(REMOTE_AUDIT_LOG_PATH).size;
     const watcher = fs.watch(REMOTE_AUDIT_LOG_PATH, () => {
       try {
         const stat = fs.statSync(REMOTE_AUDIT_LOG_PATH);
-        if (stat.size <= offset) return; // truncation — ignore
+        if (stat.size <= offset) return;
         const buf = Buffer.alloc(stat.size - offset);
         const fd = fs.openSync(REMOTE_AUDIT_LOG_PATH, 'r');
         fs.readSync(fd, buf, 0, buf.length, offset);
@@ -86,7 +94,6 @@ function App({
               const typeLabel = sessionType === 'exec' ? '[exec]' : '[shell]';
               addLog('info', `${typeLabel} [${entry.identity}] $ ${entry.command}`);
             } else if (entry.event === 'exec') {
-              // Log exec commands from SSH direct exec sessions
               addLog('info', `[exec] [${entry.identity}] $ ${entry.command}`);
             }
           } catch {
@@ -111,6 +118,10 @@ function App({
     exit();
   }, [exit]);
 
+  if (!serverInfo) {
+    return <></>;
+  }
+
   return (
     <RemoteServeDashboard
       bindAddress={serverInfo.bindAddress}
@@ -122,36 +133,4 @@ function App({
       onQuit={handleQuit}
     />
   );
-}
-
-export async function launchRemoteServe(port: number): Promise<void> {
-  // Buffer log entries before the TUI mounts so nothing is lost
-  const pendingLogs: LogEntry[] = [];
-  const bufferLog = (level: LogEntry['level'], message: string) => {
-    pendingLogs.push({ level, message, ts: new Date() });
-  };
-  serverEvents.on('log', bufferLog);
-
-  let resolveServerInfo!: (info: ServerInfo) => void;
-  const serverInfoPromise = new Promise<ServerInfo>((res) => {
-    resolveServerInfo = res;
-  });
-
-  serverEvents.once('listening', (address, actualPort, fingerprint) => {
-    resolveServerInfo({ bindAddress: address, port: actualPort, fingerprint });
-  });
-
-  const serverPromise = startRemoteServer(port);
-  const serverInfo = await serverInfoPromise;
-
-  // Stop buffering — hand off to the TUI
-  serverEvents.off('log', bufferLog);
-
-  await launchTui(<App serverInfo={serverInfo} initialLogs={pendingLogs} />, {
-    onExit: async () => {
-      await serverPromise.catch(() => {
-        /* already exiting */
-      });
-    },
-  });
 }

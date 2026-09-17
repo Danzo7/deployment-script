@@ -31,3 +31,25 @@ export async function domainSetHeader(
   // 6. Log success
   Logger.success(`Header "${key}" set on domain "${normalized}".`);
 }
+
+export const launchDomainHeaderApp = async (name: string): Promise<void> => {
+  const { PageId } = await import('../app/navigation/types.js');
+  const { launchPage } = await import('../app/navigation/launcher.js');
+  const normalized = normalizeDomainName(name);
+  
+  await launchPage({
+    pageId: PageId.HeaderEditor,
+    params: { target: 'domain', domainName: normalized },
+    fullScreen: true,
+    onResult: (result: any) => {
+      if (result?.count > 0) {
+        Logger.success(
+          `Saved ${result.count} header change${result.count === 1 ? '' : 's'} to domain "${normalized}".`
+        );
+        Logger.advice(
+          `Run ${Logger.highlight(`dm domain push ${normalized}`)} to apply the changes.`
+        );
+      }
+    },
+  });
+};

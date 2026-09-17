@@ -4,7 +4,8 @@
  * All presentational concerns live in components/.
  */
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Text, useInput, useApp } from 'ink';
+import { Box, Text, useInput } from 'ink';
+import { usePageExit } from '../../../app/navigation/use-page-exit.js';
 
 import type {
   GlobalState,
@@ -133,7 +134,7 @@ function DetailHeader({
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export function Dashboard(props: DashboardProps): React.ReactElement {
-  const { exit } = useApp();
+  const exit = usePageExit();
 
   const [cursor, setCursor] = useState(0);
   const [tab, setTab] = useState<DetailTab>('overview');

@@ -1,5 +1,10 @@
-import { launchDbCompare } from '../tui/pages/DbMigration/launch.js';
-
 export async function dbCompare(args: { name: string }): Promise<void> {
-  await launchDbCompare(args.name);
+  const { getNavigation } = await import('../app/navigation/navigation-context.js');
+  const { PageId } = await import('../app/navigation/types.js');
+  
+  getNavigation().push(
+    PageId.DbCompare,
+    { dbName: args.name },
+    { fullScreen: true }
+  );
 }

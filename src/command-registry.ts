@@ -69,7 +69,6 @@ import {
   remoteRenameUser,
 } from './commands/remote.js';
 import { logClear } from './commands/log-clear.js';
-import { metrics } from './commands/metrics.js';
 import { dbRegister } from './commands/db-register.js';
 import { dbList } from './commands/db-list.js';
 import { dbUpdate } from './commands/db-update.js';
@@ -77,6 +76,8 @@ import { dbRemove } from './commands/db-remove.js';
 import { dbHistory } from './commands/db-history.js';
 import { dbCompare } from './commands/db-compare.js';
 import { dbMigrate } from './commands/db-migrate.js';
+import { PageId } from './app/navigation/types.js';
+import { launchDomainHeaderApp } from './commands/domain-set-header.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -114,6 +115,15 @@ export interface LeafCommand {
   lockArg?: string;
   /** True for commands that intentionally keep the process alive (e.g. `logs`). */
   streaming?: boolean;
+  /** True for commands that open interactive TUI pages (per migration plan Section 9). */
+  interactive?: boolean;
+  /** Page info for interactive commands - used by CLI to bootstrap directly */
+  page?: { 
+    id: PageId; 
+    getParams: (argv: any) => any | Promise<any>;
+  };
+  /** True for commands that need navigation (will bootstrap if called from CLI). */
+  needsNav?: boolean;
   /**
    * If true, this command is only available in the CLI (`dm <command>`) and
    * will not appear in the REPL help, tab-completion, or be executable from
@@ -554,12 +564,9 @@ export const COMMANDS: Record<string, CommandNode> = {
       { name: 'name', demandOption: true, describe: 'Application name' },
     ],
     streaming: true,
-    // cli.ts and repl.ts each wrap this call with the keep-alive/SIGINT
-    // handling their execution context needs (see the "streaming" note in
-    // both files) — the actual work stays defined once, here.
     handler: async ({ name }) => {
-      const { logs } = await import('./commands/logs.js');
-      logs({ name });
+      const { launchLogs } = await import('./commands/logs.js');
+      await launchLogs(name);
     },
   },
 
@@ -573,7 +580,8 @@ export const COMMANDS: Record<string, CommandNode> = {
       { name: 'name', demandOption: true, describe: 'Application name' },
     ],
     handler: async ({ name }) => {
-      await metrics({ name });
+      const { launchMetrics } = await import('./commands/metrics.js');
+      await launchMetrics(name);
     },
   },
 
@@ -602,6 +610,8 @@ export const COMMANDS: Record<string, CommandNode> = {
     usage: 'monit',
     describe: 'Open the operational dashboard (alias: dashboard)',
     group: 'Info & monitoring',
+    interactive: true,
+    page: { id: PageId.Dashboard, getParams: () => ({}) },
     handler: async () => {
       await dashboard();
     },
@@ -612,6 +622,8 @@ export const COMMANDS: Record<string, CommandNode> = {
     usage: 'dashboard',
     describe: 'Open the operational TUI dashboard',
     group: 'Info & monitoring',
+    interactive: true,
+    page: { id: PageId.Dashboard, getParams: () => ({}) },
     handler: async () => {
       await dashboard();
     },
@@ -623,6 +635,11 @@ export const COMMANDS: Record<string, CommandNode> = {
     usage: 'set-env <name>',
     describe: 'Launch the interactive env editor for an application',
     group: 'Environment',
+    interactive: true,
+    page: { 
+      id: PageId.EnvEditor, 
+      getParams: (argv) => ({ appName: argv.name }),
+    },
     positionals: [
       {
         name: 'name',
@@ -960,16 +977,20 @@ export const COMMANDS: Record<string, CommandNode> = {
         usage: 'set-header <name>',
         describe: 'Launch the interactive header editor for a domain',
         group: 'Domain',
+        interactive: true,
+        page: {
+          id: PageId.HeaderEditor,
+          getParams: async (argv) => {
+            const { normalizeDomainName } = await import('./utils/route-validation.js');
+            return { target: 'domain', domainName: normalizeDomainName(argv.name) };
+          },
+        },
         positionals: [
           { name: 'name', demandOption: true, describe: 'The domain name' },
         ],
-        handler: async ({ name }) => {
-          const { launchDomainHeaderEditor } = await import(
-            './tui/pages/HeaderEditor/launch.js'
-          );
-          await launchDomainHeaderEditor(name);
-        },
-      },
+    handler: async ({ name }) => {
+      await launchDomainHeaderApp(name);
+    },      },
       'remove-header': {
         kind: 'leaf',
         usage: 'remove-header <name>',
@@ -1119,6 +1140,18 @@ export const COMMANDS: Record<string, CommandNode> = {
         usage: 'set-header <domainName>',
         describe: 'Launch the interactive header editor for a route',
         group: 'Route',
+        interactive: true,
+        page: {
+          id: PageId.HeaderEditor,
+          getParams: async (argv) => {
+            const { normalizeDomainName, normalizePath } = await import('./utils/route-validation.js');
+            return {
+              target: 'route',
+              domainName: normalizeDomainName(argv.domainName),
+              location: normalizePath(argv.location ?? ''),
+            };
+          },
+        },
         positionals: [
           {
             name: 'domainName',
@@ -1136,10 +1169,8 @@ export const COMMANDS: Record<string, CommandNode> = {
           },
         },
         handler: async ({ domainName, location }) => {
-          const { launchRouteHeaderEditor } = await import(
-            './tui/pages/HeaderEditor/launch.js'
-          );
-          await launchRouteHeaderEditor(domainName, location ?? '');
+          const { launchRouteHeaderApp } = await import('./commands/route.js');
+          await launchRouteHeaderApp(domainName, location ?? '');
         },
       },
       'remove-header': {
@@ -1249,6 +1280,11 @@ export const COMMANDS: Record<string, CommandNode> = {
         describe: 'Start the dm SSH server in the foreground',
         group: 'Remote',
         streaming: true,
+        interactive: true,
+        page: {
+          id: PageId.RemoteServe,
+          getParams: (argv) => ({ port: argv.port ?? REMOTE_PORT }),
+        },
         options: {
           port: {
             alias: 'p',
@@ -1495,6 +1531,11 @@ export const COMMANDS: Record<string, CommandNode> = {
         usage: 'compare <name>',
         describe: 'Compare current schema with desired schema (read-only)',
         group: 'Database',
+        interactive: true,
+        page: {
+          id: PageId.DbCompare,
+          getParams: (argv) => ({ dbName: argv.name }),
+        },
         positionals: [
           { name: 'name', demandOption: true, describe: 'Database name' },
         ],
@@ -1508,6 +1549,26 @@ export const COMMANDS: Record<string, CommandNode> = {
         describe: 'Execute a database migration',
         group: 'Database',
         lockArg: 'name',
+        interactive: true,
+        page: {
+          id: PageId.DbMigrate,
+          getParams: async (argv) => {
+            let initialText = '';
+            if (!process.stdin.isTTY) {
+              const chunks: Buffer[] = [];
+              for await (const chunk of process.stdin) {
+                chunks.push(chunk);
+              }
+              initialText = Buffer.concat(chunks).toString('utf8');
+            }
+            return {
+              name: argv.name,
+              key: argv.key,
+              type: argv.type,
+              initialText,
+            };
+          },
+        },
         positionals: [
           { name: 'name', demandOption: true, describe: 'Database name' },
           { name: 'key', demandOption: true, describe: 'Migration key' },
@@ -1544,3 +1605,4 @@ export async function ensureAppDirectories(): Promise<void> {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   }
 }
+

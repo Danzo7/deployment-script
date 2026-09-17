@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Box, Text, useInput, useApp } from 'ink';
+import { Box, Text, useInput } from 'ink';
+import { usePageExit } from '../../../../app/navigation/use-page-exit.js';
 import { ControlledTextInput as TextInput } from '../../../components/ControlledTextInput.js';
 import { PlanReviewScreenProps } from '../types.js';
 import { DB_COLORS } from '../../../utils/colors.js';
@@ -35,7 +36,7 @@ export const PlanReviewScreen: React.FC<PlanReviewScreenProps> = ({
   const [migrationKey, setMigrationKey] = useState(initialKey || '');
   const [editingKey, setEditingKey] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const { exit } = useApp();
+  const exit = usePageExit();
 
   // Calculate viewport for scrolling
   const maxVisibleSteps = 15; // Adjust based on typical terminal height
