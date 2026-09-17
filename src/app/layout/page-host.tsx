@@ -9,7 +9,8 @@ import { StreamingOutputPage } from '../../tui/pages/StreamingOutput/index.js';
 import { DashboardAdapter } from '../../tui/pages/Dashboard/DashboardAdapter.js';
 import { EnvEditorAdapter } from '../../tui/pages/EnvEditor/EnvEditorAdapter.js';
 import { RemoteServeAdapter } from '../../tui/pages/RemoteServe/RemoteServeAdapter.js';
-import { DbMigrateScreen, DbCompareScreen } from '../../tui/pages/DbMigration/index.js';
+import { DbMigrateAdapter } from '../../tui/pages/DbMigration/DbMigrateAdapter.js';
+import { DbCompareAdapter } from '../../tui/pages/DbMigration/DbCompareAdapter.js';
 import { HeaderEditorAdapter } from '../../tui/pages/HeaderEditor/HeaderEditorAdapter.js';
 
 // Page registry - extend as pages are migrated
@@ -19,8 +20,8 @@ const PAGE_COMPONENTS: Partial<Record<PageId, React.ComponentType<any>>> = {
   [PageId.Dashboard]: DashboardAdapter,
   [PageId.EnvEditor]: EnvEditorAdapter,
   [PageId.RemoteServe]: RemoteServeAdapter,
-  [PageId.DbMigrate]: DbMigrateScreen,
-  [PageId.DbCompare]: DbCompareScreen,
+  [PageId.DbMigrate]: DbMigrateAdapter,
+  [PageId.DbCompare]: DbCompareAdapter,
   [PageId.HeaderEditor]: HeaderEditorAdapter,
 };
 
@@ -51,14 +52,5 @@ export function PageHost() {
     return <></>;
   }
   
-  // Handle params transformation for specific pages
-  let pageProps = current.params;
-  
-  // DbMigrate: map 'name' -> 'dbName' and 'key' -> 'migrationKey'
-  if (current.id === PageId.DbMigrate) {
-    const { name, key, ...rest } = current.params as any;
-    pageProps = { dbName: name, migrationKey: key, ...rest };
-  }
-  
-  return <PageComponent {...pageProps} />;
+  return <PageComponent {...current.params} />;
 }
