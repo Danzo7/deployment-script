@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Box, Text } from 'ink';
+import { Box, Text, useInput } from 'ink';
 import { usePageExit } from '../../../app/navigation/use-page-exit.js';
 import { usePageParams } from '../../../app/navigation/use-navigation.js';
 import { PageId } from '../../../app/navigation/types.js';
@@ -15,6 +15,12 @@ export function StreamingOutputPage() {
   const emit = useCallback((line: string) => {
     setEntries((prev) => [...prev, { id: String(entryIdCounter++), text: line.trimEnd() }]);
   }, []);
+
+  useInput((input, key) => {
+    if (key.escape) {
+      exit();
+    }
+  });
 
   useEffect(() => {
     // Shadow process.exit to call page exit instead
