@@ -6,8 +6,8 @@ import type { DashboardAction } from '../tui/pages/Dashboard/types.js';
  */
 export const dashboard = async (): Promise<void> => {
   const { openSharedPm2, closeSharedPm2 } = await import('../utils/pm2-helper.js');
-  const { getNavigation } = await import('../app/navigation/navigation-context.js');
   const { PageId } = await import('../app/navigation/types.js');
+  const { launchPage } = await import('../app/navigation/launcher.js');
   const { Logger } = await import('../utils/logger.js');
   const { disconnectSharedSsh, resetTailers } = await import('../utils/dashboard-data.js');
 
@@ -17,7 +17,9 @@ export const dashboard = async (): Promise<void> => {
     /* dashboard will show pm2 unreachable */
   }
 
-  getNavigation().push(PageId.Dashboard, {}, {
+  await launchPage({
+    pageId: PageId.Dashboard,
+    params: {},
     fullScreen: true,
     onResult: async (result: unknown) => {
       closeSharedPm2();
@@ -50,15 +52,8 @@ export const dashboard = async (): Promise<void> => {
           break;
         }
         case 'logs': {
-          const { createLogsRunner } = await import('./logs.js');
-          getNavigation().push(
-            PageId.StreamingOutput,
-            {
-              title: `logs: ${action.appName}`,
-              run: createLogsRunner({ name: action.appName }),
-            },
-            { fullScreen: false }
-          );
+          const { launchLogs } = await import('./logs.js');
+          await launchLogs(action.appName);
           break;
         }
         case 'env': {
