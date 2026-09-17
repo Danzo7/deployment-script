@@ -51,5 +51,14 @@ export function PageHost() {
     return <></>;
   }
   
-  return <PageComponent {...current.params} />;
+  // Handle params transformation for specific pages
+  let pageProps = current.params;
+  
+  // DbMigrate: map 'name' -> 'dbName' and 'key' -> 'migrationKey'
+  if (current.id === PageId.DbMigrate) {
+    const { name, key, ...rest } = current.params as any;
+    pageProps = { dbName: name, migrationKey: key, ...rest };
+  }
+  
+  return <PageComponent {...pageProps} />;
 }
