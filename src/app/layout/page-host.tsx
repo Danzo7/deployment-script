@@ -6,7 +6,7 @@ import { PageId } from '../navigation/types.js';
 import { Logger } from '../../utils/logger.js';
 import { ReplPage } from '../../tui/pages/Repl/index.js';
 import { StreamingOutputPage } from '../../tui/pages/StreamingOutput/index.js';
-import { Dashboard } from '../../tui/pages/Dashboard/index.js';
+import { DashboardAdapter } from '../../tui/pages/Dashboard/DashboardAdapter.js';
 import { EnvEditorAdapter } from '../../tui/pages/EnvEditor/EnvEditorAdapter.js';
 import { RemoteServeAdapter } from '../../tui/pages/RemoteServe/RemoteServeAdapter.js';
 import { DbMigrateScreen, DbCompareScreen } from '../../tui/pages/DbMigration/index.js';
@@ -16,7 +16,7 @@ import { HeaderEditorAdapter } from '../../tui/pages/HeaderEditor/HeaderEditorAd
 const PAGE_COMPONENTS: Partial<Record<PageId, React.ComponentType<any>>> = {
   [PageId.Repl]: ReplPage,
   [PageId.StreamingOutput]: StreamingOutputPage,
-  [PageId.Dashboard]: Dashboard,
+  [PageId.Dashboard]: DashboardAdapter,
   [PageId.EnvEditor]: EnvEditorAdapter,
   [PageId.RemoteServe]: RemoteServeAdapter,
   [PageId.DbMigrate]: DbMigrateScreen,

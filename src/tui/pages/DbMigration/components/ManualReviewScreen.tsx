@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { usePageExit } from '../../../../app/navigation/use-page-exit.js';
 import { ControlledTextInput as TextInput } from '../../../components/ControlledTextInput.js';
 import { ManualReviewScreenProps } from '../types.js';
 import { DB_COLORS } from '../../../utils/colors.js';
@@ -35,7 +34,6 @@ export const ManualReviewScreen: React.FC<ManualReviewScreenProps> = ({
 }) => {
   const [migrationKey, setMigrationKey] = useState(initialKey || '');
   const [editingKey, setEditingKey] = useState(false);
-  const exit = usePageExit();
 
   useInput((input, key) => {
     if (editingKey) {
@@ -48,7 +46,6 @@ export const ManualReviewScreen: React.FC<ManualReviewScreenProps> = ({
 
     if (key.escape) {
       onCancel();
-      exit();
       return;
     }
 
