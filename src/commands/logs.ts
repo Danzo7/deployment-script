@@ -59,7 +59,7 @@ export const logs = async ({ name }: { name: string }) => {
         bus = busInstance;
 
         Logger.info(
-          `Streaming logs for "${Logger.highlight(name)}" (Ctrl+C to stop)...\n`
+          `Streaming logs for "${Logger.highlight(name)}" (Esc to stop)...\n`
         );
 
         bus.on('log:out', (packet: any) => {
@@ -150,7 +150,7 @@ export function createLogsRunner({ name }: { name: string }): StreamingRunner {
               bus = busInstance;
 
               emit(
-                `\x1b[90m[${new Date().toLocaleTimeString()}]\x1b[0m \x1b[36mℹ\x1b[0m Streaming logs for "\x1b[1m\x1b[36m${name}\x1b[0m" (Ctrl+C to stop)...\n`
+                `\x1b[90m[${new Date().toLocaleTimeString()}]\x1b[0m \x1b[36mℹ\x1b[0m Streaming logs for "\x1b[1m\x1b[36m${name}\x1b[0m" (Esc to stop)...\n`
               );
 
               bus.on('log:out', (packet: any) => {

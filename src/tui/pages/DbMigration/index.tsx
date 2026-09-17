@@ -31,7 +31,7 @@ export const DbCompareScreen: React.FC<DbCompareScreenProps> = ({ dbName }) => {
   // Handle keys on error screen
   useInput((input, key) => {
     if (error) {
-      if (key.escape || (key.ctrl && input === 'c') || (key.ctrl && input === 'x')) {
+      if (key.escape) {
         exit();
       } else if (input === 'b') {
         setError(null);
@@ -70,7 +70,7 @@ export const DbCompareScreen: React.FC<DbCompareScreenProps> = ({ dbName }) => {
             <Text dimColor>[</Text>
             <Text>b back</Text>
             <Text dimColor>]</Text>
-            <Text dimColor>  Press b to go back, ^C or ^X to exit.</Text>
+            <Text dimColor>  Press b to go back, Esc to exit.</Text>
           </Text>
         </Box>
       </Box>
@@ -140,7 +140,7 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
   // Handle keys on error screen
   useInput((input, key) => {
     if (error) {
-      if (key.escape || (key.ctrl && input === 'c') || (key.ctrl && input === 'x')) {
+      if (key.escape) {
         exit();
       } else if (input === 'b') {
         setError(null);
@@ -217,7 +217,7 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
             <Text dimColor>[</Text>
             <Text>b back</Text>
             <Text dimColor>]</Text>
-            <Text dimColor>  Press b to go back, ^C or ^X to exit.</Text>
+            <Text dimColor>  Press b to go back, Esc to exit.</Text>
           </Text>
         </Box>
       </Box>

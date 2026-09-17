@@ -171,7 +171,7 @@ export const metrics = async ({ name }: { name: string }) => {
   const multiLabel = targets.length > 1;
 
   Logger.info(
-    `Streaming nginx logs for "${Logger.highlight(name)}"${isRemote ? ` via ${NGINX_REMOTE_HOST}` : ''} (Ctrl+C to stop)...\n`
+    `Streaming nginx logs for "${Logger.highlight(name)}"${isRemote ? ` via ${NGINX_REMOTE_HOST}` : ''} (Esc to stop)...\n`
   );
 
   const stopFns: Array<() => void> = [];
@@ -253,7 +253,7 @@ export function createMetricsRunner({ name }: { name: string }): StreamingRunner
           const multiLabel = targets.length > 1;
 
           emit(
-            `\x1b[90m[${new Date().toLocaleTimeString()}]\x1b[0m \x1b[36mℹ\x1b[0m Streaming nginx logs for "\x1b[1m\x1b[36m${name}\x1b[0m"${isRemote ? ` via ${NGINX_REMOTE_HOST}` : ''} (Ctrl+C to stop)...\n`
+            `\x1b[90m[${new Date().toLocaleTimeString()}]\x1b[0m \x1b[36mℹ\x1b[0m Streaming nginx logs for "\x1b[1m\x1b[36m${name}\x1b[0m"${isRemote ? ` via ${NGINX_REMOTE_HOST}` : ''} (Esc to stop)...\n`
           );
 
           for (const { logPath, label } of targets) {

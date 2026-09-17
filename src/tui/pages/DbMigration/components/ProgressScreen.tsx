@@ -33,7 +33,7 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
 
   // Handle exit keys
   useInput((input, key) => {
-    if (key.escape || (key.ctrl && input === 'c') || (key.ctrl && input === 'x')) {
+    if (key.escape) {
       onComplete();
     }
   });
@@ -156,7 +156,7 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
         hints={[
           {
             label: isRunning ? 'running…' : 'finished',
-            desc: isComplete ? 'press ^C or ^X to exit' : '',
+            desc: isComplete ? 'press Esc to exit' : '',
           },
         ]}
       />

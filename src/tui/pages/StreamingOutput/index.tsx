@@ -32,7 +32,7 @@ export function StreamingOutputPage() {
   return (
     <Box flexDirection="column">
       <StaticOutputList entries={entries} />
-      <Text dimColor>Press Ctrl+C to stop tailing "{title}".</Text>
+      <Text dimColor>Press Esc to stop tailing "{title}".</Text>
     </Box>
   );
 }
