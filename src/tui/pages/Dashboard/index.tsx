@@ -5,7 +5,6 @@
  */
 import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { usePageExit } from '../../../app/navigation/use-page-exit.js';
 
 import type {
   GlobalState,
@@ -134,8 +133,6 @@ function DetailHeader({
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export function Dashboard(props: DashboardProps): React.ReactElement {
-  const exit = usePageExit();
-
   const [cursor, setCursor] = useState(0);
   const [tab, setTab] = useState<DetailTab>('overview');
   const [metricsView, setMetricsView] = useState<'stats' | 'logs'>('stats');
@@ -294,7 +291,6 @@ export function Dashboard(props: DashboardProps): React.ReactElement {
     } else if (input === ':') setActionMode('cmd-palette');
     else if (input === 'q') {
       props.onQuit();
-      exit();
     } else if (key.upArrow || input === 'k') {
       if (tab === 'deploys') setDeployCursor((d) => Math.max(0, d - 1));
       else setCursor((c) => Math.max(0, c - 1));
