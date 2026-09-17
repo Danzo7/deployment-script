@@ -14,6 +14,9 @@ let entryIdCounter = 0;
 // Safe for remote sessions since each SSH connection is a separate process
 const sharedHistory = new CommandHistory();
 
+// Limit REPL scrollback to prevent memory exhaustion
+const MAX_REPL_LINES = 10000;
+
 export function ReplPage() {
   const [entries, setEntries] = useState<OutputEntry[]>([]);
   const [staticKey, setStaticKey] = useState(0);
@@ -21,7 +24,10 @@ export function ReplPage() {
   const exit = usePageExit();
 
   const appendEntry = useCallback((text: string) => {
-    setEntries((prev) => [...prev, { id: String(entryIdCounter++), text }]);
+    setEntries((prev) => {
+      const next = [...prev, { id: String(entryIdCounter++), text }];
+      return next.length > MAX_REPL_LINES ? next.slice(-MAX_REPL_LINES) : next;
+    });
   }, []);
 
   // Setup Logger sink on mount and notify navigation when ready
