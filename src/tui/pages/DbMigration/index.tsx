@@ -6,10 +6,12 @@ import { TypeSelectScreen } from './components/TypeSelectScreen.js';
 import { SchemaEditor } from './components/SchemaEditor.js';
 import { PlanReviewScreen } from './components/PlanReviewScreen.js';
 import { ManualReviewScreen } from './components/ManualReviewScreen.js';
+import { DataReviewScreen } from './components/DataReviewScreen.js';
 import { ProgressScreen } from './components/ProgressScreen.js';
 import { DbSchemaDiff } from '../../../db-migration/pg-schema-diff.js';
 import { buildManualPlan } from '../../../db-migration/manual-plan.js';
-import { executeManualMigration, executeGeneratedMigration } from '../../../db-migration/migration-engine.js';
+import { buildDataPlan } from '../../../db-migration/data-plan.js';
+import { executeManualMigration, executeGeneratedMigration, executeDataMigration } from '../../../db-migration/migration-engine.js';
 import { Plan } from '../../../db-migration/plan-types.js';
 import { MigrationType, ScreenFlow } from './types.js';
 
@@ -165,11 +167,16 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
         const generatedPlan = await differ.compare(text);
         setPlan(generatedPlan);
         setScreen('plan-review');
-      } else {
+      } else if (migrationType === 'manual') {
         // Manual migration - build basic plan for review
         const manualPlan = buildManualPlan(text);
         setPlan(manualPlan);
         setScreen('manual-review');
+      } else if (migrationType === 'data') {
+        // Data migration - build data plan for review
+        const dataPlan = buildDataPlan(text);
+        setPlan(dataPlan);
+        setScreen('data-review');
       }
     } catch (err: any) {
       setError(err.message || String(err));
@@ -184,8 +191,12 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
       let migration;
       if (migrationType === 'generated') {
         migration = await executeGeneratedMigration(dbName, key, schemaText);
-      } else {
+      } else if (migrationType === 'manual') {
         migration = await executeManualMigration(dbName, key, schemaText);
+      } else if (migrationType === 'data') {
+        migration = await executeDataMigration(dbName, key, schemaText);
+      } else {
+        throw new Error('Unknown migration type');
       }
 
       // Migration record created, execution started in background
@@ -263,6 +274,19 @@ export const DbMigrateScreen: React.FC<DbMigrateScreenProps> = ({
   if (screen === 'manual-review' && plan) {
     return (
       <ManualReviewScreen
+        dbName={dbName}
+        sql={schemaText}
+        migrationKey={migrationKey}
+        onExecute={handleExecute}
+        onBack={() => setScreen('schema-editor')}
+        onCancel={handleCancel}
+      />
+    );
+  }
+
+  if (screen === 'data-review' && plan) {
+    return (
+      <DataReviewScreen
         dbName={dbName}
         sql={schemaText}
         migrationKey={migrationKey}

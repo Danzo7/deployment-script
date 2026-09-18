@@ -8,7 +8,7 @@ export const TypeSelectScreen: React.FC<TypeSelectScreenProps> = ({
   onSelect,
   onCancel,
 }) => {
-  const [selected, setSelected] = useState<'generated' | 'manual'>('generated');
+  const [selected, setSelected] = useState<'generated' | 'manual' | 'data'>('generated');
 
   useInput((input, key) => {
     if (key.escape) {
@@ -17,9 +17,13 @@ export const TypeSelectScreen: React.FC<TypeSelectScreenProps> = ({
     }
 
     if (key.upArrow) {
-      setSelected('generated');
+      const current = options.findIndex((o) => o.type === selected);
+      const nextIndex = current > 0 ? current - 1 : options.length - 1;
+      setSelected(options[nextIndex].type);
     } else if (key.downArrow) {
-      setSelected('manual');
+      const current = options.findIndex((o) => o.type === selected);
+      const nextIndex = current < options.length - 1 ? current + 1 : 0;
+      setSelected(options[nextIndex].type);
     } else if (key.return) {
       onSelect(selected);
     }
@@ -35,6 +39,11 @@ export const TypeSelectScreen: React.FC<TypeSelectScreenProps> = ({
       type: 'manual' as const,
       title: 'Manual',
       description: 'paste/type raw SQL to execute as-is',
+    },
+    {
+      type: 'data' as const,
+      title: 'Data',
+      description: 'data-only migration (INSERT, UPDATE, DELETE)',
     },
   ];
 

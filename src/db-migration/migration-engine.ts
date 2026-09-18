@@ -3,6 +3,7 @@ import { Connector } from './connector.js';
 import { MigrationRepo } from '../db/repos.js';
 import { DatabaseRepo } from '../db/repos.js';
 import { buildManualPlan } from './manual-plan.js';
+import { buildDataPlan } from './data-plan.js';
 import { executePlan } from './sql-executor.js';
 import { getCurrentUser } from '../utils/user-context.js';
 import { Migration } from '../db/model.js';
@@ -155,6 +156,57 @@ export async function executeGeneratedMigration(
     contentHash,
     type: 'generated',
     sourceText: desiredSchemaSql,
+    plan,
+    totalSteps: plan.stats.totalSteps,
+    performedBy: getCurrentUser(),
+  });
+
+  // Create migration_step rows
+  for (const step of plan.steps) {
+    await MigrationRepo.addStep(migration.id, {
+      stepIndex: step.index,
+      description: step.description,
+      sql: step.sql,
+      hazardLevel: step.hazardLevel,
+    });
+  }
+
+  // Start execution in background - do not await
+  executeInBackground(migration.id, dbName, plan);
+
+  // Return migration record immediately so UI can start polling
+  return await MigrationRepo.findById(migration.id);
+}
+
+export async function executeDataMigration(
+  dbName: string,
+  migrationKey: string,
+  sql: string
+): Promise<Migration> {
+  // Build plan
+  const plan = buildDataPlan(sql);
+
+  // Compute content hash
+  const contentHash = crypto.createHash('sha256').update(sql).digest('hex');
+
+  // Get database ID
+  const database = await DatabaseRepo.findByName(dbName);
+
+  // Check if migration with same key already exists
+  const existing = await MigrationRepo.findByKey(database.id, migrationKey);
+  if (existing) {
+    throw new Error(
+      `Migration with key "${migrationKey}" already exists for database "${dbName}"`
+    );
+  }
+
+  // Create migration row
+  const migration = await MigrationRepo.create({
+    databaseId: database.id,
+    migrationKey,
+    contentHash,
+    type: 'data',
+    sourceText: sql,
     plan,
     totalSteps: plan.stats.totalSteps,
     performedBy: getCurrentUser(),

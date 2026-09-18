@@ -5,10 +5,11 @@ export type ScreenFlow =
   | 'schema-editor'
   | 'plan-review'
   | 'manual-review'
+  | 'data-review'
   | 'progress'
   | 'done';
 
-export type MigrationType = 'generated' | 'manual';
+export type MigrationType = 'generated' | 'manual' | 'data';
 
 export interface DbMigrationState {
   dbName: string;
@@ -28,7 +29,7 @@ export interface TypeSelectScreenProps {
 export interface SchemaEditorProps {
   dbName: string;
   initialText: string;
-  mode: 'generated' | 'manual';
+  mode: 'generated' | 'manual' | 'data';
   onSubmit: (text: string) => void;
   onCancel: () => void;
   onBack?: () => void;
@@ -45,6 +46,15 @@ export interface PlanReviewScreenProps {
 }
 
 export interface ManualReviewScreenProps {
+  dbName: string;
+  sql: string;
+  migrationKey?: string;
+  onExecute: (key: string) => void;
+  onBack: () => void;
+  onCancel: () => void;
+}
+
+export interface DataReviewScreenProps {
   dbName: string;
   sql: string;
   migrationKey?: string;

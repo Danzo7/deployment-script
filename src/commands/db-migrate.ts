@@ -3,7 +3,7 @@ import { Logger } from '../utils/logger.js';
 export async function dbMigrate(args: {
   name: string;
   key: string;
-  type?: 'generated' | 'manual';
+  type?: 'generated' | 'manual' | 'data';
 }): Promise<void> {
   const { PageId } = await import('../app/navigation/types.js');
   const { launchPage } = await import('../app/navigation/launcher.js');

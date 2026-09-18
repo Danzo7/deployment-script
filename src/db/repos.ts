@@ -158,7 +158,7 @@ function mapToMigration(row: any): Migration {
     databaseId: row.databaseId,
     migrationKey: row.migrationKey,
     contentHash: row.contentHash,
-    type: row.type as 'generated' | 'manual',
+    type: row.type as 'generated' | 'manual' | 'data',
     sourceText: row.sourceText,
     plan: deserializeJSON(row.plan) || {},
     status: row.status as 'pending' | 'running' | 'succeeded' | 'failed' | 'canceled',
@@ -1420,7 +1420,7 @@ export const MigrationRepo = {
     databaseId: string | number;
     migrationKey: string;
     contentHash: string;
-    type: 'generated' | 'manual';
+    type: 'generated' | 'manual' | 'data';
     sourceText: string;
     plan: any;
     totalSteps: number;

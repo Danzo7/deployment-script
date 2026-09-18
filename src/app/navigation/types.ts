@@ -25,7 +25,7 @@ export interface PageParamsMap {
   [PageId.DbMigrate]: {
       name: string;
       key: string;
-      type?: 'generated' | 'manual';
+      type?: 'generated' | 'manual' | 'data';
       initialText: string;
     };
   [PageId.StreamingOutput]: { title: string; run: StreamingRunner };

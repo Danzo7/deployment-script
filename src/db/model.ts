@@ -173,7 +173,7 @@ export interface Migration {
   databaseId: string | number; // References Database.id
   migrationKey: string; // Unique migration key
   contentHash: string; // Hash of migration content
-  type: 'generated' | 'manual'; // Migration type
+  type: 'generated' | 'manual' | 'data'; // Migration type
   sourceText: string; // Original migration text
   plan: any; // JSON migration plan
   status: 'pending' | 'running' | 'succeeded' | 'failed' | 'canceled'; // Migration status

@@ -210,7 +210,7 @@ export const migrationsTableSqlite = sqliteTable(
       .references(() => databasesTableSqlite.id, { onDelete: 'cascade' }),
     migrationKey: text('migrationKey').notNull(),
     contentHash: text('contentHash').notNull(),
-    type: text('type', { enum: ['generated', 'manual'] }).notNull(),
+    type: text('type', { enum: ['generated', 'manual', 'data'] }).notNull(),
     sourceText: text('sourceText').notNull(),
     plan: text('plan').notNull(), // JSON
     status: text('status', {

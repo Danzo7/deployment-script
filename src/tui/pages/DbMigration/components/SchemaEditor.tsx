@@ -19,6 +19,8 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
   const title =
     mode === 'generated'
       ? `Desired schema — ${dbName}`
+      : mode === 'data'
+      ? `Data Migration SQL — ${dbName}`
       : `Migration SQL — ${dbName}`;
 
   const handleChange = (newValue: string) => {
