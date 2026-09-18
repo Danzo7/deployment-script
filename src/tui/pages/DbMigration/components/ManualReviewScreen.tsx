@@ -4,6 +4,7 @@ import { ControlledTextInput as TextInput } from '../../../components/Controlled
 import { ManualReviewScreenProps } from '../types.js';
 import { DB_COLORS } from '../../../utils/colors.js';
 import { Keybar } from '../../../components/Keybar.js';
+import { VirtualizedList } from '../../../components/VirtualizedList.js';
 
 const hasDestructiveKeyword = (sql: string): boolean => {
   const upperSql = sql.toUpperCase();
@@ -34,13 +35,8 @@ export const ManualReviewScreen: React.FC<ManualReviewScreenProps> = ({
 }) => {
   const [migrationKey, setMigrationKey] = useState(initialKey || '');
   const [editingKey, setEditingKey] = useState(false);
-  const [scrollOffset, setScrollOffset] = useState(0);
 
   const sqlLines = sql.split('\n');
-  const maxVisibleLines = 20; // Adjust based on typical terminal height
-  const visibleLines = sqlLines.slice(scrollOffset, scrollOffset + maxVisibleLines);
-  const hasMoreAbove = scrollOffset > 0;
-  const hasMoreBelow = scrollOffset + maxVisibleLines < sqlLines.length;
 
   useInput((input, key) => {
     if (editingKey) {
@@ -58,28 +54,6 @@ export const ManualReviewScreen: React.FC<ManualReviewScreenProps> = ({
 
     if (input === 'b') {
       onBack();
-      return;
-    }
-
-    // Scroll up/down
-    if (key.upArrow && scrollOffset > 0) {
-      setScrollOffset(scrollOffset - 1);
-      return;
-    }
-
-    if (key.downArrow && scrollOffset < sqlLines.length - maxVisibleLines) {
-      setScrollOffset(scrollOffset + 1);
-      return;
-    }
-
-    // Page up/down
-    if (key.pageUp) {
-      setScrollOffset(Math.max(0, scrollOffset - maxVisibleLines));
-      return;
-    }
-
-    if (key.pageDown) {
-      setScrollOffset(Math.min(sqlLines.length - maxVisibleLines, scrollOffset + maxVisibleLines));
       return;
     }
 
@@ -127,30 +101,31 @@ export const ManualReviewScreen: React.FC<ManualReviewScreenProps> = ({
         paddingY={1}
         flexGrow={1}
       >
-        {hasMoreAbove && (
-          <Box justifyContent="center">
-            <Text dimColor>↑ {scrollOffset} more lines above</Text>
-          </Box>
-        )}
-
-        {visibleLines.map((line, visIdx) => {
-          const idx = visIdx + scrollOffset;
-          const hasWarning = hasDestructiveKeyword(line);
-          return (
-            <Box key={idx}>
-              <Text dimColor>{String(idx + 1).padStart(4, ' ')}  </Text>
-              {hasWarning && <Text color={DB_COLORS.yellow}>⚠ </Text>}
-              {!hasWarning && <Text>{'  '}</Text>}
-              <Text dimColor={!hasWarning}>{line}</Text>
+        <VirtualizedList
+          items={sqlLines}
+          maxVisible={20}
+          renderItem={(line, idx) => {
+            const hasWarning = hasDestructiveKeyword(line);
+            return (
+              <Box>
+                <Text dimColor>{String(idx + 1).padStart(4, ' ')}  </Text>
+                {hasWarning && <Text color={DB_COLORS.yellow}>⚠ </Text>}
+                {!hasWarning && <Text>{'  '}</Text>}
+                <Text dimColor={!hasWarning}>{line}</Text>
+              </Box>
+            );
+          }}
+          renderMoreAbove={(count) => (
+            <Box justifyContent="center">
+              <Text dimColor>↑ {count} more lines above</Text>
             </Box>
-          );
-        })}
-
-        {hasMoreBelow && (
-          <Box justifyContent="center">
-            <Text dimColor>↓ {sqlLines.length - (scrollOffset + maxVisibleLines)} more lines below</Text>
-          </Box>
-        )}
+          )}
+          renderMoreBelow={(count) => (
+            <Box justifyContent="center">
+              <Text dimColor>↓ {count} more lines below</Text>
+            </Box>
+          )}
+        />
       </Box>
 
       {/* Migration key input */}

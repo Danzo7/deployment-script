@@ -5,6 +5,7 @@ import { DB_COLORS } from '../../../utils/colors.js';
 import { MigrationRepo } from '../../../../db/repos.js';
 import { Migration, MigrationStep } from '../../../../db/model.js';
 import { Keybar } from '../../../components/Keybar.js';
+import { VirtualizedList } from '../../../components/VirtualizedList.js';
 
 const getStatusGlyph = (status: string) => {
   switch (status) {
@@ -107,7 +108,7 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
         </Text>
       </Box>
 
-      {/* Steps progress */}
+      {/* Steps progress with virtualization */}
       <Box
         flexDirection="column"
         borderStyle="single"
@@ -116,30 +117,34 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
         paddingY={1}
         flexGrow={1}
       >
-        {steps.map((step) => {
-          const statusInfo = getStatusGlyph(step.status);
-          const stepNum = `${step.stepIndex + 1}/${migration.totalSteps}`;
+        <VirtualizedList
+          items={steps}
+          maxVisible={20}
+          renderItem={(step) => {
+            const statusInfo = getStatusGlyph(step.status);
+            const stepNum = `${step.stepIndex + 1}/${migration.totalSteps}`;
 
-          return (
-            <Box key={step.id} flexDirection="column" marginBottom={step.errorMessage ? 1 : 0}>
-              <Box>
-                <Text>{stepNum.padStart(7)}  </Text>
-                <Text color={statusInfo.color}>{statusInfo.glyph} </Text>
-                <Text>
-                  {step.description.substring(0, 60)}
-                  {step.description.length > 60 ? '...' : ''}
-                </Text>
-              </Box>
-              {step.errorMessage && (
-                <Box marginLeft={11}>
-                  <Text color={DB_COLORS.red}>
-                    error: {step.errorMessage}
+            return (
+              <Box flexDirection="column" marginBottom={step.errorMessage ? 1 : 0}>
+                <Box>
+                  <Text>{stepNum.padStart(7)}  </Text>
+                  <Text color={statusInfo.color}>{statusInfo.glyph} </Text>
+                  <Text>
+                    {step.description.substring(0, 60)}
+                    {step.description.length > 60 ? '...' : ''}
                   </Text>
                 </Box>
-              )}
-            </Box>
-          );
-        })}
+                {step.errorMessage && (
+                  <Box marginLeft={11}>
+                    <Text color={DB_COLORS.red}>
+                      error: {step.errorMessage}
+                    </Text>
+                  </Box>
+                )}
+              </Box>
+            );
+          }}
+        />
       </Box>
 
       {/* Summary message */}

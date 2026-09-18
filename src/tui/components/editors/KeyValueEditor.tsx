@@ -4,6 +4,7 @@ import { ControlledTextInput as TextInput } from '../ControlledTextInput.js';
 import { TABLE_BOX_WIDTH, TABLE_KEY_COL, TABLE_VAL_COL } from '../../utils/constants.js';
 import { countChanges } from '../../utils/editor-helpers.js';
 import { useCursor } from '../../hooks/useCursor.js';
+import { VirtualizedList } from '../VirtualizedList.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -482,17 +483,21 @@ export function KeyValueEditor({
           </Box>
         </Box>
       ) : (
-        rows.map((row, i) =>
-          React.createElement(EditorRowComponent, {
-            key: `${row.key}-${i}`,
-            row,
-            selected: i === cursor,
-            isEditing: i === cursor && mode === 'edit-value',
-            editDraft,
-            setEditDraft,
-            config,
-          })
-        )
+        <VirtualizedList
+          items={rows}
+          maxVisible={20}
+          renderItem={(row, i) =>
+            React.createElement(EditorRowComponent, {
+              key: `${row.key}-${i}`,
+              row,
+              selected: i === cursor,
+              isEditing: i === cursor && mode === 'edit-value',
+              editDraft,
+              setEditDraft,
+              config,
+            })
+          }
+        />
       )}
 
       {mode === 'add-key' && (

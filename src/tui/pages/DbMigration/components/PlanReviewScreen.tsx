@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { ControlledTextInput as TextInput } from '../../../components/ControlledTextInput.js';
 import { PlanReviewScreenProps } from '../types.js';
 import { DB_COLORS } from '../../../utils/colors.js';
 import { Keybar } from '../../../components/Keybar.js';
+import { VirtualizedList } from '../../../components/VirtualizedList.js';
 
 // Hazard metadata for cleaner rendering
 const HAZARD_META = {
@@ -35,18 +36,9 @@ export const PlanReviewScreen: React.FC<PlanReviewScreenProps> = ({
   const [migrationKey, setMigrationKey] = useState(initialKey || '');
   const [editingKey, setEditingKey] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [scrollOffset, setScrollOffset] = useState(0);
 
-  // Calculate viewport for scrolling
-  const maxVisibleSteps = 15; // Adjust based on typical terminal height
-  const scrollOffset = useMemo(() => {
-    // Keep selected item in the middle third of the viewport when possible
-    const offset = Math.max(0, selectedIndex - Math.floor(maxVisibleSteps / 2));
-    return Math.min(offset, Math.max(0, plan.steps.length - maxVisibleSteps));
-  }, [selectedIndex, plan.steps.length]);
-
-  const visibleSteps = plan.steps.slice(scrollOffset, scrollOffset + maxVisibleSteps);
-  const hasMoreAbove = scrollOffset > 0;
-  const hasMoreBelow = scrollOffset + maxVisibleSteps < plan.steps.length;
+  const maxVisibleSteps = 15;
 
   useInput((input, key) => {
     if (showConfirmation) {
@@ -78,8 +70,16 @@ export const PlanReviewScreen: React.FC<PlanReviewScreenProps> = ({
 
     if (key.upArrow && selectedIndex > 0) {
       setSelectedIndex(selectedIndex - 1);
+      // Auto-scroll to keep selected item visible
+      if (selectedIndex <= scrollOffset) {
+        setScrollOffset(Math.max(0, scrollOffset - 1));
+      }
     } else if (key.downArrow && selectedIndex < plan.steps.length - 1) {
       setSelectedIndex(selectedIndex + 1);
+      // Auto-scroll to keep selected item visible
+      if (selectedIndex >= scrollOffset + maxVisibleSteps - 1) {
+        setScrollOffset(Math.min(plan.steps.length - maxVisibleSteps, scrollOffset + 1));
+      }
     } else if (key.return) {
       // Toggle expand/collapse
       setExpandedIndex(expandedIndex === selectedIndex ? null : selectedIndex);
@@ -198,89 +198,83 @@ export const PlanReviewScreen: React.FC<PlanReviewScreenProps> = ({
         paddingY={1}
         flexGrow={1}
       >
-        {hasMoreAbove && (
-          <Box justifyContent="center">
-            <Text dimColor>↑ more</Text>
-          </Box>
-        )}
+        <VirtualizedList
+          items={plan.steps}
+          maxVisible={maxVisibleSteps}
+          disableScrollHandling={true}
+          externalScrollOffset={scrollOffset}
+          onScrollChange={setScrollOffset}
+          renderItem={(step, idx) => {
+            const hazard = HAZARD_META[step.hazardLevel];
+            const isSelected = idx === selectedIndex;
+            const isExpanded = idx === expandedIndex;
 
-        {visibleSteps.map((step, visIdx) => {
-          const idx = visIdx + scrollOffset;
-          const hazard = HAZARD_META[step.hazardLevel];
-          const isSelected = idx === selectedIndex;
-          const isExpanded = idx === expandedIndex;
+            return (
+              <Box flexDirection="column" marginBottom={isExpanded ? 1 : 0}>
+                <Box>
+                  <Text inverse={isSelected}>{isSelected ? '▸' : ' '}</Text>
+                  <Text color={hazard.color} inverse={isSelected}>
+                    {hazard.glyph}
+                  </Text>
+                  <Text inverse={isSelected}>  {idx + 1}  </Text>
+                  <Text inverse={isSelected}>{step.description}</Text>
+                </Box>
 
-          return (
-            <Box key={idx} flexDirection="column" marginBottom={isExpanded ? 1 : 0}>
-              <Box>
-                <Text inverse={isSelected}>{isSelected ? '▸' : ' '}</Text>
-                <Text color={hazard.color} inverse={isSelected}>
-                  {hazard.glyph}
-                </Text>
-                <Text inverse={isSelected}>  {idx + 1}  </Text>
-                <Text inverse={isSelected}>{step.description}</Text>
-              </Box>
-
-              {isExpanded && (
-                <Box
-                  flexDirection="column"
-                  marginLeft={4}
-                  marginTop={1}
-                  paddingLeft={1}
-                  borderLeft
-                  borderStyle="single"
-                  borderColor={DB_COLORS.accent}
-                >
-                  {/* SQL Section */}
-                  <Box flexDirection="column" marginBottom={1}>
-                    <Text dimColor>├─ SQL</Text>
-                    {step.sql.split('\n').map((line, lineIdx) => (
-                      <Text key={lineIdx} dimColor>
-                        │  {line}
-                      </Text>
-                    ))}
-                    <Text dimColor>│</Text>
-                  </Box>
-
-                  {/* Hazards Section */}
-                  {step.hazards && step.hazards.length > 0 && (
+                {isExpanded && (
+                  <Box
+                    flexDirection="column"
+                    marginLeft={4}
+                    marginTop={1}
+                    paddingLeft={1}
+                    borderLeft
+                    borderStyle="single"
+                    borderColor={DB_COLORS.accent}
+                  >
+                    {/* SQL Section */}
                     <Box flexDirection="column" marginBottom={1}>
-                      <Text dimColor>├─ Hazards</Text>
-                      {step.hazards.map((h, hIdx) => (
-                        <Box key={hIdx}>
-                          <Text dimColor>│  </Text>
-                          <Text color={hazard.color}>{hazard.glyph} </Text>
-                          <Text>{h.message}</Text>
-                        </Box>
+                      <Text dimColor>├─ SQL</Text>
+                      {step.sql.split('\n').map((line, lineIdx) => (
+                        <Text key={lineIdx} dimColor>
+                          │  {line}
+                        </Text>
                       ))}
                       <Text dimColor>│</Text>
                     </Box>
-                  )}
 
-                  {/* Metadata Section */}
-                  <Box flexDirection="column">
-                    {step.lockTimeoutMs !== undefined && (
-                      <Box>
-                        <Text dimColor>├─ Lock timeout: </Text>
-                        <Text>{(step.lockTimeoutMs / 1000).toFixed(1)}s</Text>
+                    {/* Hazards Section */}
+                    {step.hazards && step.hazards.length > 0 && (
+                      <Box flexDirection="column" marginBottom={1}>
+                        <Text dimColor>├─ Hazards</Text>
+                        {step.hazards.map((h, hIdx) => (
+                          <Box key={hIdx}>
+                            <Text dimColor>│  </Text>
+                            <Text color={hazard.color}>{hazard.glyph} </Text>
+                            <Text>{h.message}</Text>
+                          </Box>
+                        ))}
+                        <Text dimColor>│</Text>
                       </Box>
                     )}
-                    <Box>
-                      <Text dimColor>└─ Transactional: </Text>
-                      <Text>{step.transactional ? 'yes' : 'no'}</Text>
+
+                    {/* Metadata Section */}
+                    <Box flexDirection="column">
+                      {step.lockTimeoutMs !== undefined && (
+                        <Box>
+                          <Text dimColor>├─ Lock timeout: </Text>
+                          <Text>{(step.lockTimeoutMs / 1000).toFixed(1)}s</Text>
+                        </Box>
+                      )}
+                      <Box>
+                        <Text dimColor>└─ Transactional: </Text>
+                        <Text>{step.transactional ? 'yes' : 'no'}</Text>
+                      </Box>
                     </Box>
                   </Box>
-                </Box>
-              )}
-            </Box>
-          );
-        })}
-
-        {hasMoreBelow && (
-          <Box justifyContent="center">
-            <Text dimColor>↓ more</Text>
-          </Box>
-        )}
+                )}
+              </Box>
+            );
+          }}
+        />
       </Box>
 
       {/* Migration key input (migrate mode only) */}
