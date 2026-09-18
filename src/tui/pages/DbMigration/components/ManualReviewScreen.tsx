@@ -34,6 +34,13 @@ export const ManualReviewScreen: React.FC<ManualReviewScreenProps> = ({
 }) => {
   const [migrationKey, setMigrationKey] = useState(initialKey || '');
   const [editingKey, setEditingKey] = useState(false);
+  const [scrollOffset, setScrollOffset] = useState(0);
+
+  const sqlLines = sql.split('\n');
+  const maxVisibleLines = 20; // Adjust based on typical terminal height
+  const visibleLines = sqlLines.slice(scrollOffset, scrollOffset + maxVisibleLines);
+  const hasMoreAbove = scrollOffset > 0;
+  const hasMoreBelow = scrollOffset + maxVisibleLines < sqlLines.length;
 
   useInput((input, key) => {
     if (editingKey) {
@@ -54,14 +61,34 @@ export const ManualReviewScreen: React.FC<ManualReviewScreenProps> = ({
       return;
     }
 
+    // Scroll up/down
+    if (key.upArrow && scrollOffset > 0) {
+      setScrollOffset(scrollOffset - 1);
+      return;
+    }
+
+    if (key.downArrow && scrollOffset < sqlLines.length - maxVisibleLines) {
+      setScrollOffset(scrollOffset + 1);
+      return;
+    }
+
+    // Page up/down
+    if (key.pageUp) {
+      setScrollOffset(Math.max(0, scrollOffset - maxVisibleLines));
+      return;
+    }
+
+    if (key.pageDown) {
+      setScrollOffset(Math.min(sqlLines.length - maxVisibleLines, scrollOffset + maxVisibleLines));
+      return;
+    }
+
     if (input === 'k') {
       setEditingKey(true);
     } else if (input === 'y' && migrationKey) {
       onExecute(migrationKey);
     }
   });
-
-  const sqlLines = sql.split('\n');
 
   return (
     <Box flexDirection="column" height="100%" paddingX={2}>
@@ -91,7 +118,7 @@ export const ManualReviewScreen: React.FC<ManualReviewScreenProps> = ({
         </Text>
       </Box>
 
-      {/* SQL display with warnings */}
+      {/* SQL display with warnings and virtualization */}
       <Box
         flexDirection="column"
         borderStyle="single"
@@ -100,16 +127,30 @@ export const ManualReviewScreen: React.FC<ManualReviewScreenProps> = ({
         paddingY={1}
         flexGrow={1}
       >
-        {sqlLines.map((line, idx) => {
+        {hasMoreAbove && (
+          <Box justifyContent="center">
+            <Text dimColor>↑ {scrollOffset} more lines above</Text>
+          </Box>
+        )}
+
+        {visibleLines.map((line, visIdx) => {
+          const idx = visIdx + scrollOffset;
           const hasWarning = hasDestructiveKeyword(line);
           return (
             <Box key={idx}>
+              <Text dimColor>{String(idx + 1).padStart(4, ' ')}  </Text>
               {hasWarning && <Text color={DB_COLORS.yellow}>⚠ </Text>}
               {!hasWarning && <Text>{'  '}</Text>}
               <Text dimColor={!hasWarning}>{line}</Text>
             </Box>
           );
         })}
+
+        {hasMoreBelow && (
+          <Box justifyContent="center">
+            <Text dimColor>↓ {sqlLines.length - (scrollOffset + maxVisibleLines)} more lines below</Text>
+          </Box>
+        )}
       </Box>
 
       {/* Migration key input */}
@@ -149,6 +190,8 @@ export const ManualReviewScreen: React.FC<ManualReviewScreenProps> = ({
       {/* Footer */}
       <Keybar
         hints={[
+          { label: '↑↓', desc: 'scroll' },
+          { label: 'PgUp/PgDn', desc: 'page' },
           { label: 'k', desc: 'edit key' },
           { label: 'y', desc: 'execute' },
           { label: 'b', desc: 'back' },
