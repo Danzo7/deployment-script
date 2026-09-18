@@ -96,7 +96,7 @@ export const PlanReviewScreen: React.FC<PlanReviewScreenProps> = ({
   if (plan.steps.length === 0) {
     return (
       <Box flexDirection="column" height="100%" paddingX={2}>
-        <Box>
+        <Box flexShrink={0}>
           <Text bold color={DB_COLORS.accent}>
             Plan — {dbName}
           </Text>
@@ -174,7 +174,7 @@ export const PlanReviewScreen: React.FC<PlanReviewScreenProps> = ({
   return (
     <Box flexDirection="column" height="100%" paddingX={2}>
       {/* Title bar */}
-      <Box>
+      <Box flexShrink={0}>
         <Text bold color={DB_COLORS.accent}>
           Plan — {dbName}
         </Text>

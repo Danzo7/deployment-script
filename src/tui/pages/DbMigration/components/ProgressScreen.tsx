@@ -101,7 +101,7 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
   return (
     <Box flexDirection="column" height="100%" paddingX={2}>
       {/* Title bar */}
-      <Box>
+      <Box flexShrink={0}>
         <Text bold color={DB_COLORS.accent}>
           Executing — {migration.migrationKey}
         </Text>

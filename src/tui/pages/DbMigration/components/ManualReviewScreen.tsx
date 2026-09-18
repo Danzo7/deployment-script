@@ -66,7 +66,7 @@ export const ManualReviewScreen: React.FC<ManualReviewScreenProps> = ({
   return (
     <Box flexDirection="column" height="100%" paddingX={2}>
       {/* Title bar */}
-      <Box>
+      <Box flexShrink={0}>
         <Text bold color={DB_COLORS.accent}>
           Review — {dbName} — manual migration
         </Text>
