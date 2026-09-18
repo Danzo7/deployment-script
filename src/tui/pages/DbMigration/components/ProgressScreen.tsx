@@ -39,9 +39,16 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
   });
 
   useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+    let cancelled = false;
+
     const pollStatus = async () => {
+      if (cancelled) return;
+      
       try {
         const migrationData = await MigrationRepo.findById(migrationId);
+        if (cancelled) return;
+        
         setMigration(migrationData);
         setSteps(migrationData.steps || []);
 
@@ -50,15 +57,18 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
           migrationData.status === 'succeeded' ||
           migrationData.status === 'failed'
         ) {
-          if (!isComplete) {
-            setIsComplete(true);
+          setIsComplete(true);
+          if (intervalId) {
             clearInterval(intervalId);
-            // Don't auto-exit - let user press Esc to exit
+            intervalId = null;
           }
+          // Don't auto-exit - let user press Esc to exit
         }
       } catch (err) {
         // Error fetching migration status
-        console.error('Error polling migration status:', err);
+        if (!cancelled) {
+          console.error('Error polling migration status:', err);
+        }
       }
     };
 
@@ -66,12 +76,15 @@ export const ProgressScreen: React.FC<ProgressScreenProps> = ({
     pollStatus();
 
     // Poll every 500ms
-    const intervalId = setInterval(pollStatus, 500);
+    intervalId = setInterval(pollStatus, 500);
 
     return () => {
-      clearInterval(intervalId);
+      cancelled = true;
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
     };
-  }, [migrationId, isComplete]);
+  }, [migrationId]); // Only depend on migrationId
 
   if (!migration) {
     return (
