@@ -10,6 +10,7 @@
 // help text, and tab-completion all derive from this).
 // ────────────────────────────────────────────────────────────────────────────
 
+import crypto from 'crypto';
 import { deploy } from './commands/deploy.js';
 import { init } from './commands/init.js';
 import {
@@ -513,7 +514,29 @@ export const COMMANDS: Record<string, CommandNode> = {
     ],
     lockArg: 'name',
     handler: async ({ name, secret }) => {
-      if (secret !== SECRET_KEY) throw new Error('Invalid secret key');
+      // Validate secret is provided
+      if (!secret || typeof secret !== 'string') {
+        throw new Error('Invalid secret key');
+      }
+      
+      // Validate SECRET_KEY is configured
+      if (!SECRET_KEY || typeof SECRET_KEY !== 'string') {
+        throw new Error('SECRET_KEY environment variable is not configured');
+      }
+      
+      // Use timing-safe comparison to prevent timing attacks
+      const secretBuffer = Buffer.from(secret);
+      const keyBuffer = Buffer.from(SECRET_KEY);
+      
+      // Ensure both buffers are same length before comparison
+      if (secretBuffer.length !== keyBuffer.length) {
+        throw new Error('Invalid secret key');
+      }
+      
+      if (!crypto.timingSafeEqual(secretBuffer, keyBuffer)) {
+        throw new Error('Invalid secret key');
+      }
+      
       await Delete({ name });
     },
   },

@@ -2,6 +2,7 @@ import { execSync } from 'child_process';
 import { Logger } from './logger.js';
 import { withRetry } from './retry-helper.js';
 import { isDirectoryEmpty } from './file-utils.js';
+import { validateRepositoryUrl, validateSafeString } from './security-validation.js';
 
 const MIN_SVN_MAJOR = 1;
 const MIN_SVN_MINOR = 9;
@@ -88,6 +89,11 @@ export const handleSvnRepo = async ({
   branch: string;
 }): Promise<boolean> => {
   checkSvn(true);
+  
+  // Validate inputs to prevent shell injection
+  validateRepositoryUrl(repo, 'Repository URL');
+  validateSafeString(branch, 'Branch name');
+  
   const url = buildSvnUrl(repo, branch);
 
   const isWc = isSvnWorkingCopy(dir);
@@ -175,6 +181,11 @@ export const relocateSvnRepo = async (
   branch: string
 ): Promise<void> => {
   checkSvn(true);
+  
+  // Validate inputs to prevent shell injection
+  validateRepositoryUrl(newUrl, 'Repository URL');
+  validateSafeString(branch, 'Branch name');
+  
   const fullUrl = buildSvnUrl(newUrl, branch);
 
   try {
@@ -196,6 +207,14 @@ export const relocateSvnRepo = async (
  */
 export const isSvnRepo = (url: string): boolean => {
   if (!checkSvn(false)) return false;
+  
+  try {
+    // Validate URL before using in shell command
+    validateRepositoryUrl(url, 'Repository URL');
+  } catch {
+    return false;
+  }
+  
   try {
     execSync(`svn info "${url}" --non-interactive`, {
       stdio: 'pipe',

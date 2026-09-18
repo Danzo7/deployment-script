@@ -10,6 +10,10 @@ import {
   isGroup,
   resolveLeafArgs,
 } from '../../../command-registry.js';
+import {
+  isCommandBlockedForRemote,
+  getBlockedCommandMessage,
+} from '../../../utils/remote-command-guard.js';
 
 // ─── Tokeniser ────────────────────────────────────────────────────────────────
 // Splits input respecting single/double quotes, e.g.:
@@ -273,10 +277,8 @@ export async function dispatch(tokens: string[]): Promise<void> {
   const REMOTE_USER = process.env.DM_REMOTE_USER;
   
   // Block sensitive commands from remote sessions entirely.
-  if (REMOTE_USER && REMOTE_BLOCKED_COMMANDS.has(cmdKey)) {
-    Logger.error(
-      `Command "${chalk.bold(cmdKey)}" is not allowed in a remote session. Run it locally on the server.`
-    );
+  if (REMOTE_USER && isCommandBlockedForRemote(cmdKey)) {
+    Logger.error(getBlockedCommandMessage(cmdKey));
     return;
   }
 
@@ -288,23 +290,8 @@ export async function dispatch(tokens: string[]): Promise<void> {
     return;
   }
 
-  if (node.cliOnly) {
-    Logger.error(
-      `Command "${chalk.bold(cmdKey)}" is only available via the CLI (\`dm ${cmdKey}\`), not the interactive shell.`
-    );
-    return;
-  }
-
   await runNode(node, isGroup(node) ? cmdKey : node.usage, rest);
 }
-
-// ─── Remote session restrictions ─────────────────────────────────────────────
-const REMOTE_BLOCKED_COMMANDS = new Set([
-  'remote',
-  'update',
-  'install-service',
-  'migrate-db',
-]);
 
 // ─── Remote command audit ─────────────────────────────────────────────────────
 const REMOTE_USER = process.env.DM_REMOTE_USER;

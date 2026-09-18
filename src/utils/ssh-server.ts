@@ -50,6 +50,10 @@ import {
   clearAttempts,
   auditLog,
 } from './remote-auth.js';
+import {
+  isCommandBlockedForRemote,
+  getBlockedCommandMessage,
+} from './remote-command-guard.js';
 
 // ── Public server event bus ───────────────────────────────────────────────────
 // Consumers (e.g. TUI) subscribe to get live updates without polling.
@@ -349,7 +353,18 @@ export async function startRemoteServer(port: number): Promise<void> {
     });
 
     client.on('ready', () => {
-      client.on('request', (_accept, reject) => reject && reject());
+      // Explicitly reject all global requests (port forwarding, X11, etc.)
+      client.on('request', (_accept, reject, name) => {
+        if (reject) {
+          auditLog({
+            event: 'global-request-blocked',
+            ip,
+            requestType: name,
+            identity: authedAs?.identity,
+          });
+          reject();
+        }
+      });
 
       client.on('session', (acceptSession) => {
         const session = acceptSession();
@@ -367,6 +382,17 @@ export async function startRemoteServer(port: number): Promise<void> {
 
         session.on('window-change', (_accept, _reject, info) => {
           activeSession?.child.resize(info.cols, info.rows);
+        });
+
+        // ── Block SFTP and other subsystems ──────────────────────────────────
+        session.on('subsystem', (accept, reject, info) => {
+          auditLog({
+            event: 'subsystem-blocked',
+            ip,
+            subsystem: info.name,
+            identity: authedAs?.identity,
+          });
+          if (reject) reject();
         });
 
         // ── Interactive REPL session ─────────────────────────────────────────
@@ -458,16 +484,10 @@ export async function startRemoteServer(port: number): Promise<void> {
           const identity = authedAs?.identity ?? 'unknown';
           const keyFingerprint = authedAs?.fingerprint ?? 'unknown';
 
-          // Block remote-management commands from exec sessions — same set
-          // enforced by the REPL dispatcher for interactive sessions.
-          const BLOCKED_EXEC_COMMANDS = new Set([
-            'remote',
-            'update',
-            'install-service',
-            'migrate-db',
-          ]);
+          // Block CLI-only commands from exec sessions using the same logic
+          // as the interactive REPL dispatcher.
           const topLevelCmd = args[0];
-          if (topLevelCmd && BLOCKED_EXEC_COMMANDS.has(topLevelCmd)) {
+          if (topLevelCmd && isCommandBlockedForRemote(topLevelCmd)) {
             const channel = acceptExec();
             auditLog({
               event: 'exec-blocked',
@@ -475,9 +495,7 @@ export async function startRemoteServer(port: number): Promise<void> {
               ...authedAs,
               command: info.command,
             });
-            channel.stderr.write(
-              `Command "${topLevelCmd}" is not allowed in a remote session.\n`
-            );
+            channel.stderr.write(getBlockedCommandMessage(topLevelCmd) + '\n');
             channel.exit(1);
             channel.end();
             return;

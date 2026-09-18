@@ -10,6 +10,7 @@ import { getHandler } from '../app-types/index.js';
 import { detectProjectType } from '../utils/app-type-detector.js';
 import { detectVcsType } from '../utils/vcs-helper.js';
 import { getCurrentUser } from '../utils/user-context.js';
+import { validateRepositoryUrl, validateSafeString } from '../utils/security-validation.js';
 import type { ProjectType } from '../app-types/index.js';
 import type { VcsType } from '../utils/vcs-helper.js';
 
@@ -31,6 +32,15 @@ export const init = async ({
   vcsType?: VcsType;
 }) => {
   if (!repo) throw new Error('Repository URL or local folder path is required.');
+
+  // Validate inputs to prevent shell injection attacks
+  validateSafeString(name, 'Application name');
+  validateSafeString(branch, 'Branch name');
+  
+  // For git/svn repos, validate the URL
+  if (!repo.startsWith('/') && !repo.startsWith('.')) {
+    validateRepositoryUrl(repo, 'Repository URL');
+  }
 
   const resolvedVcsType: VcsType = vcsType ?? await detectVcsType(repo);
   if (!vcsType) {

@@ -2,6 +2,7 @@ import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 import { changeRepoUrl } from '../utils/vcs-helper.js';
 import { ensureDirectories } from '../utils/file-utils.js';
+import { validateRepositoryUrl, validateSafeString } from '../utils/security-validation.js';
 
 export const changeRepo = async ({
   name,
@@ -14,6 +15,15 @@ export const changeRepo = async ({
 }) => {
   if (!newRepo && !newBranch) {
     throw new Error('At least one of repository URL or branch name is required.');
+  }
+
+  // Validate inputs to prevent shell injection attacks
+  validateSafeString(name, 'Application name');
+  if (newRepo) {
+    validateRepositoryUrl(newRepo, 'Repository URL');
+  }
+  if (newBranch) {
+    validateSafeString(newBranch, 'Branch name');
   }
 
   // Fetch the app from the database
