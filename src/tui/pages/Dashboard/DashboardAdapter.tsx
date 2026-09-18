@@ -23,6 +23,8 @@ export function DashboardAdapter(): React.ReactElement {
 
   const detailTickRef = useRef(0);
   const detailAbortRef = useRef<AbortController | null>(null);
+  const globalStateRef = useRef<GlobalState | null>(null);
+  globalStateRef.current = globalState;
 
   // Fast poll: global state
   useEffect(() => {
@@ -31,7 +33,7 @@ export function DashboardAdapter(): React.ReactElement {
     const poll = async () => {
       if (cancelled) return;
       try {
-        const next = await listApps(globalState);
+        const next = await listApps(globalStateRef.current);
         if (!cancelled) {
           setGlobalState(next);
           setLoading(false);
@@ -53,18 +55,21 @@ export function DashboardAdapter(): React.ReactElement {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [globalState]);
+  }, []); // Empty dependency array - runs once on mount
 
   // Detail poll: per-selected-app
   useEffect(() => {
-    if (!selectedAppName || !globalState) return;
+    if (!selectedAppName) return;
 
     let cancelled = false;
 
     const poll = async () => {
       if (cancelled) return;
 
-      const summary = globalState.summaries.find(
+      const currentGlobalState = globalStateRef.current;
+      if (!currentGlobalState) return;
+
+      const summary = currentGlobalState.summaries.find(
         (s) => s.app.name === selectedAppName
       );
       if (!summary) {
@@ -116,7 +121,7 @@ export function DashboardAdapter(): React.ReactElement {
         detailAbortRef.current = null;
       }
     };
-  }, [selectedAppName, globalState]);
+  }, [selectedAppName]); // Only depends on selectedAppName
 
   // Load app logs when logs tab is active
   useEffect(() => {
