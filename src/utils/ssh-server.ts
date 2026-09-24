@@ -620,12 +620,27 @@ export async function startRemoteServer(port: number): Promise<void> {
           /* ignore */
         }
       }
+      
+      // Explicitly close the client connection to prevent error propagation
+      try {
+        client.end();
+      } catch {
+        /* ignore if already closed */
+      }
     });
   });
 
+  // Start listening with proper error handling
   await new Promise<void>((res, rej) => {
     server.listen(port, BIND_ADDRESS, res);
-    server.on('error', rej);
+    // Only reject on startup errors (port in use, permission denied, etc.)
+    server.once('error', rej);
+  });
+
+  // Handle runtime server-level errors to prevent crashes
+  server.on('error', (err) => {
+    slog('error', `[remote] server error: ${err.message}`);
+    // Log but don't crash - server should continue running
   });
 
   const addr = server.address() as AddressInfo;
