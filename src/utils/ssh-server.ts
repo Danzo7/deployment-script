@@ -638,7 +638,7 @@ export async function startRemoteServer(port: number): Promise<void> {
   });
 
   // Handle runtime server-level errors to prevent crashes
-  server.on('error', (err) => {
+  server.on('error', (err: Error) => {
     slog('error', `[remote] server error: ${err.message}`);
     // Log but don't crash - server should continue running
   });
