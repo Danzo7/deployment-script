@@ -344,7 +344,7 @@ export async function startRemoteServer(port: number): Promise<void> {
       client.end();
       return;
     }
-    client.on('authentication', (ctx) => {
+    client.on('authentication', (ctx: any) => {
       if (ctx.method === 'publickey') {
         const match = findAuthorizedKeyByPublicSSH(ctx.key.data as Buffer);
         if (!match) {
@@ -389,7 +389,7 @@ export async function startRemoteServer(port: number): Promise<void> {
 
     client.on('ready', () => {
       // Explicitly reject all global requests (port forwarding, X11, etc.)
-      client.on('request', (_accept, reject, name) => {
+      client.on('request', (_accept: any, reject: any, name: any) => {
         if (reject) {
           auditLog({
             event: 'global-request-blocked',
@@ -401,26 +401,26 @@ export async function startRemoteServer(port: number): Promise<void> {
         }
       });
 
-      client.on('session', (acceptSession) => {
+      client.on('session', (acceptSession: any) => {
         const session = acceptSession();
         let ptyCols = 80;
         let ptyRows = 24;
         let ptyTerm = 'xterm-256color';
         let activeSession: ActiveSession | undefined;
 
-        session.on('pty', (acceptPty, _reject, info) => {
+        session.on('pty', (acceptPty: any, _reject: any, info: any) => {
           ptyCols = info.cols;
           ptyRows = info.rows;
           ptyTerm = (info as any).term ?? 'xterm-256color';
           if (acceptPty) acceptPty();
         });
 
-        session.on('window-change', (_accept, _reject, info) => {
+        session.on('window-change', (_accept: any, _reject: any, info: any) => {
           activeSession?.child.resize(info.cols, info.rows);
         });
 
         // ── Block SFTP and other subsystems ──────────────────────────────────
-        session.on('subsystem', (accept, reject, info) => {
+        session.on('subsystem', (accept: any, reject: any, info: any) => {
           auditLog({
             event: 'subsystem-blocked',
             ip,
@@ -431,7 +431,7 @@ export async function startRemoteServer(port: number): Promise<void> {
         });
 
         // ── Interactive REPL session ─────────────────────────────────────────
-        session.on('shell', (acceptShell) => {
+        session.on('shell', (acceptShell: any) => {
           const channel = acceptShell();
           const identity = authedAs?.identity ?? 'unknown';
           const keyFingerprint = authedAs?.fingerprint ?? 'unknown';
@@ -514,7 +514,7 @@ export async function startRemoteServer(port: number): Promise<void> {
         });
 
         // ── One-shot exec: `ssh -p 2022 host deploy myapp` ──────────────────
-        session.on('exec', (acceptExec, rejectExec, info) => {
+        session.on('exec', (acceptExec: any, rejectExec: any, info: any) => {
           const args = tokeniseShell(info.command);
           const identity = authedAs?.identity ?? 'unknown';
           const keyFingerprint = authedAs?.fingerprint ?? 'unknown';
@@ -636,7 +636,7 @@ export async function startRemoteServer(port: number): Promise<void> {
 
     // Kill the associated PTY on any client-level error so the process
     // doesn't linger after a network drop.
-    client.on('error', (err) => {
+    client.on('error', (err: any) => {
       slog('error', `[remote] client error (${ip}): ${err.message}`);
       // Create a snapshot of sessions to avoid modifying Set during iteration
       const sessionsToCleanup = Array.from(activeSessions).filter(
