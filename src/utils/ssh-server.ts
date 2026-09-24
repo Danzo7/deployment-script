@@ -133,6 +133,7 @@ interface ActiveSession {
   keyFingerprint: string;
   connectedAt: Date;
   sessionType: 'shell' | 'exec';
+  cleanupOnce?: (reason: string) => void;
 }
 
 const activeSessions = new Set<ActiveSession>();
@@ -320,6 +321,12 @@ export async function startRemoteServer(port: number): Promise<void> {
     }
   });
 
+  // Attach server error handler BEFORE listen() to prevent race condition
+  server.on('error', (err: Error) => {
+    slog('error', `[remote] server error: ${err.message}`);
+    // Log but don't crash - server should continue running
+  });
+
   // Extract client handling logic into a function
   function handleClient(client: any, info: any): void {
     const ip = info.ip ?? 'unknown';
@@ -403,6 +410,12 @@ export async function startRemoteServer(port: number): Promise<void> {
 
       client.on('session', (acceptSession: any) => {
         const session = acceptSession();
+        
+        // Add error handler to session to prevent crashes
+        session.on('error', (err: any) => {
+          slog('error', `[remote] session error: ${err.message}`);
+        });
+        
         let ptyCols = 80;
         let ptyRows = 24;
         let ptyTerm = 'xterm-256color';
@@ -433,6 +446,12 @@ export async function startRemoteServer(port: number): Promise<void> {
         // ── Interactive REPL session ─────────────────────────────────────────
         session.on('shell', (acceptShell: any) => {
           const channel = acceptShell();
+          
+          // Add error handler immediately to prevent crashes
+          channel.on('error', (err: any) => {
+            slog('error', `[remote] channel error: ${err.message}`);
+          });
+          
           const identity = authedAs?.identity ?? 'unknown';
           const keyFingerprint = authedAs?.fingerprint ?? 'unknown';
 
@@ -445,17 +464,23 @@ export async function startRemoteServer(port: number): Promise<void> {
               fingerprint: keyFingerprint,
               limit: MAX_SESSIONS_PER_KEY,
             });
-            channel.stderr?.write(
-              `Session limit reached for this key (max ${MAX_SESSIONS_PER_KEY}).\n`
-            );
-            channel.exit(1);
-            channel.end();
+            try {
+              channel.stderr?.write(
+                `Session limit reached for this key (max ${MAX_SESSIONS_PER_KEY}).\n`
+              );
+              channel.exit(1);
+              channel.end();
+            } catch {
+              /* ignore errors on already-closed channel */
+            }
             return;
           }
 
           auditLog({ event: 'shell-open', ip, ...authedAs });
 
           const child = spawnReplSession(ptyCols, ptyRows, ptyTerm, identity, 'shell');
+
+          let cleanedUp = false;
 
           const sess: ActiveSession = {
             id: generateSessionId(),
@@ -468,6 +493,19 @@ export async function startRemoteServer(port: number): Promise<void> {
             sessionType: 'shell',
             idleTimer: setTimeout(() => {}, 0), // placeholder; set properly below
           };
+
+          // Guard against double-kill: only kill the pty once, no matter which path gets there first
+          sess.cleanupOnce = (reason: string) => {
+            if (cleanedUp) return;
+            cleanedUp = true;
+            unregisterSession(sess);
+            try {
+              child.kill();
+            } catch {
+              /* already gone */
+            }
+          };
+
           registerSession(sess);
           resetIdleTimer(sess);
           slog(
@@ -476,22 +514,33 @@ export async function startRemoteServer(port: number): Promise<void> {
           );
 
           child.onData((data: string) => {
-            channel.write(data);
+            try {
+              channel.write(data);
+            } catch {
+              /* ignore write errors on closed channel */
+            }
             resetIdleTimer(sess);
           });
 
           channel.on('data', (data: Buffer) => {
-            child.write(data.toString('utf8'));
+            try {
+              child.write(data.toString('utf8'));
+            } catch {
+              /* ignore write errors if child already exited */
+            }
             resetIdleTimer(sess);
           });
 
-          let childExited = false;
-
           child.onExit(({ exitCode }: { exitCode: number }) => {
-            childExited = true;
+            // PTY exited on its own — don't kill it again, just mark as cleaned up
+            cleanedUp = true;
             unregisterSession(sess);
-            channel.exit(exitCode);
-            channel.end();
+            try {
+              channel.exit(exitCode);
+              channel.end();
+            } catch {
+              /* ignore errors on already-closed channel */
+            }
             auditLog({ event: 'shell-close', ip, ...authedAs, exitCode });
             slog(
               'info',
@@ -500,14 +549,7 @@ export async function startRemoteServer(port: number): Promise<void> {
           });
 
           channel.on('close', () => {
-            unregisterSession(sess);
-            if (!childExited) {
-              try {
-                child.kill();
-              } catch {
-                /* already gone */
-              }
-            }
+            sess.cleanupOnce?.('channel-close');
           });
 
           activeSession = sess;
@@ -524,15 +566,25 @@ export async function startRemoteServer(port: number): Promise<void> {
           const topLevelCmd = args[0];
           if (topLevelCmd && isCommandBlockedForRemote(topLevelCmd)) {
             const channel = acceptExec();
+            
+            // Add error handler immediately
+            channel.on('error', (err: any) => {
+              slog('error', `[remote] exec channel error: ${err.message}`);
+            });
+            
             auditLog({
               event: 'exec-blocked',
               ip,
               ...authedAs,
               command: info.command,
             });
-            channel.stderr.write(getBlockedCommandMessage(topLevelCmd) + '\n');
-            channel.exit(1);
-            channel.end();
+            try {
+              channel.stderr.write(getBlockedCommandMessage(topLevelCmd) + '\n');
+              channel.exit(1);
+              channel.end();
+            } catch {
+              /* ignore errors on already-closed channel */
+            }
             return;
           }
 
@@ -540,21 +592,37 @@ export async function startRemoteServer(port: number): Promise<void> {
           const keySessions = sessionsByKey.get(keyFingerprint) ?? 0;
           if (keySessions >= MAX_SESSIONS_PER_KEY) {
             const channel = acceptExec();
+            
+            // Add error handler immediately
+            channel.on('error', (err: any) => {
+              slog('error', `[remote] exec channel error: ${err.message}`);
+            });
+            
             auditLog({
               event: 'per-key-limit-reached',
               ip,
               fingerprint: keyFingerprint,
               limit: MAX_SESSIONS_PER_KEY,
             });
-            channel.stderr.write(
-              `Session limit reached for this key (max ${MAX_SESSIONS_PER_KEY}).\n`
-            );
-            channel.exit(1);
-            channel.end();
+            try {
+              channel.stderr.write(
+                `Session limit reached for this key (max ${MAX_SESSIONS_PER_KEY}).\n`
+              );
+              channel.exit(1);
+              channel.end();
+            } catch {
+              /* ignore errors on already-closed channel */
+            }
             return;
           }
 
           const channel = acceptExec();
+          
+          // Add error handler immediately
+          channel.on('error', (err: any) => {
+            slog('error', `[remote] exec channel error: ${err.message}`);
+          });
+          
           auditLog({ event: 'exec', ip, ...authedAs, command: info.command });
 
           const child = pty.spawn(
@@ -573,6 +641,8 @@ export async function startRemoteServer(port: number): Promise<void> {
             }
           );
 
+          let execCleanedUp = false;
+
           const sess: ActiveSession = {
             id: generateSessionId(),
             child,
@@ -584,37 +654,54 @@ export async function startRemoteServer(port: number): Promise<void> {
             sessionType: 'exec',
             idleTimer: setTimeout(() => {}, 0),
           };
+
+          // Guard against double-kill for exec sessions too
+          sess.cleanupOnce = (reason: string) => {
+            if (execCleanedUp) return;
+            execCleanedUp = true;
+            unregisterSession(sess);
+            try {
+              child.kill();
+            } catch {
+              /* already gone */
+            }
+          };
+
           registerSession(sess);
           resetIdleTimer(sess);
 
           child.onData((data: string) => {
-            channel.write(data);
+            try {
+              channel.write(data);
+            } catch {
+              /* ignore write errors on closed channel */
+            }
             resetIdleTimer(sess);
           });
 
           channel.on('data', (data: Buffer) => {
-            child.write(data.toString('utf8'));
+            try {
+              child.write(data.toString('utf8'));
+            } catch {
+              /* ignore write errors if child already exited */
+            }
             resetIdleTimer(sess);
           });
 
-          let execChildExited = false;
-
           child.onExit(({ exitCode }: { exitCode: number }) => {
-            execChildExited = true;
+            // PTY exited on its own — don't kill it again, just mark as cleaned up
+            execCleanedUp = true;
             unregisterSession(sess);
-            channel.exit(exitCode);
-            channel.end();
+            try {
+              channel.exit(exitCode);
+              channel.end();
+            } catch {
+              /* ignore errors on already-closed channel */
+            }
           });
 
           channel.on('close', () => {
-            unregisterSession(sess);
-            if (!execChildExited) {
-              try {
-                child.kill();
-              } catch {
-                /* already gone */
-              }
-            }
+            sess.cleanupOnce?.('channel-close');
           });
 
           activeSession = sess;
@@ -643,25 +730,12 @@ export async function startRemoteServer(port: number): Promise<void> {
         (s) => s.ip === ip
       );
       for (const s of sessionsToCleanup) {
-        unregisterSession(s);
-        try {
-          s.child.kill();
-        } catch {
-          /* ignore */
-        }
-        try {
-          s.channel.end();
-        } catch {
-          /* ignore */
-        }
+        // Use the guarded cleanup to prevent double-kill
+        s.cleanupOnce?.('client-error');
       }
       
-      // Explicitly close the client connection to prevent error propagation
-      try {
-        client.end();
-      } catch {
-        /* ignore if already closed */
-      }
+      // Don't explicitly call client.end() - let the client close naturally
+      // to avoid potential cascade errors. The 'close' event will fire anyway.
     });
   } // End of handleClient function
 
@@ -671,12 +745,6 @@ export async function startRemoteServer(port: number): Promise<void> {
     server.listen(port, BIND_ADDRESS, res);
     // Only reject on startup errors (port in use, permission denied, etc.)
     server.once('error', rej);
-  });
-
-  // Handle runtime server-level errors to prevent crashes
-  server.on('error', (err: Error) => {
-    slog('error', `[remote] server error: ${err.message}`);
-    // Log but don't crash - server should continue running
   });
 
   const addr = server.address() as AddressInfo;
