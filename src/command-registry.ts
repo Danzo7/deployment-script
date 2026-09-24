@@ -1333,7 +1333,7 @@ export const COMMANDS: Record<string, CommandNode> = {
         usage: '_start-worker',
         describe: 'Internal: worker process for daemon mode',
         group: 'Remote',
-        hidden: true,
+        cliOnly: true,
         options: {
           port: {
             type: 'number',
@@ -1570,7 +1570,7 @@ export const COMMANDS: Record<string, CommandNode> = {
         describe:
           '(deprecated: use key-add) Authorize a public key',
         group: 'Remote',
-        hidden: true,
+        cliOnly: true,
         handler: async () => {
           await remoteKeyAdd();
         },
@@ -1580,7 +1580,7 @@ export const COMMANDS: Record<string, CommandNode> = {
         usage: 'remove <username>',
         describe: '(deprecated: use key-remove) Revoke a key',
         group: 'Remote',
-        hidden: true,
+        cliOnly: true,
         positionals: [
           {
             name: 'username',
@@ -1596,7 +1596,7 @@ export const COMMANDS: Record<string, CommandNode> = {
         usage: 'list',
         describe: '(deprecated: use key-list) List keys',
         group: 'Remote',
-        hidden: true,
+        cliOnly: true,
         handler: async () => {
           await remoteKeyList();
         },
@@ -1629,30 +1629,6 @@ export const COMMANDS: Record<string, CommandNode> = {
         },
         handler: async ({ host, port, identity }) => {
           await remoteConnect(host, port, identity);
-        },
-      },
-    },
-  },
-
-      rename: {
-        kind: 'leaf',
-        usage: 'rename <old-username> <new-username>',
-        describe: 'Rename a user (updates the username in the authorized keys)',
-        group: 'Remote',
-        positionals: [
-          {
-            name: 'old-username',
-            demandOption: true,
-            describe: 'Current username to rename',
-          },
-          {
-            name: 'new-username',
-            demandOption: true,
-            describe: 'New username',
-          },
-        ],
-        handler: async ({ oldUsername, newUsername }) => {
-          await remoteRenameUser(oldUsername, newUsername);
         },
       },
     },
