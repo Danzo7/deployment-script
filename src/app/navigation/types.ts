@@ -20,7 +20,7 @@ export interface PageParamsMap {
   [PageId.HeaderEditor]:
     | { target: 'domain'; domainName: string }
     | { target: 'route'; domainName: string; location: string };
-  [PageId.RemoteServe]: { port: number };
+  [PageId.RemoteServe]: { port: number; legacyMode?: boolean };
   [PageId.DbCompare]: { dbName: string };
   [PageId.DbMigrate]: {
       name: string;

@@ -8,7 +8,10 @@ import {
   removeAuthorizedKeyByUsername,
   listAuthorizedKeys,
 } from '../utils/remote-auth.js';
-import { REMOTE_PORT } from '../constants.js';
+import { REMOTE_PORT, REMOTE_IPC_SOCKET_PATH } from '../constants.js';
+import { RemoteIpcClient } from '../utils/remote-ipc-client.js';
+import { PidManager } from '../utils/pid-manager.js';
+import { REMOTE_PID_FILE_PATH } from '../constants.js';
 
 /** Blocks key-management commands from running inside a remote session. */
 function assertNotRemoteSession(): void {
@@ -20,12 +23,62 @@ function assertNotRemoteSession(): void {
 }
 
 export async function remoteServe(port: number): Promise<void> {
+  // Check if server is running
+  const pidManager = new PidManager(REMOTE_PID_FILE_PATH);
+  const isRunning = pidManager.isValid();
+
+  if (!isRunning) {
+    Logger.warn('Remote server is not running.');
+    Logger.info(`  Start server: ${chalk.cyan('dm remote start')}`);
+    Logger.info(`  Or launch with server: ${chalk.cyan('dm remote start')} (then use ${chalk.cyan('dm remote status')} to view)`);
+    Logger.nl();
+    Logger.info(chalk.gray('Starting server inline for this session (legacy mode)...'));
+    Logger.nl();
+  }
+
   const { PageId } = await import('../app/navigation/types.js');
   const { launchPage } = await import('../app/navigation/launcher.js');
 
   await launchPage({
     pageId: PageId.RemoteServe,
-    params: { port },
+    params: { port, legacyMode: !isRunning },
+    fullScreen: true,
+  });
+}
+
+/**
+ * Show remote server status (TUI dashboard)
+ * This is the new recommended way to view server status
+ */
+export async function remoteStatus(): Promise<void> {
+  // Check if server is running
+  const pidManager = new PidManager(REMOTE_PID_FILE_PATH);
+  
+  if (!pidManager.isValid()) {
+    pidManager.cleanStale();
+    Logger.error('Remote server is not running');
+    Logger.info(`  Start server: ${chalk.cyan('dm remote start')}`);
+    process.exit(1);
+  }
+
+  // Verify IPC connectivity
+  try {
+    const client = new RemoteIpcClient(REMOTE_IPC_SOCKET_PATH);
+    await client.connect();
+    await client.ping();
+    client.disconnect();
+  } catch (err: any) {
+    Logger.error(`Cannot connect to remote server: ${err.message}`);
+    Logger.info(`  Try restarting: ${chalk.cyan('dm remote restart')}`);
+    process.exit(1);
+  }
+
+  const { PageId } = await import('../app/navigation/types.js');
+  const { launchPage } = await import('../app/navigation/launcher.js');
+
+  await launchPage({
+    pageId: PageId.RemoteServe,
+    params: { port: REMOTE_PORT, legacyMode: false },
     fullScreen: true,
   });
 }
@@ -93,11 +146,29 @@ export async function remoteKeyList(): Promise<void> {
   Logger.table(table.toString());
 }
 
-export async function remoteStatus(): Promise<void> {
+export async function remoteInfo(): Promise<void> {
   const keys = listAuthorizedKeys();
+  const pidManager = new PidManager(REMOTE_PID_FILE_PATH);
+  const isRunning = pidManager.isValid();
+
+  Logger.info(`Server status   : ${isRunning ? chalk.green('Running') : chalk.gray('Stopped')}`);
   Logger.info(`Authorized keys : ${chalk.bold(String(keys.length))}`);
   Logger.info(`Default port    : ${chalk.bold(String(REMOTE_PORT))}`);
   Logger.info(`Auth            : public key only`);
+  
+  if (isRunning) {
+    try {
+      const client = new RemoteIpcClient(REMOTE_IPC_SOCKET_PATH);
+      await client.connect();
+      const status = await client.getStatus();
+      client.disconnect();
+      
+      Logger.info(`Active sessions : ${chalk.bold(String(status.activeSessions))}`);
+      Logger.info(`Uptime          : ${chalk.bold(String(Math.floor(status.uptime / 1000)))}s`);
+    } catch {
+      /* ignore if can't get extra info */
+    }
+  }
 }
 
 export async function remoteRenameUser(oldUsername: string, newUsername: string): Promise<void> {

@@ -54,6 +54,8 @@ import {
   isCommandBlockedForRemote,
   getBlockedCommandMessage,
 } from './remote-command-guard.js';
+import { RemoteIpcServer } from './remote-ipc-server.js';
+import { REMOTE_IPC_SOCKET_PATH } from '../constants.js';
 
 // ── Public server event bus ───────────────────────────────────────────────────
 // Consumers (e.g. TUI) subscribe to get live updates without polling.
@@ -255,6 +257,11 @@ function spawnReplSession(
 // ── Graceful shutdown ─────────────────────────────────────────────────────────
 
 function drainAndExit(): void {
+  // Stop IPC server first
+  if (ipcServer) {
+    ipcServer.stop().catch(() => {/* ignore */});
+  }
+
   if (activeSessions.size === 0) {
     process.exit(0);
   }
@@ -278,6 +285,8 @@ function drainAndExit(): void {
 }
 
 // ── Server ────────────────────────────────────────────────────────────────────
+
+let ipcServer: RemoteIpcServer | null = null;
 
 export async function startRemoteServer(port: number): Promise<void> {
   const hostKey = loadOrCreateHostKey();
@@ -664,6 +673,57 @@ export async function startRemoteServer(port: number): Promise<void> {
   );
 
   serverEvents.emit('listening', BIND_ADDRESS, addr.port, fingerprint);
+
+  // ── Start IPC Server ──────────────────────────────────────────────────────
+  try {
+    ipcServer = new RemoteIpcServer(REMOTE_IPC_SOCKET_PATH);
+    
+    // Update IPC server with current status
+    ipcServer.updateStatus({
+      running: true,
+      bindAddress: BIND_ADDRESS,
+      port: addr.port,
+      fingerprint,
+    });
+
+    // Handle IPC requests
+    ipcServer.on('status-request', (callback: (sessions: SessionSnapshot[]) => void) => {
+      callback(getActiveSessions());
+    });
+
+    ipcServer.on('sessions-request', (callback: (sessions: SessionSnapshot[]) => void) => {
+      callback(getActiveSessions());
+    });
+
+    ipcServer.on('disconnect-request', (sessionId: string, callback: (success: boolean) => void) => {
+      const success = disconnectSession(sessionId);
+      callback(success);
+    });
+
+    ipcServer.on('shutdown-request', () => {
+      slog('info', '[remote] Shutdown requested via IPC');
+      drainAndExit();
+    });
+
+    // Forward server events to IPC clients
+    serverEvents.on('session-open', (session) => {
+      ipcServer?.broadcastEvent('session-open', session);
+    });
+
+    serverEvents.on('session-close', (sessionId) => {
+      ipcServer?.broadcastEvent('session-close', sessionId);
+    });
+
+    serverEvents.on('log', (level, message) => {
+      ipcServer?.broadcastEvent('log', { level, message });
+    });
+
+    await ipcServer.start();
+    slog('info', `[remote] IPC server started on ${REMOTE_IPC_SOCKET_PATH}`);
+  } catch (err: any) {
+    slog('warn', `[remote] Failed to start IPC server: ${err.message}`);
+    // Continue without IPC - not critical
+  }
 
   // Keep alive — process is managed by PM2.
   await new Promise<void>(() => {});

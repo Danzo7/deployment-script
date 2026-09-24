@@ -97,6 +97,11 @@ export const REMOTE_LOGIN_ATTEMPTS_PATH = path.join(
   'login_attempts.json'
 );
 export const REMOTE_AUDIT_LOG_PATH = path.join(REMOTE_DIR, 'audit.log');
+export const REMOTE_IPC_SOCKET_PATH = 
+  process.platform === 'win32'
+    ? '\\\\.\\pipe\\dm-remote'
+    : path.join(REMOTE_DIR, 'dm-remote.sock');
+export const REMOTE_PID_FILE_PATH = path.join(REMOTE_DIR, 'dm-remote.pid');
 export const REMOTE_KNOWN_HOSTS_PATH = path.join(
   REMOTE_DIR,
   'known_hosts.json'

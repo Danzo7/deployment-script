@@ -62,13 +62,20 @@ import { changeRepo } from './commands/change-repo.js';
 import { installService } from './commands/install-service.js';
 import {
   remoteServe,
+  remoteStatus,
+  remoteInfo,
   remoteKeyAdd,
   remoteKeyRemove,
   remoteKeyList,
-  remoteStatus,
   remoteConnect,
   remoteRenameUser,
 } from './commands/remote.js';
+import { remoteStart, remoteStartWorker } from './commands/remote-start.js';
+import { remoteStop } from './commands/remote-stop.js';
+import { remoteRestart } from './commands/remote-restart.js';
+import { remoteHealth } from './commands/remote-health.js';
+import { remoteInstallService } from './commands/remote-install-service.js';
+import { remoteLogs } from './commands/remote-logs.js';
 import { logClear } from './commands/log-clear.js';
 import { dbRegister } from './commands/db-register.js';
 import { dbList } from './commands/db-list.js';
@@ -1297,16 +1304,190 @@ export const COMMANDS: Record<string, CommandNode> = {
     group: 'Remote',
     cliOnly: true,
     subcommands: {
-      serve: {
+      start: {
         kind: 'leaf',
-        usage: 'serve',
-        describe: 'Start the dm SSH server in the foreground',
+        usage: 'start',
+        describe: 'Start the dm SSH server',
+        group: 'Remote',
+        options: {
+          port: {
+            alias: 'p',
+            type: 'number',
+            default: REMOTE_PORT,
+            describe: 'Port to listen on (default: REMOTE_PORT env var or 2022)',
+          },
+          daemon: {
+            alias: 'd',
+            type: 'boolean',
+            default: false,
+            describe: 'Run as background daemon',
+          },
+        },
+        handler: async ({ port, daemon }) => {
+          await remoteStart(port, daemon);
+        },
+      },
+
+      _start_worker: {
+        kind: 'leaf',
+        usage: '_start-worker',
+        describe: 'Internal: worker process for daemon mode',
+        group: 'Remote',
+        hidden: true,
+        options: {
+          port: {
+            type: 'number',
+            default: REMOTE_PORT,
+          },
+        },
+        handler: async ({ port }) => {
+          await remoteStartWorker(port);
+        },
+      },
+
+      stop: {
+        kind: 'leaf',
+        usage: 'stop',
+        describe: 'Stop the running dm SSH server',
+        group: 'Remote',
+        options: {
+          force: {
+            alias: 'f',
+            type: 'boolean',
+            default: false,
+            describe: 'Force stop (SIGKILL instead of graceful)',
+          },
+        },
+        handler: async ({ force }) => {
+          await remoteStop(force);
+        },
+      },
+
+      restart: {
+        kind: 'leaf',
+        usage: 'restart',
+        describe: 'Restart the dm SSH server',
+        group: 'Remote',
+        options: {
+          port: {
+            alias: 'p',
+            type: 'number',
+            default: REMOTE_PORT,
+            describe: 'Port to listen on',
+          },
+          daemon: {
+            alias: 'd',
+            type: 'boolean',
+            default: false,
+            describe: 'Run as background daemon',
+          },
+        },
+        handler: async ({ port, daemon }) => {
+          await remoteRestart(port, daemon);
+        },
+      },
+
+      status: {
+        kind: 'leaf',
+        usage: 'status',
+        describe: 'Show remote server dashboard (TUI)',
         group: 'Remote',
         streaming: true,
         interactive: true,
         page: {
           id: PageId.RemoteServe,
-          getParams: (argv) => ({ port: argv.port ?? REMOTE_PORT }),
+          getParams: () => ({ port: REMOTE_PORT, legacyMode: false }),
+        },
+        handler: async () => {
+          await remoteStatus();
+        },
+      },
+
+      health: {
+        kind: 'leaf',
+        usage: 'health',
+        describe: 'Health check for remote server (exit 0 if healthy)',
+        group: 'Remote',
+        options: {
+          quiet: {
+            alias: 'q',
+            type: 'boolean',
+            default: false,
+            describe: 'Suppress output',
+          },
+        },
+        handler: async ({ quiet }) => {
+          await remoteHealth(quiet);
+        },
+      },
+
+      info: {
+        kind: 'leaf',
+        usage: 'info',
+        describe: 'Show remote access configuration',
+        group: 'Remote',
+        handler: async () => {
+          await remoteInfo();
+        },
+      },
+
+      logs: {
+        kind: 'leaf',
+        usage: 'logs',
+        describe: 'View remote server logs',
+        group: 'Remote',
+        options: {
+          follow: {
+            alias: 'f',
+            type: 'boolean',
+            default: false,
+            describe: 'Follow log output (like tail -f)',
+          },
+          lines: {
+            alias: 'n',
+            type: 'number',
+            default: 50,
+            describe: 'Number of lines to show',
+          },
+        },
+        handler: async ({ follow, lines }) => {
+          await remoteLogs(follow, lines);
+        },
+      },
+
+      'install-service': {
+        kind: 'leaf',
+        usage: 'install-service',
+        describe: 'Install remote server as system service (systemd/Windows)',
+        group: 'Remote',
+        options: {
+          uninstall: {
+            type: 'boolean',
+            default: false,
+            describe: 'Uninstall the service',
+          },
+          port: {
+            alias: 'p',
+            type: 'number',
+            default: REMOTE_PORT,
+            describe: 'Port for the service to use',
+          },
+        },
+        handler: async ({ uninstall, port }) => {
+          await remoteInstallService({ uninstall, port });
+        },
+      },
+
+      serve: {
+        kind: 'leaf',
+        usage: 'serve',
+        describe: 'Start the dm SSH server (legacy: prefer "dm remote start")',
+        group: 'Remote',
+        streaming: true,
+        interactive: true,
+        page: {
+          id: PageId.RemoteServe,
+          getParams: (argv) => ({ port: argv.port ?? REMOTE_PORT, legacyMode: undefined }),
         },
         options: {
           port: {
@@ -1322,12 +1503,74 @@ export const COMMANDS: Record<string, CommandNode> = {
         },
       },
 
+      'key-add': {
+        kind: 'leaf',
+        usage: 'key-add',
+        describe:
+          'Authorize a public key for remote access (interactive)',
+        group: 'Remote',
+        handler: async () => {
+          await remoteKeyAdd();
+        },
+      },
+
+      'key-remove': {
+        kind: 'leaf',
+        usage: 'key-remove <username>',
+        describe: 'Revoke an authorized public key by username',
+        group: 'Remote',
+        positionals: [
+          {
+            name: 'username',
+            demandOption: true,
+            describe: 'The username whose key should be revoked',
+          },
+        ],
+        handler: async ({ username }) => {
+          await remoteKeyRemove(username);
+        },
+      },
+
+      'key-list': {
+        kind: 'leaf',
+        usage: 'key-list',
+        describe: 'List all authorized public keys',
+        group: 'Remote',
+        handler: async () => {
+          await remoteKeyList();
+        },
+      },
+
+      'key-rename': {
+        kind: 'leaf',
+        usage: 'key-rename <old-username> <new-username>',
+        describe: 'Rename a user in authorized keys',
+        group: 'Remote',
+        positionals: [
+          {
+            name: 'oldUsername',
+            demandOption: true,
+            describe: 'Current username',
+          },
+          {
+            name: 'newUsername',
+            demandOption: true,
+            describe: 'New username',
+          },
+        ],
+        handler: async ({ oldUsername, newUsername }) => {
+          await remoteRenameUser(oldUsername, newUsername);
+        },
+      },
+
+      // Legacy aliases for backward compatibility
       add: {
         kind: 'leaf',
         usage: 'add',
         describe:
-          'Authorize a public key for remote access (interactive: prompts for username then key). Clients can get their public key with: ssh-keygen -y -f ~/.ssh/id_ed25519',
+          '(deprecated: use key-add) Authorize a public key',
         group: 'Remote',
+        hidden: true,
         handler: async () => {
           await remoteKeyAdd();
         },
@@ -1335,14 +1578,13 @@ export const COMMANDS: Record<string, CommandNode> = {
       remove: {
         kind: 'leaf',
         usage: 'remove <username>',
-        describe: 'Revoke an authorized public key by username',
+        describe: '(deprecated: use key-remove) Revoke a key',
         group: 'Remote',
+        hidden: true,
         positionals: [
           {
             name: 'username',
             demandOption: true,
-            describe:
-              'The username whose key should be revoked (see "dm remote list")',
           },
         ],
         handler: async ({ username }) => {
@@ -1352,19 +1594,11 @@ export const COMMANDS: Record<string, CommandNode> = {
       list: {
         kind: 'leaf',
         usage: 'list',
-        describe: 'List all authorized public keys',
+        describe: '(deprecated: use key-list) List keys',
         group: 'Remote',
+        hidden: true,
         handler: async () => {
           await remoteKeyList();
-        },
-      },
-      status: {
-        kind: 'leaf',
-        usage: 'status',
-        describe: 'Show remote access configuration (keys, port)',
-        group: 'Remote',
-        handler: async () => {
-          await remoteStatus();
         },
       },
 
@@ -1377,7 +1611,7 @@ export const COMMANDS: Record<string, CommandNode> = {
           {
             name: 'host',
             demandOption: true,
-            describe: 'Host to connect to (e.g. user@example.com or just example.com)',
+            describe: 'Host to connect to (e.g. user@example.com)',
           },
         ],
         options: {
@@ -1390,13 +1624,15 @@ export const COMMANDS: Record<string, CommandNode> = {
           identity: {
             alias: 'i',
             type: 'string',
-            describe: 'Key type to use: ed25519, ed25519_sk, ecdsa, ecdsa_sk, rsa (default: auto-resolve)',
+            describe: 'Key type to use: ed25519, ed25519_sk, ecdsa, ecdsa_sk, rsa',
           },
         },
         handler: async ({ host, port, identity }) => {
           await remoteConnect(host, port, identity);
         },
       },
+    },
+  },
 
       rename: {
         kind: 'leaf',

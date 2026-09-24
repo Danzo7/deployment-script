@@ -9,9 +9,10 @@ import {
   getActiveSessions,
   disconnectSession,
 } from '../../../utils/ssh-server.js';
+import { RemoteIpcClient } from '../../../utils/remote-ipc-client.js';
 import type { SessionSnapshot } from '../../../utils/ssh-server.js';
 import { RemoteServeDashboard, type LogEntry } from './index.js';
-import { REMOTE_AUDIT_LOG_PATH } from '../../../constants.js';
+import { REMOTE_AUDIT_LOG_PATH, REMOTE_IPC_SOCKET_PATH } from '../../../constants.js';
 
 const MAX_LOG = 200;
 
@@ -22,11 +23,12 @@ interface ServerInfo {
 }
 
 export function RemoteServeAdapter(): React.ReactElement {
-  const { port } = usePageParams<PageId.RemoteServe>();
+  const { port, legacyMode = false } = usePageParams<PageId.RemoteServe>();
   const exit = usePageExit();
   const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null);
   const [sessions, setSessions] = useState<SessionSnapshot[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [ipcClient, setIpcClient] = useState<RemoteIpcClient | null>(null);
 
   const addLog = useCallback((level: LogEntry['level'], message: string) => {
     setLogs((prev) => {
@@ -35,8 +37,19 @@ export function RemoteServeAdapter(): React.ReactElement {
     });
   }, []);
 
-  // Start server on mount
+  // Start server or connect via IPC
   useEffect(() => {
+    if (legacyMode) {
+      // Legacy mode: start server inline (old behavior)
+      return startLegacyMode();
+    } else {
+      // New mode: connect to running server via IPC
+      return startIpcMode();
+    }
+  }, [port, legacyMode, addLog]);
+
+  // Legacy mode: Start server inline
+  function startLegacyMode() {
     let serverPromise: Promise<void> | null = null;
 
     const onLog = (level: LogEntry['level'], message: string) =>
@@ -67,7 +80,61 @@ export function RemoteServeAdapter(): React.ReactElement {
         });
       }
     };
-  }, [port, addLog]);
+  }
+
+  // IPC mode: Connect to existing server
+  function startIpcMode() {
+    const client = new RemoteIpcClient(REMOTE_IPC_SOCKET_PATH);
+
+    // Handle events from server
+    client.on('log', (data: { level: LogEntry['level']; message: string }) => {
+      addLog(data.level, data.message);
+    });
+
+    client.on('session-open', () => {
+      // Refresh sessions
+      client.getSessions().then(setSessions).catch(() => {});
+    });
+
+    client.on('session-close', () => {
+      // Refresh sessions
+      client.getSessions().then(setSessions).catch(() => {});
+    });
+
+    client.on('disconnected', () => {
+      addLog('error', 'Lost connection to server');
+    });
+
+    client.on('error', (err: Error) => {
+      addLog('error', `IPC error: ${err.message}`);
+    });
+
+    // Connect and fetch initial state
+    client
+      .connect()
+      .then(async () => {
+        const status = await client.getStatus();
+        setServerInfo({
+          bindAddress: status.bindAddress,
+          port: status.port,
+          fingerprint: status.fingerprint,
+        });
+
+        const sessions = await client.getSessions();
+        setSessions(sessions);
+
+        addLog('success', 'Connected to remote server');
+      })
+      .catch((err: Error) => {
+        addLog('error', `Failed to connect: ${err.message}`);
+      });
+
+    setIpcClient(client);
+
+    return () => {
+      client.disconnect();
+    };
+  }
 
   // Tail audit log
   useEffect(() => {
@@ -109,14 +176,21 @@ export function RemoteServeAdapter(): React.ReactElement {
   }, [addLog]);
 
   const handleDisconnect = useCallback((id: string) => {
-    disconnectSession(id);
-  }, []);
+    if (ipcClient) {
+      ipcClient.disconnectSession(id);
+    } else {
+      disconnectSession(id);
+    }
+  }, [ipcClient]);
 
   const handleQuit = useCallback(() => {
-    // Signal handler in ssh-server will drain sessions
-    process.emit('SIGTERM' as any);
+    if (legacyMode) {
+      // In legacy mode, signal server shutdown
+      process.emit('SIGTERM' as any);
+    }
+    // In IPC mode, just exit TUI (server keeps running)
     exit();
-  }, [exit]);
+  }, [exit, legacyMode]);
 
   if (!serverInfo) {
     return <></>;
