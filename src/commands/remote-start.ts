@@ -36,17 +36,27 @@ async function isServerRunning(): Promise<boolean> {
     return false;
   }
 
-  // Verify via IPC
-  try {
-    const client = new RemoteIpcClient(REMOTE_IPC_SOCKET_PATH);
-    await client.connect();
-    const canPing = await client.ping();
-    client.disconnect();
-    return canPing;
-  } catch {
-    // IPC failed but process exists - might be starting up or broken
-    return pidManager.isProcessRunning();
+  // Verify via IPC with retries (server might be starting up)
+  const maxRetries = 5;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const client = new RemoteIpcClient(REMOTE_IPC_SOCKET_PATH);
+      await client.connect();
+      const canPing = await client.ping();
+      client.disconnect();
+      if (canPing) {
+        return true;
+      }
+    } catch {
+      // IPC not ready yet, wait and retry
+      if (i < maxRetries - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
   }
+
+  // IPC failed but process exists - assume it's starting up
+  return pidManager.isProcessRunning();
 }
 
 /**
@@ -114,8 +124,8 @@ async function startDaemon(port: number): Promise<void> {
   fs.closeSync(out);
   fs.closeSync(err);
 
-  // Wait a moment for the process to initialize
-  await new Promise((resolve) => setTimeout(resolve, 1500));
+  // Wait for the process to initialize (increased time for IPC setup)
+  await new Promise((resolve) => setTimeout(resolve, 2500));
 
   // Verify it started
   const running = await isServerRunning();
