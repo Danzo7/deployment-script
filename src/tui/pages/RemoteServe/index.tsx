@@ -43,6 +43,16 @@ export function RemoteServeDashboard({
   const { cursor, setCursor } = useCursor(0);
   const [confirm, setConfirm] = useState<string | null>(null);
   const [logOffset, setLogOffset] = useState(0);
+  const [, setTick] = useState(0);
+
+  // Force re-render every second to update elapsed time
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTick((t) => t + 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   // Keep cursor in bounds
   useEffect(() => {
