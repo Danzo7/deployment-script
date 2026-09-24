@@ -31,12 +31,19 @@ async function isServerRunning(): Promise<boolean> {
   const pidManager = new PidManager(REMOTE_PID_FILE_PATH);
   
   // Check PID file first
-  if (!pidManager.isValid()) {
+  const pidExists = pidManager.readPid();
+  if (!pidExists) {
+    // No PID file at all
+    return false;
+  }
+
+  const isRunning = pidManager.isProcessRunning();
+  if (!isRunning) {
     pidManager.cleanStale();
     return false;
   }
 
-  // Verify via IPC with retries (server might be starting up)
+  // Process is running - IPC might not be ready yet, try with retries
   const maxRetries = 5;
   for (let i = 0; i < maxRetries; i++) {
     try {
@@ -55,8 +62,8 @@ async function isServerRunning(): Promise<boolean> {
     }
   }
 
-  // IPC failed but process exists - assume it's starting up
-  return pidManager.isProcessRunning();
+  // IPC failed but process is running - trust the PID
+  return isRunning;
 }
 
 /**
@@ -124,20 +131,24 @@ async function startDaemon(port: number): Promise<void> {
   fs.closeSync(out);
   fs.closeSync(err);
 
-  // Wait for the process to initialize (increased time for IPC setup)
-  await new Promise((resolve) => setTimeout(resolve, 2500));
+  // Wait for the process to initialize and write PID file
+  await new Promise((resolve) => setTimeout(resolve, 4000));
 
-  // Verify it started
-  const running = await isServerRunning();
+  // Verify it started - simplified check
+  const pidManager = new PidManager(REMOTE_PID_FILE_PATH);
+  const running = pidManager.isProcessRunning();
+  
   if (running) {
     Logger.success(chalk.green('✔ Remote server started successfully'));
     Logger.info(`  Port    : ${chalk.bold(String(port))}`);
+    Logger.info(`  PID     : ${chalk.bold(String(pidManager.readPid()))}`);
     Logger.info(`  Logs    : ${chalk.cyan(logFile)}`);
     Logger.info(`  Status  : ${chalk.cyan('dm remote status')}`);
     Logger.info(`  Stop    : ${chalk.cyan('dm remote stop')}`);
   } else {
     Logger.error('Failed to start remote server');
     Logger.info(`  Check logs: ${chalk.cyan(logFile)}`);
+    Logger.info(`  PID file: ${REMOTE_PID_FILE_PATH}`);
     process.exit(1);
   }
 }
