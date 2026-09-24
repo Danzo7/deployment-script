@@ -93,12 +93,30 @@ export function RemoteServeAdapter(): React.ReactElement {
 
     client.on('session-open', () => {
       // Refresh sessions
-      client.getSessions().then(setSessions).catch(() => {});
+      client.getSessions()
+        .then((sessions) => {
+          // Convert connectedAt strings back to Date objects
+          const parsedSessions = sessions.map(s => ({
+            ...s,
+            connectedAt: new Date(s.connectedAt),
+          }));
+          setSessions(parsedSessions);
+        })
+        .catch(() => {});
     });
 
     client.on('session-close', () => {
       // Refresh sessions
-      client.getSessions().then(setSessions).catch(() => {});
+      client.getSessions()
+        .then((sessions) => {
+          // Convert connectedAt strings back to Date objects
+          const parsedSessions = sessions.map(s => ({
+            ...s,
+            connectedAt: new Date(s.connectedAt),
+          }));
+          setSessions(parsedSessions);
+        })
+        .catch(() => {});
     });
 
     client.on('disconnected', () => {
@@ -121,7 +139,12 @@ export function RemoteServeAdapter(): React.ReactElement {
         });
 
         const sessions = await client.getSessions();
-        setSessions(sessions);
+        // Convert connectedAt strings back to Date objects
+        const parsedSessions = sessions.map(s => ({
+          ...s,
+          connectedAt: new Date(s.connectedAt),
+        }));
+        setSessions(parsedSessions);
 
         addLog('success', 'Connected to remote server');
       })

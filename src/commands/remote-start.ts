@@ -4,7 +4,7 @@
 // Can run in foreground (with live logs) or daemon mode (background).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { fork } from 'child_process';
+import { fork, spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -96,10 +96,10 @@ async function startDaemon(port: number): Promise<void> {
   const out = fs.openSync(logFile, 'a');
   const err = fs.openSync(logFile, 'a');
 
-  // Fork a detached child process with log redirection
-  const child = fork(
-    scriptPath,
-    ['remote', '_start-worker', '--port', String(port)],
+  // Use spawn instead of fork for fully detached process
+  const child = spawn(
+    process.execPath,
+    [scriptPath, 'remote', '_start-worker', '--port', String(port)],
     {
       detached: true,
       stdio: ['ignore', out, err],
@@ -115,7 +115,7 @@ async function startDaemon(port: number): Promise<void> {
   fs.closeSync(err);
 
   // Wait a moment for the process to initialize
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+  await new Promise((resolve) => setTimeout(resolve, 1500));
 
   // Verify it started
   const running = await isServerRunning();

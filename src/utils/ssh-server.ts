@@ -292,10 +292,36 @@ export async function startRemoteServer(port: number): Promise<void> {
   const hostKey = loadOrCreateHostKey();
   const fingerprint = fingerprintHostKey(hostKey);
 
+  // Global error handlers to prevent process crashes
+  process.on('uncaughtException', (err) => {
+    slog('error', `[remote] Uncaught exception: ${err.message}`);
+    // Don't exit - log and continue
+  });
+
+  process.on('unhandledRejection', (reason: any) => {
+    slog('error', `[remote] Unhandled rejection: ${reason?.message ?? reason}`);
+    // Don't exit - log and continue
+  });
+
   process.on('SIGTERM', drainAndExit);
   process.on('SIGINT', drainAndExit);
 
   const server = new Server({ hostKeys: [hostKey] }, (client, info) => {
+    // Wrap entire handler in try-catch to prevent any uncaught errors
+    try {
+      handleClient(client, info);
+    } catch (err: any) {
+      slog('error', `[remote] Error in client handler: ${err.message}`);
+      try {
+        client.end();
+      } catch {
+        /* ignore */
+      }
+    }
+  });
+
+  // Extract client handling logic into a function
+  function handleClient(client: any, info: any): void {
     const ip = info.ip ?? 'unknown';
     let authedAs:
       | { method: string; identity: string; fingerprint: string }
@@ -637,7 +663,8 @@ export async function startRemoteServer(port: number): Promise<void> {
         /* ignore if already closed */
       }
     });
-  });
+  } // End of handleClient function
+
 
   // Start listening with proper error handling
   await new Promise<void>((res, rej) => {
