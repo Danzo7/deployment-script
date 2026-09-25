@@ -1,39 +1,4 @@
 using DmConnect;
-using System.Text.Json;
-
-// ── Last-connection config ────────────────────────────────────────────────────
-
-static string ConfigPath() =>
-    Path.Combine(Path.GetTempPath(), "dm-connect.json");
-
-static (string? host, int port) LoadLastConfig()
-{
-    try
-    {
-        var path = ConfigPath();
-        if (!File.Exists(path)) return (null, 2022);
-        var json = File.ReadAllText(path);
-        var doc  = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-        var h    = root.TryGetProperty("host", out var hp) ? hp.GetString() : null;
-        var p    = root.TryGetProperty("port", out var pp) && pp.TryGetInt32(out var pv) ? pv : 2022;
-        return (h, p);
-    }
-    catch { return (null, 2022); }
-}
-
-static void SaveLastConfig(string host, int port)
-{
-    try
-    {
-        var path = ConfigPath();
-        var json = JsonSerializer.Serialize(new LastConfig(host, port), AppJsonContext.Default.LastConfig);
-        File.WriteAllText(path, json);
-    }
-    catch (Exception ex)
-    {
-    }
-}
 
 // ── Argument parsing ──────────────────────────────────────────────────────────
 
@@ -109,54 +74,23 @@ for (int i = 0; i < args.Length; i++)
 
 if (host is null)
 {
-    // If no args were given at all, we're likely double-clicked — prompt interactively.
+    // If no args were given at all, prompt interactively with server selection
     if (args.Length == 0)
     {
-        var (lastHost, lastPort) = LoadLastConfig();
-        port = lastPort;
+        var selectedServer = ServerManager.SelectServer();
+        
+        if (selectedServer is null)
+        {
+            Console.WriteLine("  Press any key to exit...");
+            Console.ReadKey(intercept: true);
+            return 1;
+        }
 
+        host = selectedServer.host;
+        port = selectedServer.port;
+        
         Console.WriteLine();
-        UI.Info("dm-connect — dm remote client");
-        Console.WriteLine();
-        Console.ForegroundColor = ConsoleColor.White;
-        if (lastHost is not null)
-            Console.Write($"  Server host [default: {lastHost}]: ");
-        else
-            Console.Write("  Server host (IP or hostname): ");
-        Console.ResetColor();
-        var hostInput = Console.ReadLine()?.Trim();
-
-        if (string.IsNullOrEmpty(hostInput))
-        {
-            if (lastHost is null)
-            {
-                UI.Error("No host entered.");
-                Console.WriteLine("  Press any key to exit...");
-                Console.ReadKey(intercept: true);
-                return 1;
-            }
-            host = lastHost;
-        }
-        else
-        {
-            host = hostInput;
-        }
-
-        Console.ForegroundColor = ConsoleColor.White;
-        Console.Write($"  Port [default: {port}]: ");
-        Console.ResetColor();
-        var portInput = Console.ReadLine()?.Trim();
-        if (!string.IsNullOrEmpty(portInput))
-        {
-            if (!int.TryParse(portInput, out port))
-            {
-                UI.Error("Invalid port number.");
-                Console.WriteLine("  Press any key to exit...");
-                Console.ReadKey(intercept: true);
-                return 1;
-            }
-        }
-
+        UI.Info($"Connecting to '{selectedServer.name}' ({host}:{port})...");
     }
     else
     {
@@ -176,34 +110,63 @@ string? keyPath = KeyManager.Resolve(identity);
 if (keyPath is null)
     return 0; // user declined generation, message already printed
 
+// Save server name if it's from interactive mode
+string? serverName = null;
 if (args.Length == 0)
 {
-    SaveLastConfig(host, port);
+    var saved = ServerManager.Load();
+    var server = saved.servers.FirstOrDefault(s => s.host == host && s.port == port);
+    serverName = server?.name;
 }
 
-int exitCode = SshSession.Connect(host, port, keyPath, command.Count > 0 ? command.ToArray() : null);
+int exitCode = 0;
+bool retry = true;
 
-// Save config after successful interactive session
-
-
-if (exitCode == 255)
+while (retry)
 {
-    Console.WriteLine();
-    UI.Error("Connection failed. Possible causes:");
-    Console.ForegroundColor = ConsoleColor.Gray;
-    Console.WriteLine($"  - Server is not reachable at {host}:{port}");
-    Console.WriteLine("  - Your public key is not authorized on the server");
-    Console.ResetColor();
-    Console.WriteLine();
-    KeyManager.ShowPublicKey(keyPath);
-    UI.Info("Share the public key above with your server admin, then try again.");
+    exitCode = SshSession.Connect(host, port, keyPath, command.Count > 0 ? command.ToArray() : null);
 
-    if (args.Length == 0)
+    if (exitCode == 255)
     {
-        Console.WriteLine("  Press any key to exit...");
-        Console.ReadKey(intercept: true);
+        Console.WriteLine();
+        UI.Error("Connection failed. Possible causes:");
+        Console.ForegroundColor = ConsoleColor.Gray;
+        Console.WriteLine($"  - Server is not reachable at {host}:{port}");
+        Console.WriteLine("  - Your public key is not authorized on the server");
+        Console.ResetColor();
+        Console.WriteLine();
+        KeyManager.ShowPublicKey(keyPath);
+        UI.Info("Share the public key above with your server admin.");
+
+        if (args.Length == 0)
+        {
+            Console.WriteLine();
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.Write("  Press Enter to retry or any other key to exit... ");
+            Console.ResetColor();
+            
+            var key = Console.ReadKey(intercept: true);
+            Console.WriteLine();
+            
+            if (key.Key == ConsoleKey.Enter)
+            {
+                Console.WriteLine();
+                UI.Info("Retrying connection...");
+                Console.WriteLine();
+                continue;
+            }
+        }
+        return 1;
     }
-    return 1;
+    
+    // Connection succeeded or exit code is not connection failure
+    retry = false;
+}
+
+// Update last connected server on successful connection
+if (exitCode == 0 && serverName is not null)
+{
+    ServerManager.UpdateLastConnected(serverName);
 }
 
 if (args.Length == 0)
