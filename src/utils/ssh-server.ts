@@ -210,7 +210,12 @@ function resetIdleTimer(session: ActiveSession): void {
       ip: session.ip,
       identity: session.identity,
     });
-    session.child.kill();
+    try {
+      // Gracefully kill PTY - wrap to prevent node-pty crashes on Windows
+      session.child.kill();
+    } catch (err: any) {
+      // Ignore node-pty AttachConsole errors on Windows
+    }
     try {
       session.channel.end();
     } catch {
@@ -242,17 +247,23 @@ function spawnReplSession(
   identity: string,
   sessionType: 'shell' | 'exec'
 ): IPty {
-  return pty.spawn(process.execPath, [resolveDmEntrypoint()], {
-    name: term || 'xterm-256color',
-    cols: cols || 80,
-    rows: rows || 24,
-    cwd: ROOT_DIR,
-    env: {
-      ...(process.env as Record<string, string>),
-      DM_REMOTE_USER: identity,
-      DM_REMOTE_SESSION_TYPE: sessionType,
-    },
-  });
+  try {
+    return pty.spawn(process.execPath, [resolveDmEntrypoint()], {
+      name: term || 'xterm-256color',
+      cols: cols || 80,
+      rows: rows || 24,
+      cwd: ROOT_DIR,
+      env: {
+        ...(process.env as Record<string, string>),
+        DM_REMOTE_USER: identity,
+        DM_REMOTE_SESSION_TYPE: sessionType,
+      },
+    });
+  } catch (err: any) {
+    // Log error but rethrow - caller needs to handle spawn failure
+    slog('error', `[remote] Failed to spawn PTY: ${err.message}`);
+    throw err;
+  }
 }
 
 // ── Graceful shutdown ─────────────────────────────────────────────────────────
@@ -271,9 +282,10 @@ function drainAndExit(): void {
   );
   for (const s of activeSessions) {
     try {
+      // Gracefully kill PTY - wrap to prevent node-pty crashes on Windows
       s.child.kill();
-    } catch {
-      /* ignore */
+    } catch (err: any) {
+      // Ignore node-pty AttachConsole errors on Windows
     }
     try {
       s.channel.end();
@@ -478,7 +490,20 @@ export async function startRemoteServer(port: number): Promise<void> {
 
           auditLog({ event: 'shell-open', ip, ...authedAs });
 
-          const child = spawnReplSession(ptyCols, ptyRows, ptyTerm, identity, 'shell');
+          let child: IPty;
+          try {
+            child = spawnReplSession(ptyCols, ptyRows, ptyTerm, identity, 'shell');
+          } catch (err: any) {
+            // Failed to spawn PTY - notify client and abort
+            try {
+              channel.stderr?.write(`Failed to start session: ${err.message}\n`);
+              channel.exit(1);
+              channel.end();
+            } catch {
+              /* ignore errors on already-closed channel */
+            }
+            return;
+          }
 
           let cleanedUp = false;
 
@@ -500,9 +525,11 @@ export async function startRemoteServer(port: number): Promise<void> {
             cleanedUp = true;
             unregisterSession(sess);
             try {
+              // Gracefully kill PTY - wrap in try-catch to prevent node-pty crashes on Windows
               child.kill();
-            } catch {
-              /* already gone */
+            } catch (err: any) {
+              // Ignore errors - node-pty on Windows can throw AttachConsole errors during cleanup
+              // This is a known issue with ConPTY on Windows when the console is already detached
             }
           };
 
@@ -625,21 +652,34 @@ export async function startRemoteServer(port: number): Promise<void> {
           
           auditLog({ event: 'exec', ip, ...authedAs, command: info.command });
 
-          const child = pty.spawn(
-            process.execPath,
-            [resolveDmEntrypoint(), ...args],
-            {
-              name: ptyTerm || 'xterm-256color',
-              cols: ptyCols || 80,
-              rows: ptyRows || 24,
-              cwd: ROOT_DIR,
-              env: {
-                ...(process.env as Record<string, string>),
-                DM_REMOTE_USER: identity,
-                DM_REMOTE_SESSION_TYPE: 'exec',
-              },
+          let child: IPty;
+          try {
+            child = pty.spawn(
+              process.execPath,
+              [resolveDmEntrypoint(), ...args],
+              {
+                name: ptyTerm || 'xterm-256color',
+                cols: ptyCols || 80,
+                rows: ptyRows || 24,
+                cwd: ROOT_DIR,
+                env: {
+                  ...(process.env as Record<string, string>),
+                  DM_REMOTE_USER: identity,
+                  DM_REMOTE_SESSION_TYPE: 'exec',
+                },
+              }
+            );
+          } catch (err: any) {
+            // Failed to spawn PTY - notify client and abort
+            try {
+              channel.stderr.write(`Failed to execute command: ${err.message}\n`);
+              channel.exit(1);
+              channel.end();
+            } catch {
+              /* ignore errors on already-closed channel */
             }
-          );
+            return;
+          }
 
           let execCleanedUp = false;
 
@@ -661,9 +701,11 @@ export async function startRemoteServer(port: number): Promise<void> {
             execCleanedUp = true;
             unregisterSession(sess);
             try {
+              // Gracefully kill PTY - wrap in try-catch to prevent node-pty crashes on Windows
               child.kill();
-            } catch {
-              /* already gone */
+            } catch (err: any) {
+              // Ignore errors - node-pty on Windows can throw AttachConsole errors during cleanup
+              // This is a known issue with ConPTY on Windows when the console is already detached
             }
           };
 

@@ -6,6 +6,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 
 export class PidManager {
   private pidFilePath: string;
@@ -59,18 +60,49 @@ export class PidManager {
   }
 
   /**
-   * Check if the PID in the file is still running
+   * Check if the PID in the file is still running (Windows-aware)
    */
   isProcessRunning(): boolean {
     const pid = this.readPid();
     if (!pid) return false;
 
+    // Windows-specific check
+    if (process.platform === 'win32') {
+      return this.isProcessRunningWindows(pid);
+    }
+
+    // Unix/Linux check using signal 0
     try {
       // Signal 0 doesn't kill the process, just checks if it exists
       process.kill(pid, 0);
       return true;
     } catch {
       // Process doesn't exist or we don't have permission
+      return false;
+    }
+  }
+
+  /**
+   * Windows-specific process check using tasklist
+   */
+  private isProcessRunningWindows(pid: number): boolean {
+    try {
+      // Use tasklist to check if PID exists
+      // /FI filters by PID, /NH removes header
+      const output = execSync(
+        `tasklist /FI "PID eq ${pid}" /NH`,
+        {
+          encoding: 'utf8',
+          stdio: ['pipe', 'pipe', 'ignore'], // Suppress stderr
+          timeout: 2000, // 2 second timeout
+        }
+      );
+
+      // If process exists, output will contain the PID
+      // If not, output will be "INFO: No tasks are running which match the specified criteria."
+      return output.includes(String(pid));
+    } catch {
+      // Command failed - assume process doesn't exist
       return false;
     }
   }
