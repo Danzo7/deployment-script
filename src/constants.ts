@@ -7,12 +7,16 @@ import dotenv from 'dotenv';
 // ============================================================================
 // PATH RESOLUTION STRATEGY
 // ============================================================================
-// dm uses ~/.dm/ as its data directory by default (cross-platform).
-// This allows npm installation without polluting node_modules.
+// dm uses a system-wide data directory by default:
+//   Windows: C:\ProgramData\deployment-manager\
+//   Linux:   /opt/deployment-manager/
+//
+// This ensures consistency when services run as SYSTEM/root and when users
+// run commands directly - all contexts access the same application data.
 //
 // Priority order for finding .env:
 // 1. Current working directory (.env)
-// 2. User data directory (~/.dm/.env)
+// 2. System data directory (ProgramData/opt)
 // 3. Installation directory (fallback for dev/legacy)
 //
 // DM_ROOT can override the data directory location via environment variable.
@@ -22,13 +26,18 @@ const INSTALL_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
  * Resolves the dm data directory.
- * Cross-platform: uses ~/.dm on both Windows and Unix.
+ * Uses system-wide locations to ensure consistency across user contexts.
  */
 function getDmDataDir(): string {
   if (process.env.DM_ROOT) {
     return resolve(process.env.DM_ROOT);
   }
-  return path.join(homedir(), '.dm');
+  
+  if (process.platform === 'win32') {
+    return path.join(process.env.PROGRAMDATA || 'C:\\ProgramData', 'deployment-manager');
+  } else {
+    return '/opt/deployment-manager';
+  }
 }
 
 function findEnvFile(): string {
