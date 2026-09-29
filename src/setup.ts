@@ -9,18 +9,20 @@
  * Directories are created automatically when needed by the application.
  */
 
-import { ensureDefaultConfig, isFirstRun } from './utils/first-run-setup.js';
 import { migrateFromJSON } from './commands/migrate-db.js';
 import chalk from 'chalk';
 import { homedir } from 'os';
 import path from 'path';
 
+export function isFirstRun(): boolean {
+  return !fs.existsSync(ROOT_DIR);
+}
+
 async function setup() {
   try {
     const firstRun = isFirstRun();
     
-    // Create .env if missing
-    ensureDefaultConfig();
+
     
     // Run database migration (handles both new installs and migrations from JSON)
     await migrateFromJSON();
