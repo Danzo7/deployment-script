@@ -6,7 +6,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { execa } from 'execa';
-import { writeFileSync, existsSync, unlinkSync } from 'fs';
+import { writeFileSync, existsSync, unlinkSync, realpathSync } from 'fs';
 import { userInfo } from 'os';
 import chalk from 'chalk';
 import { Logger } from '../utils/logger.js';
@@ -53,7 +53,7 @@ export async function remoteInstallService(
 function resolveInvocation(): { node: string; script: string } {
   return {
     node: process.execPath,
-    script: process.argv[1],
+    script: realpathSync(process.argv[1]),
   };
 }
 
