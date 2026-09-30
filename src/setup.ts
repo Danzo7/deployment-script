@@ -13,7 +13,8 @@ import { migrateFromJSON } from './commands/migrate-db.js';
 import chalk from 'chalk';
 import { homedir } from 'os';
 import path from 'path';
-
+import fs from 'fs';
+import { ROOT_DIR } from './constants.js';
 export function isFirstRun(): boolean {
   return !fs.existsSync(ROOT_DIR);
 }
