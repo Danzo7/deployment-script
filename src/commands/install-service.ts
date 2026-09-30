@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-expressions */
 import { execa } from 'execa';
-import { writeFileSync, existsSync, unlinkSync } from 'fs';
+import { writeFileSync, existsSync, unlinkSync, realpathSync } from 'fs';
 import { userInfo } from 'os';
 import chalk from 'chalk';
 import { Logger } from '../utils/logger.js';
@@ -66,7 +66,7 @@ export async function installService(
 function resolveInvocation(): { node: string; script: string } {
   return {
     node: process.execPath, // e.g. /usr/local/bin/node  or  C:\Program Files\nodejs\node.exe
-    script: process.argv[1], // e.g. /usr/local/lib/node_modules/dm/dist/cli.js
+    script: realpathSync(process.argv[1]), // e.g. /usr/local/lib/node_modules/dm/dist/cli.js
   };
 }
 
