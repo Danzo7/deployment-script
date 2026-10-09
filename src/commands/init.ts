@@ -37,10 +37,8 @@ export const init = async ({
   validateSafeString(name, 'Application name');
   validateSafeString(branch, 'Branch name');
   
-  // For git/svn repos, validate the URL
-  if (!repo.startsWith('/') && !repo.startsWith('.')) {
-    validateRepositoryUrl(repo, 'Repository URL');
-  }
+  // Always validate repository URL/path for security
+  validateRepositoryUrl(repo, 'Repository URL');
 
   const resolvedVcsType: VcsType = vcsType ?? await detectVcsType(repo);
   if (!vcsType) {

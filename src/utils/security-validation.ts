@@ -44,7 +44,7 @@ export function validateSafeString(value: string, fieldName: string): void {
  * 
  * Allows URL-safe characters but blocks shell metacharacters that could enable injection.
  * Allowed: alphanumeric, :/@._-+~ for URLs, and forward slashes for paths
- * Disallowed: shell metacharacters like ; | & $ ` ( ) < > \ ' " and newlines
+ * Disallowed: shell metacharacters like ; | & $ ` ( ) < > ' " and newlines
  * 
  * @throws Error if the URL contains shell injection characters
  */
@@ -57,8 +57,27 @@ export function validateRepositoryUrl(url: string, fieldName: string): void {
     throw new Error(`${fieldName} exceeds maximum length of 2048 characters`);
   }
 
-  // Check for shell metacharacters and control characters
-  // Allow URL components but block injection characters
+  // Check if it's a local path (Unix, Windows, or relative)
+  const isWindowsPath = /^[a-zA-Z]:[/\\]/.test(url); // C:\ or C:/
+  const isUnixPath = url.startsWith('/');
+  const isRelativePath = url.startsWith('./') || url.startsWith('.\\') || url.startsWith('../') || url.startsWith('..\\');
+  const isUncPath = url.startsWith('\\\\') || url.startsWith('//'); // Network paths
+  
+  if (isWindowsPath || isUnixPath || isRelativePath || isUncPath) {
+    // For local paths, validate against path injection but allow backslashes and colons
+    // Check for dangerous shell metacharacters excluding backslash (for Windows paths)
+    // eslint-disable-next-line no-control-regex
+    const dangerousChars = /[;&|`$()<>'"!\u0000-\u001F\u007F]/;
+    if (dangerousChars.test(url)) {
+      throw new Error(
+        `${fieldName} contains unsafe shell metacharacters. Paths must not contain: ; & | \` $ ( ) < > ' " !`
+      );
+    }
+    return;
+  }
+
+  // For URLs, check for shell metacharacters and control characters
+  // Allow URL components but block injection characters including backslashes
   // eslint-disable-next-line no-control-regex
   const dangerousChars = /[;&|`$()<>\\'"!\s\u0000-\u001F\u007F]/;
   if (dangerousChars.test(url)) {
@@ -69,11 +88,10 @@ export function validateRepositoryUrl(url: string, fieldName: string): void {
 
   // Additional validation for common URL patterns
   const validUrlPattern = /^(https?|git|svn(\+ssh)?|ssh|file):\/\/.+$/;
-  const isAbsolutePath = /^\/[a-zA-Z0-9._\-/]+$/.test(url);
   
-  if (!validUrlPattern.test(url) && !isAbsolutePath) {
+  if (!validUrlPattern.test(url)) {
     throw new Error(
-      `${fieldName} must be a valid URL (http://, https://, git://, svn://, svn+ssh://, ssh://, file://) or absolute path`
+      `${fieldName} must be a valid URL (http://, https://, git://, svn://, svn+ssh://, ssh://, file://) or a local path`
     );
   }
 }
