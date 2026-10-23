@@ -52,28 +52,44 @@ const staticHandler: AppTypeHandler = {
 
     const distFolder = path.join(sourceRoot, 'dist');
     const buildFolder = path.join(sourceRoot, 'build');
+    const rootIndexHtml = path.join(sourceRoot, 'index.html');
+    const packageJson = path.join(sourceRoot, 'package.json');
 
     let staticSource: string | undefined;
+
     if (fs.existsSync(distFolder)) {
       staticSource = distFolder;
     } else if (fs.existsSync(buildFolder)) {
       staticSource = buildFolder;
+    } else if (fs.existsSync(rootIndexHtml)) {
+      // Only allow root-level copying for pure HTML sites (no package.json)
+      if (fs.existsSync(packageJson)) {
+        throw new Error(
+          `Found package.json but no build output folder.\n` +
+            `For projects with package.json (React, Vite, etc.), you must build your site first.\n` +
+            `Run "npm run build" locally and commit the dist/ or build/ folder to your repository.\n` +
+            `Static apps with build processes are not built on the server.`
+        );
+      }
+      staticSource = sourceRoot;
     }
 
     if (!staticSource) {
       throw new Error(
-        `No static output folder found for static app.\n` +
-          `Expected a "dist/" or "build/" folder inside ${sourceRoot}.\n` +
-          `Make sure your site is built before deploying (e.g. run "npm run build" locally and commit the output, or use a CI step that produces dist/ or build/).`
+        `No static content found for static app.\n` +
+          `Expected one of:\n` +
+          `  - "dist/" folder with index.html inside ${sourceRoot}\n` +
+          `  - "build/" folder with index.html inside ${sourceRoot}\n` +
+          `  - "index.html" at root (only for pure HTML sites without package.json)\n` +
+          `Make sure your site is built before deploying.`
       );
     }
 
     fs.mkdirSync(buildDir, { recursive: true });
     fsExtra.copySync(staticSource, buildDir);
 
-    Logger.info(
-      `Copied static output from "${path.basename(staticSource)}/" into build directory.`
-    );
+    const sourceDesc = staticSource === sourceRoot ? 'root directory' : `"${path.basename(staticSource)}/" folder`;
+    Logger.info(`Copied static content from ${sourceDesc} into build directory.`);
 
     applyStorageSymlinks(buildDir, storages ?? []);
     return buildDir;
