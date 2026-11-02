@@ -153,7 +153,12 @@ const getPM2Config = (
   const { port, projectType, name, status, config: appConfig } = config;
   const handler = getHandler(projectType);
   const pm2Config = handler.buildPm2Config({ dir, name, port, status, config: appConfig });
-  return { ...pm2Config, exec_mode: handler.getExecMode() };
+  return {
+    ...pm2Config,
+    ...(config.output !== undefined ? { output: config.output } : {}),
+    ...(config.error !== undefined ? { error: config.error } : {}),
+    exec_mode: handler.getExecMode(),
+  };
 };
 
 // ─── Public API ───────────────────────────────────────────────────────────────

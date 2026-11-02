@@ -2,7 +2,7 @@ import {
   normalizeDomainName,
   normalizePath,
 } from '../utils/route-validation.js';
-import { validateHeaderKey } from '../utils/header-merge.js';
+import { validateHeaderKey, validateHeaderValue } from '../utils/header-merge.js';
 import { DomainRepo, RouteRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 
@@ -29,6 +29,7 @@ export async function routeSetHeader(
 
   // 4. Validate header key
   validateHeaderKey(key);
+  validateHeaderValue(value);
 
   // 5. Set/overwrite key in route.headers (initialize to {} if undefined)
   const headers: Record<string, string> = route.headers ?? {};

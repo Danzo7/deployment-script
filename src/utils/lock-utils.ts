@@ -2,14 +2,20 @@ import fs from 'fs';
 import path from 'path';
 import { LOCK_DIR } from '../constants.js';
 import { Logger } from './logger.js';
+import { randomUUID } from 'crypto';
+import { validateResourceName } from './managed-path.js';
+
+const ownedLocks = new Map<string, string>();
+const lockPath = (appName: string) => {
+  validateResourceName(appName);
+  return path.join(LOCK_DIR, `${appName}.lock`);
+};
 
 /**
  * Ensures the lock directory exists.
  */
 const ensureLockDir = () => {
-  if (!fs.existsSync(LOCK_DIR)) {
-    fs.mkdirSync(LOCK_DIR);
-  }
+  fs.mkdirSync(LOCK_DIR, { recursive: true });
 };
 
 /**
@@ -18,14 +24,16 @@ const ensureLockDir = () => {
  * @throws {Error} If the lock already exists.
  */
 export const acquireLock = (appName: string) => {
+  const lockFile = lockPath(appName);
   ensureLockDir();
-  const lockFile = path.join(LOCK_DIR, `${appName}.lock`);
-
-  if (fs.existsSync(lockFile)) {
-    throw new Error(`CLI for ${appName} is already running.`);
+  const contents = `${process.pid}\n${randomUUID()}`;
+  try {
+    fs.writeFileSync(lockFile, contents, { flag: 'wx', mode: 0o600 });
+  } catch (err: any) {
+    if (err.code === 'EEXIST') throw new Error(`CLI for ${appName} is already running.`);
+    throw err;
   }
-
-  fs.writeFileSync(lockFile, String(process.pid));
+  ownedLocks.set(lockFile, contents);
 };
 
 /**
@@ -33,15 +41,20 @@ export const acquireLock = (appName: string) => {
  * @param {string} appName - The name of the app.
  */
 export const releaseLock = (appName: string) => {
-  const lockFile = path.join(LOCK_DIR, `${appName}.lock`);
-
-  if (fs.existsSync(lockFile)) {
-    fs.unlinkSync(lockFile);
+  const lockFile = lockPath(appName);
+  const contents = ownedLocks.get(lockFile);
+  if (!contents) return;
+  try {
+    if (fs.readFileSync(lockFile, 'utf8') === contents) fs.unlinkSync(lockFile);
+  } catch (err: any) {
+    if (err.code !== 'ENOENT') throw err;
+  } finally {
+    ownedLocks.delete(lockFile);
   }
 };
 // Helper function to forcibly release the lock
 export const forceReleaseLock = (appName: string) => {
-  const lockFile = path.join(LOCK_DIR, `${appName}.lock`);
+  const lockFile = lockPath(appName);
 
   // Check if the lock file exists
   if (!fs.existsSync(lockFile)) {

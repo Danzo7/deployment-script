@@ -10,6 +10,7 @@ import {
   assertAppNotRoutedElsewhere,
 } from '../utils/route-validation.js';
 import { getCurrentUser } from '../utils/user-context.js';
+import { validateRoutePath } from '../utils/nginx-validation.js';
 
 export async function routeAdd(
   appName: string,
@@ -19,6 +20,7 @@ export async function routeAdd(
 ): Promise<void> {
   const normalizedDomain = normalizeDomainName(domainName);
   const normalizedPath = normalizePath(location);
+  validateRoutePath(normalizedPath);
 
   const app = await AppRepo.findByName(appName);
   const domain = await DomainRepo.findByName(normalizedDomain);

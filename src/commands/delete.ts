@@ -2,10 +2,16 @@ import fsExtra from 'fs-extra/esm';
 import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 import { deletePm2App, getAppStatus } from '../utils/pm2-helper.js';
+import { assertManagedPath, assertSeparatePaths, validateResourceName } from '../utils/managed-path.js';
+import { getHandler } from '../app-types/index.js';
+import { STORAGE_DIR } from '../constants.js';
 
 export const Delete = async ({ name }: { name: string }) => {
   Logger.info(`Deleting app: ${name}...`);
   const app = await AppRepo.findByName(name);
+  validateResourceName(name);
+  assertManagedPath(app.appDir, getHandler(app.projectType || 'nextjs').getAppsDir());
+  assertSeparatePaths(app.appDir, STORAGE_DIR);
   const appStatus = await getAppStatus(name);
   if (appStatus !== 'not-found') {
     await deletePm2App(name);

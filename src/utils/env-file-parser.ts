@@ -10,8 +10,8 @@ export interface EnvEntry {
  * Parses a .env.local file into an ordered array of key/value entries.
  * Comments and blank lines are ignored (not round-tripped).
  */
-export function parseEnvFile(envDir: string): EnvEntry[] {
-  const filePath = path.join(envDir, '.env.local');
+export function parseEnvFile(envDir: string, fileName: '.env.local' | '.env' = '.env.local'): EnvEntry[] {
+  const filePath = path.join(envDir, fileName);
   if (!fs.existsSync(filePath)) return [];
 
   const lines = fs.readFileSync(filePath, 'utf-8').split('\n');
@@ -33,8 +33,8 @@ export function parseEnvFile(envDir: string): EnvEntry[] {
 /**
  * Writes the given entries back to .env.local, replacing the file completely.
  */
-export function writeEnvFile(envDir: string, entries: EnvEntry[]): void {
-  const filePath = path.join(envDir, '.env.local');
+export function writeEnvFile(envDir: string, entries: EnvEntry[], fileName: '.env.local' | '.env' = '.env.local'): void {
+  const filePath = path.join(envDir, fileName);
   const content = entries.map(({ key, value }) => `${key}=${value}`).join('\n');
   fs.mkdirSync(envDir, { recursive: true });
   fs.writeFileSync(filePath, content, 'utf-8');

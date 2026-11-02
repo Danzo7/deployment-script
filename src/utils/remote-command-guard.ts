@@ -5,7 +5,19 @@
  * Used by both the interactive REPL dispatcher and SSH exec handler.
  */
 
-import { COMMANDS } from '../command-registry.js';
+import { COMMANDS, isGroup, type CommandNode } from '../command-registry.js';
+
+/** Check the resolved command, including every enclosing group. */
+export function assertRemoteCommandAllowed(commandPath: string[]): void {
+  if (!process.env.DM_REMOTE_USER) return;
+  let nodes: Record<string, CommandNode> = COMMANDS;
+  for (const key of commandPath) {
+    const node = nodes[key];
+    if (!node) throw new Error('Unknown remote command');
+    if (node.cliOnly) throw new Error(getBlockedCommandMessage(commandPath.join(' ')));
+    nodes = isGroup(node) ? node.subcommands : {};
+  }
+}
 
 /**
  * Checks if a command should be blocked in remote sessions.

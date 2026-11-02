@@ -9,7 +9,7 @@ export const checkEnv = async (
   envDir: string,
   envName: '.env.local' | '.env'
 ) => {
-  const appEnvPath = path.join(dir, '.env.local');
+  const appEnvPath = path.join(dir, envName);
   const releaseEnvPath = path.join(envDir, envName);
 
   if (fs.existsSync(appEnvPath) && fs.existsSync(releaseEnvPath)) {
@@ -33,15 +33,16 @@ export const checkEnv = async (
 };
 
 // Function to set an environment variable in .env.local
-export const setEnv = (dir: string, envName: string, envValue: string) => {
-  const appEnvPath = path.join(dir, '.env.local');
+export const setEnv = (dir: string, envName: string, envValue: string, fileName: '.env.local' | '.env' = '.env.local') => {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(envName)) throw new Error(`Invalid environment variable name: ${envName}`);
+  const appEnvPath = path.join(dir, fileName);
 
   let envFileContent = fs.existsSync(appEnvPath)
     ? fs.readFileSync(appEnvPath, 'utf-8')
     : '';
   const regex = new RegExp(`^${envName}=.*$`, 'm');
   if (regex.test(envFileContent)) {
-    envFileContent = envFileContent.replace(regex, `${envName}=${envValue}`);
+    envFileContent = envFileContent.replace(regex, () => `${envName}=${envValue}`);
     Logger.info(`Updated environment variable: ${envName}`);
   } else {
     envFileContent += `\n${envName}=${envValue}`;

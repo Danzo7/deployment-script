@@ -342,6 +342,11 @@ export async function startRemoteServer(port: number): Promise<void> {
   // Extract client handling logic into a function
   function handleClient(client: any, info: any): void {
     const ip = info.ip ?? 'unknown';
+    const ownedSessions = new Set<ActiveSession>();
+    const cleanupClientSessions = () => {
+      for (const session of ownedSessions) session.cleanupOnce?.('client-disconnect');
+      ownedSessions.clear();
+    };
     let authedAs:
       | { method: string; identity: string; fingerprint: string }
       | undefined;
@@ -467,18 +472,20 @@ export async function startRemoteServer(port: number): Promise<void> {
           const identity = authedAs?.identity ?? 'unknown';
           const keyFingerprint = authedAs?.fingerprint ?? 'unknown';
 
-          // Per-key session limit check.
+          // Check at session creation, including connections accepted before the cap.
           const keySessions = sessionsByKey.get(keyFingerprint) ?? 0;
-          if (keySessions >= MAX_SESSIONS_PER_KEY) {
+          const globalLimitReached = activeSessions.size >= MAX_SESSIONS;
+          if (globalLimitReached || keySessions >= MAX_SESSIONS_PER_KEY) {
             auditLog({
-              event: 'per-key-limit-reached',
+              event: globalLimitReached ? 'session-limit-reached' : 'per-key-limit-reached',
               ip,
               fingerprint: keyFingerprint,
-              limit: MAX_SESSIONS_PER_KEY,
+              limit: globalLimitReached ? MAX_SESSIONS : MAX_SESSIONS_PER_KEY,
             });
             try {
               channel.stderr?.write(
-                `Session limit reached for this key (max ${MAX_SESSIONS_PER_KEY}).\n`
+                globalLimitReached ? `Server session limit reached (max ${MAX_SESSIONS}).\n` :
+                  `Session limit reached for this key (max ${MAX_SESSIONS_PER_KEY}).\n`
               );
               channel.exit(1);
               channel.end();
@@ -523,6 +530,7 @@ export async function startRemoteServer(port: number): Promise<void> {
           sess.cleanupOnce = (reason: string) => {
             if (cleanedUp) return;
             cleanedUp = true;
+            ownedSessions.delete(sess);
             unregisterSession(sess);
             try {
               // Gracefully kill PTY - wrap in try-catch to prevent node-pty crashes on Windows
@@ -534,6 +542,7 @@ export async function startRemoteServer(port: number): Promise<void> {
           };
 
           registerSession(sess);
+          ownedSessions.add(sess);
           resetIdleTimer(sess);
           slog(
             'info',
@@ -560,8 +569,11 @@ export async function startRemoteServer(port: number): Promise<void> {
 
           child.onExit(({ exitCode }: { exitCode: number }) => {
             // PTY exited on its own — don't kill it again, just mark as cleaned up
-            cleanedUp = true;
-            unregisterSession(sess);
+            if (!cleanedUp) {
+              cleanedUp = true;
+              ownedSessions.delete(sess);
+              unregisterSession(sess);
+            }
             try {
               channel.exit(exitCode);
               channel.end();
@@ -615,9 +627,10 @@ export async function startRemoteServer(port: number): Promise<void> {
             return;
           }
 
-          // Per-key session limit check.
+          // Recheck the global cap for every exec, not only when TCP connects.
           const keySessions = sessionsByKey.get(keyFingerprint) ?? 0;
-          if (keySessions >= MAX_SESSIONS_PER_KEY) {
+          const globalLimitReached = activeSessions.size >= MAX_SESSIONS;
+          if (globalLimitReached || keySessions >= MAX_SESSIONS_PER_KEY) {
             const channel = acceptExec();
             
             // Add error handler immediately
@@ -626,14 +639,15 @@ export async function startRemoteServer(port: number): Promise<void> {
             });
             
             auditLog({
-              event: 'per-key-limit-reached',
+              event: globalLimitReached ? 'session-limit-reached' : 'per-key-limit-reached',
               ip,
               fingerprint: keyFingerprint,
-              limit: MAX_SESSIONS_PER_KEY,
+              limit: globalLimitReached ? MAX_SESSIONS : MAX_SESSIONS_PER_KEY,
             });
             try {
               channel.stderr.write(
-                `Session limit reached for this key (max ${MAX_SESSIONS_PER_KEY}).\n`
+                globalLimitReached ? `Server session limit reached (max ${MAX_SESSIONS}).\n` :
+                  `Session limit reached for this key (max ${MAX_SESSIONS_PER_KEY}).\n`
               );
               channel.exit(1);
               channel.end();
@@ -699,6 +713,7 @@ export async function startRemoteServer(port: number): Promise<void> {
           sess.cleanupOnce = (reason: string) => {
             if (execCleanedUp) return;
             execCleanedUp = true;
+            ownedSessions.delete(sess);
             unregisterSession(sess);
             try {
               // Gracefully kill PTY - wrap in try-catch to prevent node-pty crashes on Windows
@@ -710,6 +725,7 @@ export async function startRemoteServer(port: number): Promise<void> {
           };
 
           registerSession(sess);
+          ownedSessions.add(sess);
           resetIdleTimer(sess);
 
           child.onData((data: string) => {
@@ -732,8 +748,11 @@ export async function startRemoteServer(port: number): Promise<void> {
 
           child.onExit(({ exitCode }: { exitCode: number }) => {
             // PTY exited on its own — don't kill it again, just mark as cleaned up
-            execCleanedUp = true;
-            unregisterSession(sess);
+            if (!execCleanedUp) {
+              execCleanedUp = true;
+              ownedSessions.delete(sess);
+              unregisterSession(sess);
+            }
             try {
               channel.exit(exitCode);
               channel.end();
@@ -752,6 +771,7 @@ export async function startRemoteServer(port: number): Promise<void> {
     });
 
     client.on('close', () => {
+      cleanupClientSessions();
       if (authedAs) {
         auditLog({ event: 'disconnect', ip, ...authedAs });
         slog(
@@ -767,14 +787,7 @@ export async function startRemoteServer(port: number): Promise<void> {
     // doesn't linger after a network drop.
     client.on('error', (err: any) => {
       slog('error', `[remote] client error (${ip}): ${err.message}`);
-      // Create a snapshot of sessions to avoid modifying Set during iteration
-      const sessionsToCleanup = Array.from(activeSessions).filter(
-        (s) => s.ip === ip
-      );
-      for (const s of sessionsToCleanup) {
-        // Use the guarded cleanup to prevent double-kill
-        s.cleanupOnce?.('client-error');
-      }
+      cleanupClientSessions();
       
       // Don't explicitly call client.end() - let the client close naturally
       // to avoid potential cascade errors. The 'close' event will fire anyway.

@@ -5,6 +5,7 @@ import { AppRepo } from '../db/repos.js';
 import { Logger } from './logger.js';
 import { withBackoffRetry } from './retry-helper.js';
 import { STORAGE_DIR } from '../constants.js';
+import { assertManagedPath } from './managed-path.js';
 
 const MAX_BUILDS = 3;
 
@@ -65,10 +66,12 @@ const removeBuilds = async (
   buildPaths: string[]
 ): Promise<void> => {
   if (buildPaths.length === 0) return;
+  const app = await AppRepo.findByName(appName);
   Logger.info(`Removing ${buildPaths.length} old build(s) for "${appName}"...`);
 
   for (const buildPath of buildPaths) {
     try {
+      assertManagedPath(buildPath, path.join(app.appDir, 'builds'));
       await Logger.spinner(
         `Removing old build: ${path.basename(buildPath)}`,
         () => removeBuildDir(buildPath)

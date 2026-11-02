@@ -2,6 +2,7 @@ import { AppRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 import { ensureDirectories } from '../utils/file-utils.js';
 import { setEnv } from '../utils/env-heper.js';
+import { getHandler } from '../app-types/index.js';
 
 export const setEnvForApp = async ({
   name,
@@ -20,7 +21,7 @@ export const setEnvForApp = async ({
 
   Logger.info(`Setting environment variable.....`);
 
-  setEnv(envDir, envName, envValue);
+  setEnv(envDir, envName, envValue, getHandler(app.projectType || 'nextjs').envFileName);
 
   Logger.success(
     `To apply the changes, run: ${Logger.highlight(`dm deploy ${name}`)}`

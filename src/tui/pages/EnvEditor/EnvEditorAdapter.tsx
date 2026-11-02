@@ -8,12 +8,14 @@ import { ensureDirectories } from '../../../utils/file-utils.js';
 import { usePageParams } from '../../../app/navigation/use-navigation.js';
 import { PageId } from '../../../app/navigation/types.js';
 import { usePageExit } from '../../../app/navigation/use-page-exit.js';
+import { getHandler } from '../../../app-types/index.js';
 
 export function EnvEditorAdapter(): React.ReactElement {
   const { appName } = usePageParams<PageId.EnvEditor>();
   const exit = usePageExit();
   const [initial, setInitial] = useState<Array<{ key: string; value: string }> | null>(null);
   const [envDir, setEnvDir] = useState<string>('');
+  const [fileName, setFileName] = useState<'.env.local' | '.env'>('.env.local');
   const [error, setError] = useState<string | null>(null);
 
   // Load data on mount (per plan: pages load their own data)
@@ -22,7 +24,9 @@ export function EnvEditorAdapter(): React.ReactElement {
       try {
         const app = await AppRepo.findByName(appName);
         const dirs = ensureDirectories(app.appDir);
-        const entries = parseEnvFile(dirs.envDir);
+        const envFileName = getHandler(app.projectType || 'nextjs').envFileName ?? '.env.local';
+        const entries = parseEnvFile(dirs.envDir, envFileName);
+        setFileName(envFileName);
         setEnvDir(dirs.envDir);
         setInitial(entries);
       } catch (err: any) {
@@ -38,14 +42,14 @@ export function EnvEditorAdapter(): React.ReactElement {
     const toDelete = rows.filter(r => r.state === 'deleted');
 
     if (toDelete.length > 0) {
-      const existing = parseEnvFile(envDir);
+      const existing = parseEnvFile(envDir, fileName);
       const deleteKeys = new Set(toDelete.map(r => r.key));
       const kept = existing.filter(e => !deleteKeys.has(e.key));
-      writeEnvFile(envDir, kept);
+      writeEnvFile(envDir, kept, fileName);
     }
 
     for (const row of toUpsert) {
-      setEnv(envDir, row.key, row.value);
+      setEnv(envDir, row.key, row.value, fileName);
     }
 
     return exit(count);

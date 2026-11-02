@@ -57,9 +57,9 @@ const staticHandler: AppTypeHandler = {
 
     let staticSource: string | undefined;
 
-    if (fs.existsSync(distFolder)) {
+    if (fs.existsSync(path.join(distFolder, 'index.html'))) {
       staticSource = distFolder;
-    } else if (fs.existsSync(buildFolder)) {
+    } else if (fs.existsSync(path.join(buildFolder, 'index.html'))) {
       staticSource = buildFolder;
     } else if (fs.existsSync(rootIndexHtml)) {
       // Only allow root-level copying for pure HTML sites (no package.json)
@@ -102,14 +102,17 @@ const staticHandler: AppTypeHandler = {
   async prepareRelease(dir: string, opts: PrepareReleaseOptions): Promise<void> {
     void opts; // opts not used for static apps — no build step
     const pkgPath = path.join(dir, 'package.json');
-    if (fs.existsSync(pkgPath)) {
+    const hasOutput = ['dist', 'build'].some(folder =>
+      fs.existsSync(path.join(dir, folder, 'index.html'))
+    );
+    if (fs.existsSync(pkgPath) && !hasOutput) {
       throw new Error(
         'Static apps must have their output pre-built and committed.\n' +
           'Please build your project locally (e.g. "npm run build") and commit the dist/ or build/ folder to the repository.\n' +
           'dm does not run build steps for static apps.'
       );
     }
-    // No package.json — nothing to do
+    // Output is already built; no server-side build step is needed.
   },
 
   getAppsDir(): string {

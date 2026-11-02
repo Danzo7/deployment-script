@@ -45,6 +45,8 @@ export interface AppTypeHandler {
    * calling registerHandler(handler) with a handler that declares its typeKey.
    */
   readonly typeKey: string;
+  /** File edited by the environment editor; legacy handlers default to .env.local. */
+  readonly envFileName?: '.env.local' | '.env';
 
   /**
    * Returns a PM2 StartOptions object for launching this app type.

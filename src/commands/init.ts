@@ -13,6 +13,8 @@ import { getCurrentUser } from '../utils/user-context.js';
 import { validateRepositoryUrl, validateSafeString } from '../utils/security-validation.js';
 import type { ProjectType } from '../app-types/index.js';
 import type { VcsType } from '../utils/vcs-helper.js';
+import { assertManagedPath, assertSeparatePaths, validateResourceName } from '../utils/managed-path.js';
+import { STORAGE_DIR } from '../constants.js';
 
 export const init = async ({
   name,
@@ -35,6 +37,7 @@ export const init = async ({
 
   // Validate inputs to prevent shell injection attacks
   validateSafeString(name, 'Application name');
+  validateResourceName(name);
   validateSafeString(branch, 'Branch name');
   
   // Always validate repository URL/path for security
@@ -71,6 +74,8 @@ export const init = async ({
   handler.checkPrerequisites?.();
 
   const appDir = path.join(handler.getAppsDir(), name);
+  assertManagedPath(appDir, handler.getAppsDir());
+  assertSeparatePaths(appDir, STORAGE_DIR);
   ensureDirectories(appDir);
 
   if (!port) {

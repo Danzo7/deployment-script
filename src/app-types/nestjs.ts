@@ -11,6 +11,7 @@ import { checkEnv } from '../utils/env-heper.js';
 
 const nestjsHandler: AppTypeHandler = {
   typeKey: 'nestjs',
+  envFileName: '.env',
 
   buildPm2Config(input: BuildPm2ConfigInput) {
     const { dir, name, port, config } = input;

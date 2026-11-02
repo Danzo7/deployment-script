@@ -1,5 +1,5 @@
 import { normalizeDomainName } from '../utils/route-validation.js';
-import { validateHeaderKey } from '../utils/header-merge.js';
+import { validateHeaderKey, validateHeaderValue } from '../utils/header-merge.js';
 import { DomainRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 import { getCurrentUser } from '../utils/user-context.js';
@@ -17,6 +17,7 @@ export async function domainSetHeader(
 
   // 3. Validate header key
   validateHeaderKey(key);
+  validateHeaderValue(value);
 
   // 4. Set/overwrite key in domain.headers (initialize to {} if undefined)
   const headers: Record<string, string> = domain.headers ?? {};

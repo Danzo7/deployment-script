@@ -13,6 +13,7 @@ import {
 import {
   isCommandBlockedForRemote,
   getBlockedCommandMessage,
+  assertRemoteCommandAllowed,
 } from '../../../utils/remote-command-guard.js';
 
 // ─── Tokeniser ────────────────────────────────────────────────────────────────
@@ -213,8 +214,10 @@ export const TOP_LEVEL_COMMANDS = [
 async function runNode(
   node: CommandNode,
   fullUsage: string,
-  rest: string[]
+  rest: string[],
+  commandPath: string[]
 ): Promise<void> {
+  assertRemoteCommandAllowed(commandPath);
   if (isGroup(node)) {
     const [subKey, ...subRest] = rest;
     const subNode = subKey ? node.subcommands[subKey] : undefined;
@@ -227,7 +230,7 @@ async function runNode(
     const subUsage = isGroup(subNode)
       ? `${fullUsage} ${subKey}`
       : `${fullUsage} ${subNode.usage}`;
-    await runNode(subNode, subUsage, subRest);
+    await runNode(subNode, subUsage, subRest, [...commandPath, subKey]);
     return;
   }
 
@@ -290,7 +293,7 @@ export async function dispatch(tokens: string[]): Promise<void> {
     return;
   }
 
-  await runNode(node, isGroup(node) ? cmdKey : node.usage, rest);
+  await runNode(node, isGroup(node) ? cmdKey : node.usage, rest, [cmdKey]);
 }
 
 // ─── Remote command audit ─────────────────────────────────────────────────────

@@ -11,6 +11,7 @@
     "dist"
   ],
   "scripts": {
+    "test": "node tests/regressions.test.mjs",
     "build": "tsc",
     "build:dm-connect": "dotnet publish dm-connect/dm-connect.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o releases/dm-connect-windows",
     "setup": "node dist/setup.js",

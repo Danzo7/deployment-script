@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import type { Domain, RouteWithApp } from '../db/model.js';
 import { PROXY_TARGET_HOST } from '../constants.js';
-import { PROXY_SET_HEADERS, mergeHeaders } from './header-merge.js';
-import { normalizeDomainName } from './route-validation.js';
+import { PROXY_SET_HEADERS, mergeHeaders, validateHeaderKey, validateHeaderValue } from './header-merge.js';
+import { normalizeDomainName, validateHostname } from './route-validation.js';
+import { quoteNginxArgument, validateRoutePath } from './nginx-validation.js';
+import { isIP } from 'node:net';
 import { DomainRepo } from '../db/repos.js';
 import { getHandler } from '../app-types/index.js';
 // ─── dm_json log format ───────────────────────────────────────────────────────
@@ -95,8 +97,8 @@ const COMMON_DIRECTIVES = [
 
 function sslDirectives(certPath: string, keyPath: string): string {
   return [
-    `${INDENT}ssl_certificate ${certPath};`,
-    `${INDENT}ssl_certificate_key ${keyPath};`,
+    `${INDENT}ssl_certificate ${quoteNginxArgument(certPath)};`,
+    `${INDENT}ssl_certificate_key ${quoteNginxArgument(keyPath)};`,
     `${INDENT}ssl_protocols TLSv1.2 TLSv1.3;`,
     `${INDENT}ssl_prefer_server_ciphers off;`,
     `${INDENT}ssl_session_cache shared:SSL:10m;`,
@@ -114,6 +116,10 @@ function buildLocationBlocks(
 
   return sorted
     .map((route) => {
+      validateRoutePath(route.path);
+      if (!Number.isInteger(route.app.port) || route.app.port < 1 || route.app.port > 65535) {
+        throw new Error(`Invalid upstream port: ${route.app.port}`);
+      }
       const locationPath = route.path === '' ? '/' : '/' + route.path + '/';
       const safeRoute =
         route.path.replace(/[^a-z0-9]/gi, '_').replace(/^_+|_+$/g, '') ||
@@ -135,7 +141,9 @@ function buildLocationBlocks(
       for (const [key, value] of Object.entries(
         mergeHeaders(domain, route, hasSsl)
       )) {
-        lines.push(`${INDENT}${INDENT}add_header ${key} "${value}" always;`);
+        validateHeaderKey(key);
+        validateHeaderValue(value);
+        lines.push(`${INDENT}${INDENT}add_header ${quoteNginxArgument(key)} ${quoteNginxArgument(value)} always;`);
       }
 
       lines.push(`${INDENT}}`);
@@ -248,6 +256,12 @@ export function compileDomainConfig(
   routes: RouteWithApp[],
   allDomains: Domain[]
 ): string {
+  if (!validateHostname(domain.name)) throw new Error(`Invalid domain name: ${domain.name}`);
+  const host = PROXY_TARGET_HOST.replace(/^\[|\]$/g, '');
+  const bracketedIpv6 = PROXY_TARGET_HOST.startsWith('[') && PROXY_TARGET_HOST.endsWith(']') && isIP(host) === 6;
+  if (!validateHostname(PROXY_TARGET_HOST) && !bracketedIpv6) {
+    throw new Error('Invalid PROXY_TARGET_HOST');
+  }
   const wwwIsRegisteredDomain = allDomains.some(
     (d) => d.name === 'www.' + domain.name
   );

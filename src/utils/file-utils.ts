@@ -3,6 +3,8 @@ import { Logger } from './logger.js';
 import { Storage } from '../db/model.js';
 import fs from 'fs';
 import path from 'path';
+import { assertManagedPath, storageLinkPath } from './managed-path.js';
+import { STORAGE_DIR } from '../constants.js';
 
 export const calculateFileHash = (filePath: string): string => {
   if (!fs.existsSync(filePath)) return '';
@@ -56,8 +58,9 @@ export const applyStorageSymlinks = (
 ): void => {
   for (const storage of storages) {
     const effectiveLinkName = storage.linkName ?? storage.name;
-    const linkPath = path.join(buildDir, effectiveLinkName);
+    const linkPath = storageLinkPath(buildDir, effectiveLinkName);
     const targetPath = storage.path;
+    assertManagedPath(targetPath, STORAGE_DIR);
 
     let stat: fs.Stats | null = null;
     try {

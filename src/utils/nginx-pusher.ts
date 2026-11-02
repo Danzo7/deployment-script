@@ -5,6 +5,7 @@ import { DomainRepo } from '../db/repos.js';
 import { DOMAINS_DIR } from '../constants.js';
 import { PushSnapshot } from './domain-push-utils.js';
 import { compileDomainConfig } from './nginx-compiler.js';
+import { quoteNginxArgument } from './nginx-validation.js';
 
 /**
  * Base class for Nginx push operations
@@ -53,14 +54,14 @@ export abstract class NginxPusher {
   protected rewriteCertPaths(certPath: string, keyPath: string): void {
     // Replace ssl_certificate directive
     this.compiledConfig = this.compiledConfig.replace(
-      /ssl_certificate\s+[^;]+;/g,
-      `ssl_certificate ${certPath};`
+      /^([ \t]*)ssl_certificate[ \t]+(?:"(?:\\.|[^"\\])*"|[^;\r\n]+);[ \t]*$/gm,
+      (_match, indent: string) => `${indent}ssl_certificate ${quoteNginxArgument(certPath)};`
     );
 
     // Replace ssl_certificate_key directive
     this.compiledConfig = this.compiledConfig.replace(
-      /ssl_certificate_key\s+[^;]+;/g,
-      `ssl_certificate_key ${keyPath};`
+      /^([ \t]*)ssl_certificate_key[ \t]+(?:"(?:\\.|[^"\\])*"|[^;\r\n]+);[ \t]*$/gm,
+      (_match, indent: string) => `${indent}ssl_certificate_key ${quoteNginxArgument(keyPath)};`
     );
   }
 

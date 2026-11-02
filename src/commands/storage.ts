@@ -9,12 +9,16 @@ import { AppRepo, StorageRepo } from '../db/repos.js';
 import { Logger } from '../utils/logger.js';
 import { requireSymlinkPermission } from '../utils/os-helper.js';
 import { getCurrentUser } from '../utils/user-context.js';
+import { assertManagedPath, storageLinkPath, validateResourceName } from '../utils/managed-path.js';
 
 export const storageNew = async (
   name: string,
   linkName?: string
 ): Promise<void> => {
+  validateResourceName(name);
+  storageLinkPath(STORAGE_DIR, linkName ?? name);
   const storagePath = path.join(STORAGE_DIR, name);
+  assertManagedPath(storagePath, STORAGE_DIR);
   fs.mkdirSync(storagePath, { recursive: true });
   await StorageRepo.add({
     name,
@@ -35,6 +39,8 @@ export const storageAttach = async (
 
   const app = await AppRepo.findByName(appName);
   const storage = await StorageRepo.findByName(storageName);
+  assertManagedPath(storage.path, STORAGE_DIR);
+  storageLinkPath(app.activeBuild ?? path.join(app.appDir, 'builds', 'pending'), storage.linkName ?? storage.name);
 
   // Check if already attached via junction table
   const existingStorages = await AppRepo.getStoragesByAppId(app.id);
@@ -56,7 +62,7 @@ export const storageAttach = async (
 
     if (activeBuildExists) {
       const effectiveLinkName = storage.linkName ?? storage.name;
-      const symlinkPath = path.join(app.activeBuild, effectiveLinkName);
+      const symlinkPath = storageLinkPath(app.activeBuild, effectiveLinkName);
       let stat: fs.Stats | null = null;
       try {
         stat = fs.lstatSync(symlinkPath);
@@ -97,7 +103,7 @@ export const storageAttach = async (
 
     if (activeBuildExists) {
       const effectiveLinkName = storage.linkName ?? storage.name;
-      const symlinkPath = path.join(app.activeBuild, effectiveLinkName);
+      const symlinkPath = storageLinkPath(app.activeBuild, effectiveLinkName);
       let symlinkExists = false;
       try {
         const existingStat = fs.lstatSync(symlinkPath);
@@ -137,12 +143,21 @@ export const storageDetach = async (
   }
 
   // Remove from junction table
+  const symlinkPath = app.activeBuild
+    ? storageLinkPath(app.activeBuild, storage.linkName ?? storage.name)
+    : undefined;
+  if (symlinkPath) {
+    try {
+      const stat = fs.lstatSync(symlinkPath);
+      if (!stat.isSymbolicLink()) throw new Error(`Refusing to detach a non-symlink: ${symlinkPath}`);
+    } catch (err: any) {
+      if (err.code !== 'ENOENT') throw err;
+    }
+  }
   await AppRepo.unlinkStorage(app.id, storage.id);
 
   // Remove symlink using linkName
-  if (app.activeBuild) {
-    const effectiveLinkName = storage.linkName ?? storage.name;
-    const symlinkPath = path.join(app.activeBuild, effectiveLinkName);
+  if (symlinkPath) {
     try {
       fs.lstatSync(symlinkPath);
       fs.unlinkSync(symlinkPath);
@@ -157,7 +172,13 @@ export const storageDetach = async (
 };
 
 export const storageRm = async (name: string): Promise<void> => {
+  validateResourceName(name);
   const storage = await StorageRepo.findByName(name);
+  const storagePath = path.join(STORAGE_DIR, name);
+  assertManagedPath(storagePath, STORAGE_DIR);
+  if (path.relative(path.resolve(storagePath), path.resolve(storage.path)) !== '') {
+    throw new Error(`Storage "${name}" has a different recorded directory; refusing to delete ${storagePath}.`);
+  }
 
   // Check if any apps are attached via junction table
   const attachedApps = await AppRepo.findByStorageId(storage.id);
@@ -169,9 +190,6 @@ export const storageRm = async (name: string): Promise<void> => {
     );
   }
 
-  await StorageRepo.remove(name);
-
-  const storagePath = path.join(STORAGE_DIR, name);
   if (fs.existsSync(storagePath)) {
     await fsExtra.remove(storagePath);
   } else {
@@ -179,6 +197,7 @@ export const storageRm = async (name: string): Promise<void> => {
       `Storage directory ${Logger.highlight(storagePath)} not found on disk; skipping removal.`
     );
   }
+  await StorageRepo.remove(name);
 
   Logger.success(`Storage ${Logger.highlight(name)} removed.`);
 };

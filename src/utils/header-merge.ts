@@ -1,4 +1,9 @@
 import type { Domain, Route } from '../db/model.js';
+import { quoteNginxArgument } from './nginx-validation.js';
+
+export function validateHeaderValue(value: string): void {
+  quoteNginxArgument(value);
+}
 
 /**
  * The proxy_set_header directives emitted in every location block.
@@ -41,7 +46,7 @@ export const HSTS_HEADER: [string, string] = [
  * Validates a user-supplied header key. Throws with a descriptive message on failure.
  *
  * Rules:
- *   - printable ASCII only (code points 0x21–0x7E), no whitespace, no colon
+ *   - an HTTP field-name token (no whitespace, separators, or control characters)
  *   - must not match (case-insensitively) any key in PROXY_SET_HEADERS — those are
  *     compiler-owned request-direction headers, not user-settable response headers
  *
@@ -50,8 +55,8 @@ export const HSTS_HEADER: [string, string] = [
  * those is the entire purpose of the three-layer merge.
  */
 export function validateHeaderKey(key: string): void {
-  // Must be non-empty printable ASCII (0x21–0x7E), no whitespace, no colon
-  if (!/^[\x21-\x7E]+$/.test(key) || /[\s:]/.test(key)) {
+  // HTTP field names are tokens, not arbitrary printable ASCII.
+  if (!/^[!#$%&'*+.^_`|~0-9a-zA-Z-]+$/.test(key)) {
     throw new Error(`"${key}" is not a valid HTTP header name`);
   }
 

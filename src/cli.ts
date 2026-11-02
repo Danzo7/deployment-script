@@ -16,6 +16,7 @@ import {
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
+import { assertRemoteCommandAllowed } from './utils/remote-command-guard.js';
 
 const _require = createRequire(import.meta.url);
 const _pkg = _require(
@@ -39,9 +40,10 @@ const setupCleanup = (name: string) => {
 // Wraps a leaf command's handler with locking + uniform error handling, so
 // neither command-registry.ts nor any individual command has to repeat
 // try/catch or acquireLock/releaseLock boilerplate.
-function wrapHandler(node: LeafCommand) {
+function wrapHandler(node: LeafCommand, commandPath: string[]) {
   return async (argv: any): Promise<void> => {
     try {
+      assertRemoteCommandAllowed(commandPath);
       if (node.lockArg) {
         acquireLock(argv[node.lockArg]);
         setupCleanup(argv[node.lockArg]);
@@ -80,12 +82,13 @@ function buildLeafYargs(yb: Argv, node: LeafCommand): Argv<any> {
 // Recursively registers a command-registry node (leaf or group) onto a yargs
 // instance. This is the only place that knows how to translate our
 // declarative command tree into yargs' `.command()` calls.
-function registerNode(y: Argv, key: string, node: CommandNode): Argv {
+function registerNode(y: Argv, key: string, node: CommandNode, parents: string[] = []): Argv {
+  const commandPath = [...parents, key];
   if (isGroup(node)) {
     return y.command(key, node.describe, (sub: Argv) => {
       let s = sub;
       for (const [subKey, subNode] of Object.entries(node.subcommands)) {
-        s = registerNode(s, subKey, subNode) as Argv;
+        s = registerNode(s, subKey, subNode, commandPath) as Argv;
       }
       return s.demandCommand(1);
     }) as Argv;
@@ -94,7 +97,7 @@ function registerNode(y: Argv, key: string, node: CommandNode): Argv {
     node.usage,
     node.describe,
     (yb: Argv) => buildLeafYargs(yb, node),
-    wrapHandler(node)
+    wrapHandler(node, commandPath)
   ) as Argv;
 }
 
